@@ -73,6 +73,15 @@ The first adapters will target a synthetic test ATS, one common employer ATS,
 and LinkedIn Easy Apply. The company/ATS route remains preferred. Generic form
 support comes after these are reliable.
 
+Current adapter coverage:
+
+- **LinkedIn:** job extraction, Easy Apply detection, external company-route
+  discovery, and modal-scoped field scanning.
+- **Greenhouse:** job/application extraction and application-form scoping.
+- **Lever:** posting extraction and application-form scoping.
+- **Workday:** job extraction and active application-page scoping.
+- **Generic:** standards-based JobPosting JSON-LD plus visible HTML controls.
+
 ## Resume tailoring rules
 
 - The base resume is parsed into evidence-backed facts.

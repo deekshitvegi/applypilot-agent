@@ -12,6 +12,7 @@ const elements = {
   resumeFile: document.querySelector("#resume-file"),
   resumeStatus: document.querySelector("#resume-status"),
   captureJob: document.querySelector("#capture-job"),
+  openApplication: document.querySelector("#open-application"),
   tailorResume: document.querySelector("#tailor-resume"),
   tailorResult: document.querySelector("#tailor-result"),
   jobTitle: document.querySelector("#job-title"),
@@ -32,6 +33,7 @@ const state = {
   onboarding: null,
   provider: null,
   job: null,
+  route: null,
   formPlan: null,
   localMode: false,
 };
@@ -186,11 +188,50 @@ async function captureJob() {
     elements.jobTitle.textContent = captured.title || "Captured job";
     elements.jobCompany.textContent = [captured.company, captured.location].filter(Boolean).join(" · ");
     elements.tailorResume.disabled = !(state.localMode && state.provider?.configured);
+    state.route = await api("/api/application-route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source_url: captured.source_url,
+        company_application_url: captured.company_application_url,
+        company_url_verified: captured.company_url_verified,
+        easy_apply_available: captured.easy_apply_available,
+      }),
+    });
+    if (state.route.route === "company_site") {
+      elements.openApplication.textContent = "Open company application";
+      elements.openApplication.disabled = false;
+    } else if (state.route.route === "manual_review") {
+      elements.openApplication.textContent = "Review external application";
+      elements.openApplication.disabled = false;
+    } else if (state.route.route === "easy_apply") {
+      elements.openApplication.textContent = "Easy Apply fallback available";
+      elements.openApplication.disabled = true;
+    } else {
+      elements.openApplication.textContent = "No application route found";
+      elements.openApplication.disabled = true;
+    }
   } catch (error) {
     elements.jobCompany.textContent = error.message;
   } finally {
     elements.captureJob.disabled = false;
     elements.captureJob.textContent = "Capture this job";
+  }
+}
+
+async function openApplication() {
+  if (!state.route?.target_url) return;
+  elements.openApplication.disabled = true;
+  try {
+    const result = await chrome.runtime.sendMessage({
+      action: "openApplication",
+      url: state.route.target_url,
+    });
+    if (result.error) throw new Error(result.error);
+    elements.openApplication.textContent = "Company application opened";
+  } catch (error) {
+    elements.jobCompany.textContent = error.message;
+    elements.openApplication.disabled = false;
   }
 }
 
@@ -317,6 +358,7 @@ function escapeHtml(value) {
 elements.answerForm.addEventListener("submit", saveOnboardingAnswer);
 elements.resumeFile.addEventListener("change", uploadResume);
 elements.captureJob.addEventListener("click", captureJob);
+elements.openApplication.addEventListener("click", openApplication);
 elements.tailorResume.addEventListener("click", tailorResume);
 elements.scanForm.addEventListener("click", scanForm);
 elements.fillForm.addEventListener("click", fillForm);

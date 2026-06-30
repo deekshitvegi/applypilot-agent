@@ -224,6 +224,7 @@ def form_plan(request: FormPlanRequest) -> FormFillPlan:
         fields=request.fields,
         profile=store.load(),
         answers=store.list_answers(),
+        adapter=request.adapter,
     )
 
 

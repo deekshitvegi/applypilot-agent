@@ -109,6 +109,9 @@ class JobContext(BaseModel):
     location: str = ""
     description: str
     company_application_url: str = ""
+    company_url_verified: bool = False
+    easy_apply_available: bool = False
+    adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = "generic"
 
 
 class TailoredBullet(BaseModel):
@@ -195,10 +198,12 @@ class UnknownField(BaseModel):
 class FormPlanRequest(BaseModel):
     page_url: str
     fields: list[FormField]
+    adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = "generic"
 
 
 class FormFillPlan(BaseModel):
     page_url: str
+    adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = "generic"
     actions: list[FormFillAction] = Field(default_factory=list)
     unknown_fields: list[UnknownField] = Field(default_factory=list)
     blocked_fields: list[UnknownField] = Field(default_factory=list)

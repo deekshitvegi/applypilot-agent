@@ -47,6 +47,9 @@ This repository currently contains:
   passwords and authentication fields untouched, reports unknown required
   questions, and never clicks Submit;
 - a synthetic employer ATS for safe end-to-end testing;
+- adapter detection and job extraction for LinkedIn, Greenhouse, Lever, and
+  Workday, with recognized ATS links auto-verified and unknown external links
+  held for review;
 - tests for encryption, resume extraction, evidence validation, routing, and APIs;
 - architecture and delivery milestones in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

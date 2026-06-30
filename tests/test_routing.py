@@ -39,3 +39,15 @@ def test_unverified_external_url_requires_review() -> None:
 
     assert decision.route == "manual_review"
 
+
+def test_recognized_ats_url_is_verified_automatically() -> None:
+    decision = choose_application_route(
+        JobApplicationOptions(
+            source_url="https://www.linkedin.com/jobs/view/example",
+            company_application_url="https://jobs.lever.co/example/123",
+            company_url_verified=False,
+            easy_apply_available=True,
+        )
+    )
+
+    assert decision.route == "company_site"

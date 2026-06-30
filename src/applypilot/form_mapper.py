@@ -33,6 +33,7 @@ def plan_form_fill(
     fields: list[FormField],
     profile: CandidateProfile,
     answers: list[ReusableAnswer],
+    adapter: str = "generic",
 ) -> FormFillPlan:
     actions: list[FormFillAction] = []
     unknown: list[UnknownField] = []
@@ -77,6 +78,7 @@ def plan_form_fill(
 
     return FormFillPlan(
         page_url=page_url,
+        adapter=adapter,
         actions=actions,
         unknown_fields=unknown,
         blocked_fields=blocked,

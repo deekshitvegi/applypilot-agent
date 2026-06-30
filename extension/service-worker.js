@@ -7,6 +7,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     captureJob: captureActiveJob,
     scanForm: scanActiveForm,
     fillForm: () => fillActiveForm(message.actions || []),
+    openApplication: () => openApplicationRoute(message.url),
   };
   const action = actions[message.action];
   if (!action) return false;
@@ -36,7 +37,7 @@ async function scanActiveForm() {
     target: { tabId: tab.id },
     func: extractFormFields,
   });
-  return { page_url: tab.url, fields: result.result };
+  return { page_url: tab.url, fields: result.result, adapter: detectAdapterFromUrl(tab.url) };
 }
 
 async function fillActiveForm(actions) {
@@ -57,10 +58,40 @@ async function getActiveHttpTab() {
   return tab;
 }
 
+async function openApplicationRoute(url) {
+  const target = new URL(url);
+  if (target.protocol !== "https:") {
+    throw new Error("Only secure HTTPS application links can be opened.");
+  }
+  const tab = await chrome.tabs.create({ url: target.href, active: true });
+  return { opened: true, tab_id: tab.id };
+}
+
+function detectAdapterFromUrl(url) {
+  const host = new URL(url).hostname.toLowerCase();
+  if (host === "linkedin.com" || host.endsWith(".linkedin.com")) return "linkedin";
+  if (host === "greenhouse.io" || host.endsWith(".greenhouse.io")) return "greenhouse";
+  if (host === "lever.co" || host.endsWith(".lever.co")) return "lever";
+  if (host === "myworkdayjobs.com" || host.endsWith(".myworkdayjobs.com")) return "workday";
+  return "generic";
+}
+
 function extractFormFields() {
-  const controls = [...document.querySelectorAll("input, textarea, select")].filter((control) => {
+  const host = location.hostname.toLowerCase();
+  const root = host.includes("linkedin.com")
+    ? document.querySelector(".jobs-easy-apply-modal, [role='dialog']") || document
+    : host.includes("greenhouse.io")
+      ? document.querySelector("#application_form, main") || document
+      : host.includes("lever.co")
+        ? document.querySelector(".application-form, main") || document
+        : host.includes("myworkdayjobs.com")
+          ? document.querySelector("[data-automation-id='applicationPage'], main") || document
+          : document;
+  const controls = [...root.querySelectorAll("input, textarea, select")].filter((control) => {
     const type = (control.type || "").toLowerCase();
-    return !control.disabled && !["hidden", "submit", "button", "reset", "image"].includes(type);
+    const style = getComputedStyle(control);
+    const visible = type === "file" || (style.display !== "none" && style.visibility !== "hidden");
+    return visible && !control.disabled && !["hidden", "submit", "button", "reset", "image"].includes(type);
   });
 
   return controls.map((control, index) => {
@@ -162,6 +193,16 @@ function extractJobFromPage() {
   const meta = (name) =>
     document.querySelector(`meta[name="${name}"], meta[property="${name}"]`)?.content || "";
   const clean = (value) => value.replace(/\s+/g, " ").trim();
+  const host = location.hostname.toLowerCase();
+  const adapter = host.includes("linkedin.com")
+    ? "linkedin"
+    : host.includes("greenhouse.io")
+      ? "greenhouse"
+      : host.includes("lever.co")
+        ? "lever"
+        : host.includes("myworkdayjobs.com")
+          ? "workday"
+          : "generic";
 
   let structured = {};
   for (const node of document.querySelectorAll('script[type="application/ld+json"]')) {
@@ -181,19 +222,31 @@ function extractJobFromPage() {
   const organization = structured.hiringOrganization || {};
   const address = structured.jobLocation?.address || structured.applicantLocationRequirements || {};
   const selectors = {
-    title: ["h1", ".job-details-jobs-unified-top-card__job-title", "[data-automation-id='jobPostingHeader']"],
+    title: [
+      ".job-details-jobs-unified-top-card__job-title h1",
+      ".posting-headline h2",
+      "#header .app-title",
+      "[data-automation-id='jobPostingHeader']",
+      "h1",
+    ],
     company: [
       ".job-details-jobs-unified-top-card__company-name",
+      ".posting-headline .company",
+      "#header .company-name",
       "[data-automation-id='jobPostingCompany']",
       ".company-name",
     ],
     location: [
       ".job-details-jobs-unified-top-card__primary-description-container",
+      ".posting-categories .location",
+      "#header .location",
       "[data-automation-id='locations']",
       ".location",
     ],
     description: [
       ".jobs-description-content__text",
+      ".posting-page .section-wrapper",
+      "#content .content",
       "#job-details",
       "[data-automation-id='jobPostingDescription']",
       ".job-description",
@@ -219,12 +272,52 @@ function extractJobFromPage() {
     .filter(Boolean)
     .map((item) => (typeof item === "string" ? item : item.name));
 
+  const atsSuffixes = [
+    "greenhouse.io",
+    "lever.co",
+    "myworkdayjobs.com",
+    "icims.com",
+    "smartrecruiters.com",
+    "ashbyhq.com",
+    "jobvite.com",
+  ];
+  const isRecognizedAts = (url) => {
+    try {
+      const parsed = new URL(url, location.href);
+      return parsed.protocol === "https:" && atsSuffixes.some(
+        (suffix) => parsed.hostname === suffix || parsed.hostname.endsWith(`.${suffix}`),
+      );
+    } catch {
+      return false;
+    }
+  };
+  const externalApply = [...document.querySelectorAll("a[href]")].find((link) => {
+    const linkText = clean(link.textContent || "").toLowerCase();
+    if (!linkText.includes("apply")) return false;
+    try {
+      const target = new URL(link.href, location.href);
+      return target.protocol === "https:" && target.hostname !== location.hostname;
+    } catch {
+      return false;
+    }
+  });
+  const onAtsPage = ["greenhouse", "lever", "workday"].includes(adapter);
+  const companyApplicationUrl = onAtsPage
+    ? location.href
+    : externalApply?.href || (structured.url !== location.href ? structured.url || "" : "");
+  const easyApplyAvailable = [...document.querySelectorAll("button")].some((button) =>
+    clean(button.textContent || "").toLowerCase().includes("easy apply"),
+  );
+
   return {
     source_url: location.href,
     title: clean(structured.title || firstText(selectors.title) || meta("og:title")),
     company: clean(organization.name || firstText(selectors.company)),
     location: clean(locationParts.join(", ") || firstText(selectors.location)),
     description: htmlToText(structured.description) || firstText(selectors.description),
-    company_application_url: structured.url || "",
+    company_application_url: companyApplicationUrl,
+    company_url_verified: onAtsPage || isRecognizedAts(companyApplicationUrl),
+    easy_apply_available: easyApplyAvailable,
+    adapter,
   };
 }
