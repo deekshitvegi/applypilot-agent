@@ -1,5 +1,8 @@
 # ApplyPilot Agent
 
+[![CI](https://github.com/deekshitvegi/applypilot-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/deekshitvegi/applypilot-agent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-6d5dfc.svg)](LICENSE)
+
 **[Open the live demo](https://applypilot-agent.onrender.com)**
 
 **[Test the synthetic employer ATS](https://applypilot-agent.onrender.com/demo/ats)**
@@ -32,7 +35,7 @@ verified company application route is available.
 - Site-specific automation must respect the site's current terms and the
   user's authorization.
 
-## Current working checkpoint
+## MVP status
 
 This repository currently contains:
 
@@ -44,8 +47,8 @@ This repository currently contains:
   capture, chat, and tailoring preview;
 - a company-site-first route planner;
 - a generic form scanner/filler that maps verified profile answers, leaves
-  passwords and authentication fields untouched, reports unknown required
-  questions, and never clicks Submit;
+  passwords and authentication fields untouched, and reports unknown required
+  questions;
 - a synthetic employer ATS for safe end-to-end testing;
 - adapter detection and job extraction for LinkedIn, Greenhouse, Lever, and
   Workday, with recognized ATS links auto-verified and unknown external links
@@ -60,8 +63,10 @@ This repository currently contains:
 - tests for encryption, resume extraction, evidence validation, routing, and APIs;
 - architecture and delivery milestones in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Live form filling and ATS-specific adapters are under active development. The
-hosted dashboard does not pretend those unfinished actions have occurred.
+This is a working MVP, not a claim of universal ATS compatibility. Employer
+sites change frequently; unknown layouts stop safely and need a new adapter or
+manual completion. CAPTCHA, MFA, credential entry, and ambiguous submit controls
+always remain user handoffs.
 
 ## Hosted demo
 
@@ -78,6 +83,20 @@ repository. Free instances can take about a minute to wake after being idle.
 ## Run locally
 
 Requirements: Python 3.11+ and Chrome/Edge with extension developer mode.
+
+Quick setup on Windows:
+
+```powershell
+.\scripts\setup.ps1
+```
+
+Then add a newly generated Gemini key to `.env` and start the local service:
+
+```powershell
+.\scripts\start.ps1
+```
+
+Manual setup:
 
 ```powershell
 python -m venv .venv
@@ -122,8 +141,13 @@ hosted demo URL; Chrome will ask for permission to contact that exact origin.
 ```powershell
 pytest
 ruff check .
+.\scripts\package-extension.ps1
 ```
 
 Do not put real candidate information, API keys, session cookies, or generated
 resumes in GitHub. The repository can hold code and synthetic test fixtures
 only.
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).

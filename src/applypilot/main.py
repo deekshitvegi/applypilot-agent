@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 
 import uvicorn
@@ -9,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import __version__
 from .config import settings
 from .documents import artifact_filename, build_docx, build_pdf
 from .ai import AIProviderError, GeminiProvider
@@ -56,7 +58,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="ApplyPilot Agent", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="ApplyPilot Agent", version=__version__, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"^(chrome-extension|moz-extension)://.*$",
@@ -91,6 +93,8 @@ def health() -> dict[str, str]:
         "status": "ok",
         "service": "applypilot",
         "mode": "demo" if settings.demo_mode else "local",
+        "version": __version__,
+        "revision": os.getenv("RENDER_GIT_COMMIT", "local")[:7],
     }
 
 
