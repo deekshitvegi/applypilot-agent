@@ -1,15 +1,22 @@
-const API_BASE = "http://127.0.0.1:8765";
+const DEFAULT_API_BASE = "http://127.0.0.1:8765";
 
 const connection = document.querySelector("#connection");
 const question = document.querySelector("#question");
 const progress = document.querySelector("#progress");
 const refresh = document.querySelector("#refresh");
+const settings = document.querySelector("#settings");
+
+async function getApiBase() {
+  const stored = await chrome.storage.sync.get({ apiBase: DEFAULT_API_BASE });
+  return stored.apiBase.replace(/\/$/, "");
+}
 
 async function loadState() {
   connection.textContent = "Connecting to local agent…";
   connection.classList.remove("connected");
 
   try {
+    const API_BASE = await getApiBase();
     const healthResponse = await fetch(`${API_BASE}/health`);
     if (!healthResponse.ok) throw new Error("Health check failed");
 
@@ -35,5 +42,5 @@ async function loadState() {
 }
 
 refresh.addEventListener("click", loadState);
+settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
 loadState();
-

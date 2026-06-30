@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: applypilot-agent
+    runtime: python
+    plan: free
+    region: ohio
+    buildCommand: pip install .
+    startCommand: uvicorn applypilot.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: APPLYPILOT_DEMO_MODE
+        value: "true"
+      - key: APPLYPILOT_DATABASE_PATH
+        value: /tmp/applypilot.sqlite3
+      - key: PYTHON_VERSION
+        value: 3.13.5

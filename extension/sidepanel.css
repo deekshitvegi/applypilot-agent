@@ -26,6 +26,10 @@ header {
   border-bottom: 1px solid #26304b;
 }
 
+header > div:nth-child(2) {
+  flex: 1;
+}
+
 .brand-mark {
   display: grid;
   width: 42px;
@@ -104,6 +108,14 @@ button {
   font-weight: 700;
 }
 
+.icon-button {
+  width: 36px;
+  margin: 0;
+  padding: 8px;
+  border-color: #35415f;
+  background: #141d35;
+}
+
 button:disabled,
 textarea:disabled {
   cursor: not-allowed;
@@ -137,4 +149,3 @@ textarea {
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
 }
-

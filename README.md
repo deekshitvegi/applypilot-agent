@@ -38,6 +38,18 @@ This repository currently contains:
 - tests for the profile store and onboarding question flow;
 - architecture and delivery milestones in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+## Hosted demo
+
+The repository includes a Render Blueprint for a stateless public demo. The
+hosted instance demonstrates service health and company-site-first routing, but
+it disables candidate profile storage. Real resumes, answers, and browser
+automation stay in the local service.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/deekshitvegi/applypilot-agent)
+
+Render automatically rebuilds the service from `main` after it is linked to the
+repository. Free instances can take about a minute to wake after being idle.
+
 ## Run locally
 
 Requirements: Python 3.11+ and Chrome/Edge with extension developer mode.
@@ -62,6 +74,9 @@ To load the browser side panel:
 2. Enable **Developer mode**.
 3. Choose **Load unpacked** and select the `extension` directory.
 4. Pin ApplyPilot and click its toolbar icon on a job page.
+
+The extension defaults to the local service. Its settings page can point to a
+hosted demo URL; Chrome will ask for permission to contact that exact origin.
 
 ## Development
 

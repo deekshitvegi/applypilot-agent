@@ -3,8 +3,9 @@
   "name": "ApplyPilot",
   "description": "Local-first job application copilot",
   "version": "0.1.0",
-  "permissions": ["activeTab", "sidePanel"],
+  "permissions": ["activeTab", "sidePanel", "storage"],
   "host_permissions": ["http://127.0.0.1:8765/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
   "background": {
     "service_worker": "service-worker.js"
   },
@@ -13,6 +14,6 @@
   },
   "side_panel": {
     "default_path": "sidepanel.html"
-  }
+  },
+  "options_page": "options.html"
 }
-

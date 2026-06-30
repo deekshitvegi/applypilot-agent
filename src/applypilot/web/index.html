@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="ApplyPilot public demo — company-site-first job application copilot"
+    />
+    <title>ApplyPilot Agent — Live Demo</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <nav>
+      <a class="brand" href="/" aria-label="ApplyPilot home">
+        <span class="brand-mark">AP</span>
+        <span>ApplyPilot</span>
+      </a>
+      <div class="nav-actions">
+        <span id="service-status" class="status-pill">Connecting…</span>
+        <a
+          class="github-link"
+          href="https://github.com/deekshitvegi/applypilot-agent"
+          target="_blank"
+          rel="noreferrer"
+        >GitHub ↗</a>
+      </div>
+    </nav>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">OPEN-SOURCE JOB APPLICATION COPILOT</p>
+          <h1>Apply on the company site.<br /><span>Arrive prepared.</span></h1>
+          <p class="hero-copy">
+            ApplyPilot is being built to understand a job, tailor truthful application
+            materials, and complete employer ATS forms through a browser side panel.
+          </p>
+        </div>
+        <aside class="privacy-note">
+          <span class="privacy-icon">⌂</span>
+          <div>
+            <strong>Public demo, private data</strong>
+            <p>This hosted instance does not save names, résumés, or application answers.</p>
+          </div>
+        </aside>
+      </section>
+
+      <section class="workspace-grid">
+        <article class="panel route-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">ROUTE PLANNER</p>
+              <h2>Choose where to apply</h2>
+            </div>
+            <span class="step-badge">Working now</span>
+          </div>
+
+          <form id="route-form">
+            <label>
+              Job listing URL
+              <input
+                id="source-url"
+                type="url"
+                value="https://www.linkedin.com/jobs/view/example"
+                required
+              />
+            </label>
+            <label>
+              Company or ATS application URL
+              <input
+                id="company-url"
+                type="url"
+                value="https://careers.example.com/jobs/123/apply"
+              />
+            </label>
+            <div class="check-row">
+              <label class="check-label">
+                <input id="verified" type="checkbox" checked />
+                External URL is verified
+              </label>
+              <label class="check-label">
+                <input id="easy-apply" type="checkbox" checked />
+                Easy Apply is available
+              </label>
+            </div>
+            <button type="submit">Plan application route</button>
+          </form>
+
+          <div id="route-result" class="route-result" aria-live="polite">
+            <p class="result-label">PLANNED ROUTE</p>
+            <strong>Company application</strong>
+            <p>A verified employer or ATS page wins over Easy Apply.</p>
+          </div>
+        </article>
+
+        <article class="panel copilot-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">AGENT PREVIEW</p>
+              <h2>Application timeline</h2>
+            </div>
+            <span class="step-badge muted-badge">In development</span>
+          </div>
+
+          <ol class="timeline">
+            <li class="done">
+              <span>1</span>
+              <div><strong>Discover job</strong><p>Read the active listing and locate the employer route.</p></div>
+            </li>
+            <li class="active">
+              <span>2</span>
+              <div><strong>Analyze requirements</strong><p>Match evidence from the candidate’s real experience.</p></div>
+            </li>
+            <li>
+              <span>3</span>
+              <div><strong>Tailor materials</strong><p>Rephrase and reorder without inventing claims.</p></div>
+            </li>
+            <li>
+              <span>4</span>
+              <div><strong>Fill employer ATS</strong><p>Use remembered answers and pause on unknown questions.</p></div>
+            </li>
+            <li>
+              <span>5</span>
+              <div><strong>Review and submit</strong><p>Show the exact application before the final action.</p></div>
+            </li>
+          </ol>
+
+          <div class="honesty-card">
+            <strong>What this demo proves today</strong>
+            <p>
+              Service health, company-site-first routing, local-data boundaries, and the
+              browser side-panel foundation. AI tailoring and live form filling are the next
+              engineering milestones—not simulated buttons.
+            </p>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <p>Built in public. Designed to keep candidate data local.</p>
+      <a href="/docs">API docs</a>
+    </footer>
+
+    <script src="/assets/app.js"></script>
+  </body>
+</html>
