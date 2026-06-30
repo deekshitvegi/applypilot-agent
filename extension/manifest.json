@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "ApplyPilot",
+  "description": "Local-first job application copilot",
+  "version": "0.1.0",
+  "permissions": ["activeTab", "sidePanel"],
+  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Open ApplyPilot"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}
+

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ApplyPilot</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand-mark">AP</div>
+      <div>
+        <h1>ApplyPilot</h1>
+        <p id="connection" class="status">Connecting to local agent…</p>
+      </div>
+    </header>
+
+    <main>
+      <section class="card">
+        <p class="eyebrow">ONBOARDING</p>
+        <h2 id="question">Checking your candidate profile…</h2>
+        <p id="progress" class="muted"></p>
+        <button id="refresh" type="button">Refresh</button>
+      </section>
+
+      <section class="card chat-card">
+        <p class="eyebrow">LIVE COPILOT</p>
+        <div id="messages" class="messages" aria-live="polite">
+          <p class="agent-message">
+            I’m ready. Job-aware chat and page actions arrive in the next checkpoint.
+          </p>
+        </div>
+        <form id="chat-form">
+          <label class="sr-only" for="chat-input">Message ApplyPilot</label>
+          <textarea
+            id="chat-input"
+            rows="2"
+            placeholder="Ask about this application…"
+            disabled
+          ></textarea>
+          <button type="submit" disabled>Send</button>
+        </form>
+      </section>
+    </main>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
+
