@@ -21,6 +21,10 @@ const elements = {
   fillForm: document.querySelector("#fill-form"),
   formStatus: document.querySelector("#form-status"),
   formResult: document.querySelector("#form-result"),
+  unknownAnswerForm: document.querySelector("#unknown-answer-form"),
+  unknownQuestion: document.querySelector("#unknown-question"),
+  unknownAnswer: document.querySelector("#unknown-answer"),
+  approveSubmit: document.querySelector("#approve-submit"),
   chatForm: document.querySelector("#chat-form"),
   chatInput: document.querySelector("#chat-input"),
   chatButton: document.querySelector("#chat-form button"),
@@ -34,6 +38,9 @@ const state = {
   provider: null,
   job: null,
   route: null,
+  application: null,
+  submitClicked: false,
+  formScan: null,
   formPlan: null,
   localMode: false,
 };
@@ -46,6 +53,16 @@ async function api(path, options = {}) {
   }
   if (response.status === 204) return null;
   return response.json();
+}
+
+async function transitionApplication(status, message, metadata = {}) {
+  if (!state.application || state.application.status === status) return state.application;
+  state.application = await api(`/api/applications/${state.application.id}/transition`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status, message, metadata }),
+  });
+  return state.application;
 }
 
 async function loadState() {
@@ -185,6 +202,10 @@ async function captureJob() {
       throw new Error("Could not find a complete job description on this page.");
     }
     state.job = captured;
+    state.submitClicked = false;
+    elements.approveSubmit.classList.add("hidden");
+    elements.approveSubmit.disabled = false;
+    elements.approveSubmit.textContent = "Approve and submit application";
     elements.jobTitle.textContent = captured.title || "Captured job";
     elements.jobCompany.textContent = [captured.company, captured.location].filter(Boolean).join(" · ");
     elements.tailorResume.disabled = !(state.localMode && state.provider?.configured);
@@ -197,6 +218,14 @@ async function captureJob() {
         company_url_verified: captured.company_url_verified,
         easy_apply_available: captured.easy_apply_available,
       }),
+    });
+    state.application = await api("/api/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job: captured, route: state.route }),
+    });
+    await transitionApplication("analyzed", "Job and application route analyzed.", {
+      adapter: captured.adapter,
     });
     if (state.route.route === "company_site") {
       elements.openApplication.textContent = "Open company application";
@@ -229,6 +258,7 @@ async function openApplication() {
     });
     if (result.error) throw new Error(result.error);
     elements.openApplication.textContent = "Company application opened";
+    await transitionApplication("filling", "Opened the company application route.");
   } catch (error) {
     elements.jobCompany.textContent = error.message;
     elements.openApplication.disabled = false;
@@ -256,6 +286,7 @@ async function tailorResume() {
       <p><strong>Skills:</strong> ${escapeHtml(tailored.skills.join(", "))}</p>
       ${warnings}
     `;
+    await transitionApplication("materials_ready", "Created an evidence-grounded tailored draft.");
   } catch (error) {
     elements.tailorResult.textContent = error.message;
   } finally {
@@ -272,20 +303,12 @@ async function scanForm() {
     const scan = await chrome.runtime.sendMessage({ action: "scanForm" });
     if (scan.error) throw new Error(scan.error);
     if (!scan.fields.length) throw new Error("No fillable fields were found on this page.");
-    state.formPlan = await api("/api/forms/plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(scan),
+    state.formScan = scan;
+    await transitionApplication("filling", "Application form fields detected.", {
+      adapter: scan.adapter,
+      field_count: String(scan.fields.length),
     });
-    const requiredUnknown = state.formPlan.unknown_fields.filter((field) => field.required);
-    elements.formStatus.textContent = `${scan.fields.length} fields found · ${state.formPlan.actions.length} known`;
-    elements.formResult.innerHTML = `
-      <strong>${state.formPlan.actions.length} fields ready</strong>
-      <p>${requiredUnknown.length} required questions need your answer.</p>
-      <p>${state.formPlan.blocked_fields.length} sensitive/authentication fields will be left alone.</p>
-      <p>The final Submit button will not be clicked.</p>
-    `;
-    elements.fillForm.disabled = state.formPlan.actions.length === 0;
+    await replanForm();
   } catch (error) {
     elements.formStatus.textContent = error.message;
     elements.formResult.textContent = "Nothing was changed on the page.";
@@ -293,6 +316,57 @@ async function scanForm() {
     elements.scanForm.disabled = false;
     elements.scanForm.textContent = "Analyze visible fields";
   }
+}
+
+async function replanForm() {
+  state.formPlan = await api("/api/forms/plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(state.formScan),
+  });
+  const requiredUnknown = state.formPlan.unknown_fields.filter((field) => field.required);
+  const requiredBlocked = state.formPlan.blocked_fields.filter((field) => field.required);
+  elements.formStatus.textContent = `${state.formScan.fields.length} fields found · ${state.formPlan.actions.length} known`;
+  elements.formResult.innerHTML = `
+    <strong>${state.formPlan.actions.length} fields ready</strong>
+    <p>${requiredUnknown.length} required questions need your answer.</p>
+    <p>${state.formPlan.blocked_fields.length} sensitive/authentication fields will be left alone.</p>
+    <p>The final Submit button will not be clicked.</p>
+  `;
+  elements.fillForm.disabled = state.formPlan.actions.length === 0;
+
+  if (requiredUnknown.length) {
+    const [firstUnknown] = requiredUnknown;
+    elements.unknownAnswerForm.classList.remove("hidden");
+    elements.unknownQuestion.textContent = firstUnknown.label;
+    elements.unknownAnswer.value = "";
+    await transitionApplication("blocked", "A required question needs a verified answer.", {
+      question: firstUnknown.label,
+    });
+  } else {
+    elements.unknownAnswerForm.classList.add("hidden");
+    if (requiredBlocked.length) {
+      await transitionApplication("blocked", "A required authentication field needs the user.", {
+        field: requiredBlocked[0].label,
+      });
+    } else if (state.application?.status === "blocked") {
+      await transitionApplication("filling", "All required questions now have verified answers.");
+    }
+  }
+}
+
+async function saveUnknownAnswer(event) {
+  event.preventDefault();
+  const answer = elements.unknownAnswer.value.trim();
+  const question = elements.unknownQuestion.textContent.trim();
+  if (!answer || !question) return;
+  const id = crypto.randomUUID();
+  await api(`/api/answers/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, question, answer, field_type: "text", sensitive: false }),
+  });
+  await replanForm();
 }
 
 async function fillForm() {
@@ -311,11 +385,61 @@ async function fillForm() {
       <p>${result.errors.length ? escapeHtml(result.errors.join(" ")) : "No fill errors detected."}</p>
       <p>ApplyPilot did not submit the application.</p>
     `;
+    const requiredUnknown = state.formPlan.unknown_fields.some((field) => field.required);
+    const requiredBlocked = state.formPlan.blocked_fields.some((field) => field.required);
+    if (!requiredUnknown && !requiredBlocked) {
+      await transitionApplication(
+        "review_required",
+        "Known fields were filled; final user review is required.",
+      );
+      elements.approveSubmit.classList.remove("hidden");
+    }
   } catch (error) {
     elements.formStatus.textContent = error.message;
   } finally {
     elements.fillForm.disabled = false;
     elements.fillForm.textContent = "Fill known fields";
+  }
+}
+
+async function approveAndSubmit() {
+  try {
+    if (!state.submitClicked) {
+      const confirmed = window.confirm(
+        "ApplyPilot will click the final Submit button now. Confirm that you reviewed every field.",
+      );
+      if (!confirmed) return;
+
+      elements.approveSubmit.disabled = true;
+      elements.approveSubmit.textContent = "Submitting…";
+      const result = await chrome.runtime.sendMessage({ action: "submitApplication" });
+      if (result.error || !result.clicked) {
+        throw new Error(result.error || "Submission was not completed.");
+      }
+      state.submitClicked = true;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+
+    const verification = await chrome.runtime.sendMessage({ action: "verifySubmission" });
+    if (verification.error || !verification.confirmed) {
+      elements.formStatus.textContent =
+        verification.error || "Submit was clicked, but site confirmation is not visible yet.";
+      elements.approveSubmit.disabled = false;
+      elements.approveSubmit.textContent = "Verify site result";
+      return;
+    }
+    await transitionApplication(
+      "submitted",
+      "The user approved submission and the employer site displayed confirmation.",
+      { signal: verification.signal },
+    );
+    elements.approveSubmit.textContent = "Submission confirmed";
+  } catch (error) {
+    elements.formStatus.textContent = error.message;
+    elements.approveSubmit.disabled = false;
+    elements.approveSubmit.textContent = state.submitClicked
+      ? "Verify site result"
+      : "Approve and submit application";
   }
 }
 
@@ -362,6 +486,8 @@ elements.openApplication.addEventListener("click", openApplication);
 elements.tailorResume.addEventListener("click", tailorResume);
 elements.scanForm.addEventListener("click", scanForm);
 elements.fillForm.addEventListener("click", fillForm);
+elements.unknownAnswerForm.addEventListener("submit", saveUnknownAnswer);
+elements.approveSubmit.addEventListener("click", approveAndSubmit);
 elements.chatForm.addEventListener("submit", sendChat);
 elements.refresh.addEventListener("click", loadState);
 elements.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());

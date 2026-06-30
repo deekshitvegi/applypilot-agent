@@ -209,3 +209,45 @@ class FormFillPlan(BaseModel):
     blocked_fields: list[UnknownField] = Field(default_factory=list)
     confirmation_required: bool = True
     submit_allowed: bool = False
+
+
+ApplicationStatus = Literal[
+    "discovered",
+    "analyzed",
+    "materials_ready",
+    "filling",
+    "review_required",
+    "blocked",
+    "submitted",
+    "abandoned",
+]
+
+
+class ApplicationEvent(BaseModel):
+    id: str = Field(default_factory=new_id)
+    event_type: str
+    message: str
+    metadata: dict[str, str] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ApplicationRecord(BaseModel):
+    id: str = Field(default_factory=new_id)
+    job: JobContext
+    status: ApplicationStatus = "discovered"
+    route: ApplicationRouteDecision | None = None
+    blocked_reason: str = ""
+    events: list[ApplicationEvent] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class ApplicationCreate(BaseModel):
+    job: JobContext
+    route: ApplicationRouteDecision | None = None
+
+
+class ApplicationTransition(BaseModel):
+    status: ApplicationStatus
+    message: str
+    metadata: dict[str, str] = Field(default_factory=dict)

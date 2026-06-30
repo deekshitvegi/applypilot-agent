@@ -11,8 +11,16 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .ai import AIProviderError, GeminiProvider
+from .applications import (
+    InvalidApplicationTransition,
+    create_application,
+    transition_application,
+)
 from .models import (
     ApplicationRouteDecision,
+    ApplicationCreate,
+    ApplicationRecord,
+    ApplicationTransition,
     CandidateProfile,
     ChatRequest,
     ChatResponse,
@@ -84,13 +92,15 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/capabilities")
-def capabilities() -> dict[str, bool | str]:
+def capabilities() -> dict[str, object]:
     return {
         "mode": "demo" if settings.demo_mode else "local",
         "stores_candidate_data": not settings.demo_mode,
         "company_site_first": True,
-        "live_site_automation": False,
+        "live_site_automation": not settings.demo_mode,
         "resume_tailoring": ai_provider.configured and not settings.demo_mode,
+        "supported_adapters": ["linkedin", "greenhouse", "lever", "workday", "generic"],
+        "review_before_submit": True,
     }
 
 
@@ -226,6 +236,45 @@ def form_plan(request: FormPlanRequest) -> FormFillPlan:
         answers=store.list_answers(),
         adapter=request.adapter,
     )
+
+
+@app.post("/api/applications", response_model=ApplicationRecord)
+def start_application(request: ApplicationCreate) -> ApplicationRecord:
+    require_local_data_mode()
+    return store.save_application(create_application(request))
+
+
+@app.get("/api/applications", response_model=list[ApplicationRecord])
+def list_applications() -> list[ApplicationRecord]:
+    require_local_data_mode()
+    return store.list_applications()
+
+
+@app.get("/api/applications/{application_id}", response_model=ApplicationRecord)
+def get_application(application_id: str) -> ApplicationRecord:
+    require_local_data_mode()
+    application = store.get_application(application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return application
+
+
+@app.post(
+    "/api/applications/{application_id}/transition",
+    response_model=ApplicationRecord,
+)
+def transition_saved_application(
+    application_id: str, transition: ApplicationTransition
+) -> ApplicationRecord:
+    require_local_data_mode()
+    application = store.get_application(application_id)
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    try:
+        updated = transition_application(application, transition)
+    except InvalidApplicationTransition as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return store.save_application(updated)
 
 
 def run() -> None:

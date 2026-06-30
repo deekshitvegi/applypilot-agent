@@ -50,6 +50,10 @@ This repository currently contains:
 - adapter detection and job extraction for LinkedIn, Greenhouse, Lever, and
   Workday, with recognized ATS links auto-verified and unknown external links
   held for review;
+- encrypted per-job application sessions and audit events;
+- blocked-question recovery that remembers a new answer and replans the form;
+- an explicit two-step final-submit approval that pauses for CAPTCHA/MFA and
+  records `submitted` only after the site displays a confirmation signal;
 - tests for encryption, resume extraction, evidence validation, routing, and APIs;
 - architecture and delivery milestones in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

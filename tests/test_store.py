@@ -2,7 +2,13 @@ from pathlib import Path
 
 import sqlite3
 
-from applypilot.models import CandidateProfile, ResumeDocument, ReusableAnswer
+from applypilot.models import (
+    ApplicationRecord,
+    CandidateProfile,
+    JobContext,
+    ResumeDocument,
+    ReusableAnswer,
+)
 from applypilot.store import ProfileStore
 
 
@@ -43,3 +49,20 @@ def test_answer_and_resume_round_trip(tmp_path: Path) -> None:
     assert store.list_resumes() == [resume]
     assert store.delete_answer(answer.id) is True
     assert store.list_answers() == []
+
+
+def test_application_round_trip(tmp_path: Path) -> None:
+    store = ProfileStore(tmp_path / "profile.sqlite3")
+    application = ApplicationRecord(
+        job=JobContext(
+            title="Software Engineer",
+            company="Example Robotics",
+            description="Build reliable Python automation.",
+        ),
+        status="analyzed",
+    )
+
+    store.save_application(application)
+
+    assert store.get_application(application.id) == application
+    assert store.list_applications() == [application]

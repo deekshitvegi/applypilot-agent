@@ -4,7 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from .models import CandidateProfile, ResumeDocument, ReusableAnswer
+from .models import ApplicationRecord, CandidateProfile, ResumeDocument, ReusableAnswer
 from .security import LocalCipher
 
 
@@ -20,6 +20,16 @@ class ProfileStore:
                 """
                 CREATE TABLE IF NOT EXISTS candidate_profile (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
+                    payload TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS applications (
+                    id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL,
                     payload TEXT NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
@@ -145,6 +155,44 @@ class ProfileStore:
                 "SELECT payload FROM resumes ORDER BY uploaded_at DESC"
             ).fetchall()
         return [ResumeDocument.model_validate_json(self.cipher.decrypt(row[0])) for row in rows]
+
+    def save_application(self, application: ApplicationRecord) -> ApplicationRecord:
+        self.initialize()
+        payload = self.cipher.encrypt(application.model_dump_json())
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO applications (id, status, payload, updated_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    status = excluded.status,
+                    payload = excluded.payload,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (application.id, application.status, payload),
+            )
+        return application
+
+    def get_application(self, application_id: str) -> ApplicationRecord | None:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM applications WHERE id = ?", (application_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return ApplicationRecord.model_validate_json(self.cipher.decrypt(row[0]))
+
+    def list_applications(self) -> list[ApplicationRecord]:
+        self.initialize()
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM applications ORDER BY updated_at DESC"
+            ).fetchall()
+        return [
+            ApplicationRecord.model_validate_json(self.cipher.decrypt(row[0]))
+            for row in rows
+        ]
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.database_path)

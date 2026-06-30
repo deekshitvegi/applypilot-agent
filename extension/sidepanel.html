@@ -60,6 +60,14 @@
         <button id="fill-form" class="secondary-button" type="button" disabled>
           Fill known fields
         </button>
+        <form id="unknown-answer-form" class="hidden">
+          <label id="unknown-question" for="unknown-answer">Unknown required question</label>
+          <input id="unknown-answer" type="text" autocomplete="off" />
+          <button type="submit">Remember answer and replan</button>
+        </form>
+        <button id="approve-submit" class="danger-button hidden" type="button">
+          Approve and submit application
+        </button>
         <div id="form-result" class="result-box hidden"></div>
       </section>
 

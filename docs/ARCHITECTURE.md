@@ -52,6 +52,13 @@ DISCOVERED -> ANALYZED -> MATERIALS_READY -> FILLING -> REVIEW_REQUIRED
 change, or a validation failure. The agent pauses and explains the exact action
 needed in the side panel.
 
+Each transition is appended to an encrypted local audit record. A required
+unknown question can be answered in the side panel and stored as a reusable
+answer; the form is then replanned. The final submit action requires an explicit
+side-panel confirmation, refuses to act when CAPTCHA/MFA is visible, targets
+only a unique known submit label, and waits for an employer-site confirmation
+signal before recording `SUBMITTED`.
+
 ## Site adapters
 
 Every supported application surface implements the same small contract:

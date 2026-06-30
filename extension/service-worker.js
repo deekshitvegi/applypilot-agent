@@ -8,6 +8,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     scanForm: scanActiveForm,
     fillForm: () => fillActiveForm(message.actions || []),
     openApplication: () => openApplicationRoute(message.url),
+    submitApplication: submitActiveApplication,
+    verifySubmission: verifyActiveSubmission,
   };
   const action = actions[message.action];
   if (!action) return false;
@@ -46,6 +48,24 @@ async function fillActiveForm(actions) {
     target: { tabId: tab.id },
     func: applyFormFillPlan,
     args: [actions],
+  });
+  return result.result;
+}
+
+async function submitActiveApplication() {
+  const tab = await getActiveHttpTab();
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: clickFinalSubmit,
+  });
+  return result.result;
+}
+
+async function verifyActiveSubmission() {
+  const tab = await getActiveHttpTab();
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: detectSubmissionConfirmation,
   });
   return result.result;
 }
@@ -186,6 +206,66 @@ function applyFormFillPlan(actions) {
   }
 
   return { filled, errors, submit_clicked: false };
+}
+
+function clickFinalSubmit() {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+  const challenge = [
+    "iframe[src*='captcha']",
+    "iframe[src*='recaptcha']",
+    "iframe[src*='hcaptcha']",
+    "[class*='captcha']",
+    "[id*='captcha']",
+    "input[autocomplete='one-time-code']",
+  ].some((selector) => [...document.querySelectorAll(selector)].some(visible));
+  if (challenge) {
+    return { clicked: false, error: "CAPTCHA or verification is present and requires the user." };
+  }
+
+  const labels = ["submit application", "submit", "send application", "finish application"];
+  const candidates = [...document.querySelectorAll("button, input[type='submit']")].filter((button) => {
+    if (button.disabled || !visible(button)) return false;
+    const label = (button.textContent || button.value || button.getAttribute("aria-label") || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    return labels.includes(label);
+  });
+
+  if (candidates.length !== 1) {
+    return {
+      clicked: false,
+      error: candidates.length
+        ? "Multiple final-submit controls were found; submit manually."
+        : "A unique final-submit control was not found.",
+    };
+  }
+
+  const label = (candidates[0].textContent || candidates[0].value || "Submit").trim();
+  candidates[0].click();
+  return { clicked: true, label };
+}
+
+function detectSubmissionConfirmation() {
+  const text = (document.body?.innerText || "").replace(/\s+/g, " ").toLowerCase();
+  const patterns = [
+    "application submitted",
+    "application has been submitted",
+    "thank you for applying",
+    "thanks for applying",
+    "we received your application",
+    "we've received your application",
+  ];
+  const urlSignal = /submitted|thank[-_]?you|confirmation/i.test(location.pathname);
+  const matched = patterns.find((pattern) => text.includes(pattern));
+  return {
+    confirmed: Boolean(matched || urlSignal),
+    signal: matched || (urlSignal ? "confirmation URL" : ""),
+  };
 }
 
 function extractJobFromPage() {

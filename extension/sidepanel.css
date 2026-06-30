@@ -163,6 +163,12 @@ select {
   color: #d6def4;
 }
 
+.danger-button {
+  border-color: #f97316;
+  background: #c2410c;
+  color: white;
+}
+
 .file-button {
   display: block;
   margin-top: 14px;
