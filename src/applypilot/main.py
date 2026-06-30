@@ -30,6 +30,8 @@ from .models import (
     FormFillPlan,
     FormPlanRequest,
     JobApplicationOptions,
+    JobFitAnalysis,
+    JobPreparation,
     OnboardingState,
     ProviderStatus,
     ProviderConfigRequest,
@@ -107,6 +109,10 @@ def capabilities() -> dict[str, object]:
         "company_site_first": True,
         "live_site_automation": not settings.demo_mode,
         "resume_tailoring": ai_provider.configured and not settings.demo_mode,
+        "job_fit_analysis": ai_provider.configured and not settings.demo_mode,
+        "deterministic_autofill": not settings.demo_mode,
+        "editable_reusable_profile": not settings.demo_mode,
+        "automation_policies": ["review_each", "always_allow"],
         "supported_adapters": ["linkedin", "greenhouse", "lever", "workday", "generic"],
         "review_before_submit": True,
     }
@@ -220,6 +226,38 @@ def tailor_resume(request: TailorRequest) -> TailoredResume:
         return ai_provider.tailor_resume(resume, request.job)
     except AIProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/jobs/analyze", response_model=JobFitAnalysis)
+def analyze_job(request: TailorRequest) -> JobFitAnalysis:
+    require_local_data_mode()
+    resume = store.get_active_resume()
+    if resume is None:
+        raise HTTPException(status_code=404, detail="Upload a resume before analyzing job fit")
+    try:
+        return ai_provider.analyze_job(resume, request.job)
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/jobs/prepare", response_model=JobPreparation)
+def prepare_job(request: TailoredArtifactRequest) -> JobPreparation:
+    require_local_data_mode()
+    resume = store.get_active_resume()
+    if resume is None:
+        raise HTTPException(status_code=404, detail="Upload a resume before preparing a job")
+    if request.application_id and store.get_application(request.application_id) is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    try:
+        evidence = ai_provider.extract_evidence(resume)
+        analysis = ai_provider.analyze_job(resume, request.job, evidence)
+        tailored = ai_provider.tailor_resume(resume, request.job, evidence)
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    artifact = store.save_tailored_artifact(
+        TailoredArtifact(application_id=request.application_id, tailored=tailored)
+    )
+    return JobPreparation(analysis=analysis, artifact=artifact)
 
 
 @app.post("/api/tailored", response_model=TailoredArtifact)

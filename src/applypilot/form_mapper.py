@@ -94,6 +94,7 @@ def map_profile_field(
         (("last name", "family name", "surname"), last_name, "profile.legal_name"),
         (("full name", "legal name"), profile.legal_name, "profile.legal_name"),
         (("preferred name",), profile.preferred_name, "profile.preferred_name"),
+        (("pronoun",), profile.pronouns, "profile.pronouns"),
         (("email", "email address"), profile.email, "profile.email"),
         (("phone", "mobile"), profile.phone, "profile.phone"),
         (("street address", "address line 1"), profile.address_line_1, "profile.address_line_1"),
@@ -115,6 +116,10 @@ def map_profile_field(
         (("background check",), profile.background_check_consent, "profile.background_check_consent"),
         (("notice period", "available to start"), profile.notice_period, "profile.notice_period"),
         (("salary", "compensation", "pay expectation"), profile.desired_salary, "profile.desired_salary"),
+        (("gender", "gender identity", "sex"), profile.gender_identity, "profile.gender_identity"),
+        (("race", "ethnicity", "ethnic background"), profile.race_ethnicity, "profile.race_ethnicity"),
+        (("veteran", "protected veteran"), profile.veteran_status, "profile.veteran_status"),
+        (("disability", "disabled"), profile.disability_status, "profile.disability_status"),
     ]
 
     for patterns, raw_value, source in mappings:
@@ -144,6 +149,11 @@ def coerce_option(value: str, field: FormField) -> str:
     if not field.options:
         return value
     normalized_value = normalize(value)
+    semantic = semantic_choice(normalized_value)
+    if semantic:
+        for option in field.options:
+            if semantic_choice(normalize(f"{option.value} {option.label}")) == semantic:
+                return option.value
     for option in field.options:
         if normalized_value in {normalize(option.value), normalize(option.label)}:
             return option.value
@@ -152,6 +162,22 @@ def coerce_option(value: str, field: FormField) -> str:
         if normalized_value in option_text or option_text in normalized_value:
             return option.value
     return value
+
+
+def semantic_choice(value: str) -> str:
+    if any(phrase in value for phrase in ("prefer not", "decline", "do not wish")):
+        return "decline"
+    tokens = set(value.split())
+    if value in {"yes", "true", "1"} or "yes" in tokens:
+        return "yes"
+    if (
+        value in {"no", "false", "0"}
+        or "no" in tokens
+        or "do not have" in value
+        or "not a protected veteran" in value
+    ):
+        return "no"
+    return ""
 
 
 def boolean_value(value: str | bool, field: FormField) -> str:

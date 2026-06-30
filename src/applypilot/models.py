@@ -12,6 +12,7 @@ class CandidateProfile(BaseModel):
 
     legal_name: str = ""
     preferred_name: str = ""
+    pronouns: str = ""
     email: str = ""
     phone: str = ""
     address_line_1: str = ""
@@ -34,6 +35,10 @@ class CandidateProfile(BaseModel):
     notice_period: str = ""
     desired_salary: str = ""
     remote_preference: Literal["", "remote", "hybrid", "onsite", "flexible"] = ""
+    gender_identity: str = ""
+    race_ethnicity: str = ""
+    veteran_status: str = ""
+    disability_status: str = ""
     custom_answers: dict[str, str] = Field(default_factory=dict)
 
 
@@ -133,6 +138,16 @@ class TailoredResume(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class JobFitAnalysis(BaseModel):
+    score: int = Field(ge=0, le=100)
+    verdict: Literal["strong", "possible", "stretch"]
+    summary: str
+    strengths: list[str] = Field(default_factory=list)
+    gaps: list[str] = Field(default_factory=list)
+    matched_keywords: list[str] = Field(default_factory=list)
+    recommendation: str
+
+
 class TailorRequest(BaseModel):
     job: JobContext
 
@@ -147,6 +162,11 @@ class TailoredArtifact(BaseModel):
     application_id: str = ""
     tailored: TailoredResume
     created_at: datetime = Field(default_factory=utc_now)
+
+
+class JobPreparation(BaseModel):
+    analysis: JobFitAnalysis
+    artifact: TailoredArtifact
 
 
 class ChatRequest(BaseModel):

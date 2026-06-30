@@ -53,3 +53,48 @@ def test_uses_similar_reusable_answer() -> None:
 
     assert plan.actions[0].value == "Yes"
     assert plan.actions[0].source == f"answer.{answer.id}"
+
+
+def test_maps_voluntary_demographics_without_an_ai_provider() -> None:
+    profile = CandidateProfile(
+        race_ethnicity="Prefer not to answer",
+        veteran_status="No",
+        disability_status="Yes",
+    )
+    fields = [
+        FormField(
+            id="race",
+            label="Race / ethnicity",
+            field_type="select",
+            options=[
+                FormOption(value="decline", label="I prefer not to answer"),
+                FormOption(value="asian", label="Asian"),
+            ],
+        ),
+        FormField(
+            id="veteran",
+            label="Protected veteran status",
+            field_type="select",
+            options=[
+                FormOption(value="protected", label="Yes, I am a protected veteran"),
+                FormOption(value="not-protected", label="No, I am not a protected veteran"),
+            ],
+        ),
+        FormField(
+            id="disability",
+            label="Disability status",
+            field_type="select",
+            options=[
+                FormOption(value="yes", label="Yes, I have a disability"),
+                FormOption(value="no", label="No, I do not have a disability"),
+            ],
+        ),
+    ]
+
+    plan = plan_form_fill("https://example.test", fields, profile, [])
+
+    assert {action.field_id: action.value for action in plan.actions} == {
+        "race": "decline",
+        "veteran": "not-protected",
+        "disability": "yes",
+    }

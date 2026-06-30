@@ -11,6 +11,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     submitApplication: submitActiveApplication,
     verifySubmission: verifyActiveSubmission,
     attachResume: () => attachResumeFile(message.fieldId, message.url, message.filename),
+    getActiveTab: getActiveTabInfo,
+    getTab: () => getTabInfo(message.tabId),
+    readPageContext: readActivePageContext,
+    collectJobQueue: () => collectLinkedInJobQueue(message.tabId),
+    openQueuedJob: () => openQueuedJob(message.tabId, message.url),
+    openEasyApply: openLinkedInEasyApply,
   };
   const action = actions[message.action];
   if (!action) return false;
@@ -27,48 +33,29 @@ async function captureActiveJob() {
     throw new Error("Open a job page in the active tab first.");
   }
 
-  const [result] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: extractJobFromPage,
-  });
-  return result.result;
+  const result = await runInTab(tab.id, extractJobFromPage);
+  return { ...result, tab_id: tab.id };
 }
 
 async function scanActiveForm() {
   const tab = await getActiveHttpTab();
-  const [result] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: extractFormFields,
-  });
-  return { page_url: tab.url, fields: result.result, adapter: detectAdapterFromUrl(tab.url) };
+  const fields = await runInTab(tab.id, extractFormFields);
+  return { page_url: tab.url, fields, adapter: detectAdapterFromUrl(tab.url) };
 }
 
 async function fillActiveForm(actions) {
   const tab = await getActiveHttpTab();
-  const [result] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: applyFormFillPlan,
-    args: [actions],
-  });
-  return result.result;
+  return runInTab(tab.id, applyFormFillPlan, [actions]);
 }
 
 async function submitActiveApplication() {
   const tab = await getActiveHttpTab();
-  const [result] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: clickFinalSubmit,
-  });
-  return result.result;
+  return runInTab(tab.id, clickFinalSubmit);
 }
 
 async function verifyActiveSubmission() {
   const tab = await getActiveHttpTab();
-  const [result] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: detectSubmissionConfirmation,
-  });
-  return result.result;
+  return runInTab(tab.id, detectSubmissionConfirmation);
 }
 
 async function attachResumeFile(fieldId, url, filename) {
@@ -84,12 +71,67 @@ async function attachResumeFile(fieldId, url, filename) {
     binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
   }
   const tab = await getActiveHttpTab();
-  const [result] = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: applyFileToInput,
-    args: [fieldId, btoa(binary), filename],
-  });
-  return result.result;
+  return runInTab(tab.id, applyFileToInput, [fieldId, btoa(binary), filename]);
+}
+
+async function runInTab(tabId, func, args = []) {
+  try {
+    const [result] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func,
+      args,
+    });
+    if (!result) throw new Error("The page did not return a result.");
+    return result.result;
+  } catch (error) {
+    if (/cannot access|permission|host permission/i.test(error.message)) {
+      throw new Error("ApplyPilot needs site access for this page. Enable access in the side panel.");
+    }
+    throw error;
+  }
+}
+
+async function getActiveTabInfo() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab ? { id: tab.id, url: tab.url || "", title: tab.title || "", status: tab.status } : {};
+}
+
+async function getTabInfo(tabId) {
+  if (!tabId) return getActiveTabInfo();
+  const tab = await chrome.tabs.get(tabId);
+  return { id: tab.id, url: tab.url || "", title: tab.title || "", status: tab.status };
+}
+
+async function readActivePageContext() {
+  const tab = await getActiveHttpTab();
+  const context = await runInTab(tab.id, extractVisiblePageContext);
+  return { ...context, tab_id: tab.id, url: tab.url };
+}
+
+async function collectLinkedInJobQueue(tabId) {
+  const tab = tabId ? await chrome.tabs.get(tabId) : await getActiveHttpTab();
+  if (!tab.id || !tab.url?.includes("linkedin.com")) return { tab_id: tab.id, urls: [] };
+  const urls = await runInTab(tab.id, extractLinkedInJobLinks);
+  return { tab_id: tab.id, urls };
+}
+
+async function openQueuedJob(tabId, url) {
+  if (!tabId || !/^https:\/\/([a-z0-9-]+\.)*linkedin\.com\//i.test(url || "")) {
+    throw new Error("The queued LinkedIn job is not valid.");
+  }
+  await chrome.tabs.update(tabId, { url, active: true });
+  await waitForTabComplete(tabId);
+  return getTabInfo(tabId);
+}
+
+async function waitForTabComplete(tabId, timeoutMs = 30000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.status === "complete") return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("The page took too long to load.");
 }
 
 async function getActiveHttpTab() {
@@ -107,6 +149,11 @@ async function openApplicationRoute(url) {
   }
   const tab = await chrome.tabs.create({ url: target.href, active: true });
   return { opened: true, tab_id: tab.id };
+}
+
+async function openLinkedInEasyApply() {
+  const tab = await getActiveHttpTab();
+  return runInTab(tab.id, clickLinkedInEasyApply);
 }
 
 function detectAdapterFromUrl(url) {
@@ -129,11 +176,12 @@ function extractFormFields() {
         : host.includes("myworkdayjobs.com")
           ? document.querySelector("[data-automation-id='applicationPage'], main") || document
           : document;
-  const controls = [...root.querySelectorAll("input, textarea, select")].filter((control) => {
+  const controls = [...root.querySelectorAll("input, textarea, select, button[role='combobox'], button[aria-haspopup='listbox']")].filter((control) => {
     const type = (control.type || "").toLowerCase();
+    const customCombobox = control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox";
     const style = getComputedStyle(control);
     const visible = type === "file" || (style.display !== "none" && style.visibility !== "hidden");
-    return visible && !control.disabled && !["hidden", "submit", "button", "reset", "image"].includes(type);
+    return visible && !control.disabled && (customCombobox || !["hidden", "submit", "button", "reset", "image"].includes(type));
   });
 
   return controls.map((control, index) => {
@@ -156,7 +204,7 @@ function extractFormFields() {
       control.id ||
       `Field ${index + 1}`;
     const tag = control.tagName.toLowerCase();
-    let fieldType = tag === "textarea" ? "textarea" : tag === "select" ? "select" : control.type || "text";
+    let fieldType = tag === "textarea" ? "textarea" : tag === "select" || control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox" ? "select" : control.type || "text";
     if (!["text", "email", "tel", "url", "number", "textarea", "select", "checkbox", "radio", "file", "password"].includes(fieldType)) {
       fieldType = "other";
     }
@@ -180,7 +228,7 @@ function extractFormFields() {
   });
 }
 
-function applyFormFillPlan(actions) {
+async function applyFormFillPlan(actions) {
   let filled = 0;
   const errors = [];
   const dispatch = (control) => {
@@ -199,6 +247,39 @@ function applyFormFillPlan(actions) {
     try {
       const type = (control.type || control.tagName).toLowerCase();
       if (type === "file" || type === "password") continue;
+      if (
+        (control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox") &&
+        control.tagName !== "SELECT"
+      ) {
+        if (control.tagName === "INPUT") {
+          control.click();
+          const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(control), "value");
+          if (descriptor?.set) descriptor.set.call(control, action.value);
+          else control.value = action.value;
+          dispatch(control);
+        } else {
+          control.click();
+        }
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+        const target = normalize(action.value);
+        const options = [...document.querySelectorAll("[role='option']")].filter((option) => {
+          const style = getComputedStyle(option);
+          return style.display !== "none" && style.visibility !== "hidden";
+        });
+        const option = options.find((candidate) =>
+          [candidate.textContent, candidate.getAttribute("data-value")]
+            .filter(Boolean)
+            .some((value) => {
+              const candidate = normalize(value);
+              return candidate === target || candidate.startsWith(`${target} `) || target.startsWith(`${candidate} `);
+            }),
+        );
+        if (!option) throw new Error("matching dropdown option not found");
+        option.click();
+        filled += 1;
+        continue;
+      }
       if (type === "checkbox") {
         control.checked = ["true", "yes", "1", "on"].includes(String(action.value).toLowerCase());
       } else if (type === "radio") {
@@ -288,6 +369,22 @@ function detectSubmissionConfirmation() {
     confirmed: Boolean(matched || urlSignal),
     signal: matched || (urlSignal ? "confirmation URL" : ""),
   };
+}
+
+function clickLinkedInEasyApply() {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+  const buttons = [...document.querySelectorAll("button")].filter((button) =>
+    visible(button) && /easy apply/i.test(button.textContent || button.getAttribute("aria-label") || ""),
+  );
+  if (buttons.length !== 1) {
+    return { opened: false, error: "A unique LinkedIn Easy Apply button was not found." };
+  }
+  buttons[0].click();
+  return { opened: true };
 }
 
 function applyFileToInput(fieldId, base64, filename) {
@@ -445,4 +542,30 @@ function extractJobFromPage() {
     easy_apply_available: easyApplyAvailable,
     adapter,
   };
+}
+
+function extractVisiblePageContext() {
+  const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+  return {
+    title: clean(document.querySelector("h1")?.textContent || document.title),
+    text: clean(document.querySelector("main")?.innerText || document.body?.innerText).slice(0, 30000),
+  };
+}
+
+function extractLinkedInJobLinks() {
+  const current = location.href.split("?")[0];
+  return [...new Set(
+    [...document.querySelectorAll("a[href*='/jobs/view/']")]
+      .map((link) => {
+        try {
+          const url = new URL(link.href, location.href);
+          url.search = "";
+          url.hash = "";
+          return url.href;
+        } catch {
+          return "";
+        }
+      })
+      .filter((url) => url && url.split("?")[0] !== current),
+  )].slice(0, 25);
 }

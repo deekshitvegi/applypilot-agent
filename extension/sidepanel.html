@@ -48,6 +48,43 @@
         </form>
       </section>
 
+      <section class="panel automation-panel">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Automation</p>
+            <h2>Application runner</h2>
+          </div>
+          <span id="site-access-badge" class="badge">Access needed</span>
+        </div>
+        <p class="muted">Common fields use your saved profile—no AI call required.</p>
+        <button id="enable-site-access" class="secondary-button" type="button">Enable job-site access</button>
+        <label for="automation-policy">Before final submission</label>
+        <select id="automation-policy">
+          <option value="review_each">Ask me every time</option>
+          <option value="always_allow">Always allow for this browser</option>
+        </select>
+        <label for="resume-policy">Tailored résumé attachment</label>
+        <select id="resume-policy">
+          <option value="ask_each">Ask before attaching</option>
+          <option value="always_attach">Always attach the job-specific résumé</option>
+        </select>
+        <label for="minimum-fit">Minimum fit score for automatic applications</label>
+        <input id="minimum-fit" type="number" min="0" max="100" step="5" value="60" />
+        <label class="check-row" for="continue-next">
+          <input id="continue-next" type="checkbox" checked />
+          Continue to the next queued LinkedIn job
+        </label>
+        <div id="automation-warning" class="automation-warning hidden">
+          Automatic mode will fill, submit, and continue without asking again. Login, CAPTCHA,
+          MFA, missing answers, and ambiguous controls still pause the runner.
+        </div>
+        <div class="button-row">
+          <button id="start-automation" type="button">Run current job</button>
+          <button id="stop-automation" class="secondary-button" type="button" disabled>Stop</button>
+        </div>
+        <p id="automation-status" class="field-help">Waiting to start.</p>
+      </section>
+
       <section class="panel chat-card">
         <div class="section-heading">
           <div>
@@ -89,7 +126,20 @@
               <select id="answer-choice" class="hidden"></select>
               <button type="submit">Save answer</button>
             </form>
+            <button id="edit-profile" class="secondary-button" type="button">Edit saved profile</button>
             <button id="refresh" class="secondary-button" type="button">Refresh status</button>
+            <form id="profile-editor" class="profile-editor hidden">
+              <div id="profile-fields" class="profile-fields"></div>
+              <div id="saved-answers" class="saved-answers"></div>
+              <p class="privacy-note">
+                Saved in encrypted local storage at data/applypilot.sqlite3 with a separate
+                local key. Demographic answers are optional and are never guessed by ApplyPilot.
+              </p>
+              <div class="button-row">
+                <button type="submit">Save profile</button>
+                <button id="cancel-profile" class="secondary-button" type="button">Cancel</button>
+              </div>
+            </form>
           </div>
         </details>
 
@@ -114,6 +164,8 @@
             <button id="capture-job" type="button">Capture this job</button>
             <button id="open-application" class="secondary-button" type="button" disabled>Find company application</button>
             <button id="tailor-resume" class="secondary-button" type="button" disabled>Tailor résumé</button>
+            <button id="analyze-fit" class="secondary-button" type="button" disabled>Analyze job fit</button>
+            <div id="fit-result" class="result-box hidden"></div>
             <div id="tailor-result" class="result-box hidden"></div>
             <div id="artifact-actions" class="button-grid hidden">
               <button id="download-docx" class="secondary-button" type="button">Download DOCX</button>

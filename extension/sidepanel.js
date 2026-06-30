@@ -16,14 +16,31 @@ const elements = {
   providerBadge: document.querySelector("#provider-badge"),
   disconnectProvider: document.querySelector("#disconnect-provider"),
   toggleKey: document.querySelector("#toggle-key"),
+  siteAccessBadge: document.querySelector("#site-access-badge"),
+  enableSiteAccess: document.querySelector("#enable-site-access"),
+  automationPolicy: document.querySelector("#automation-policy"),
+  resumePolicy: document.querySelector("#resume-policy"),
+  minimumFit: document.querySelector("#minimum-fit"),
+  continueNext: document.querySelector("#continue-next"),
+  automationWarning: document.querySelector("#automation-warning"),
+  startAutomation: document.querySelector("#start-automation"),
+  stopAutomation: document.querySelector("#stop-automation"),
+  automationStatus: document.querySelector("#automation-status"),
   answerForm: document.querySelector("#answer-form"),
   answerInput: document.querySelector("#answer-input"),
   answerChoice: document.querySelector("#answer-choice"),
+  editProfile: document.querySelector("#edit-profile"),
+  profileEditor: document.querySelector("#profile-editor"),
+  profileFields: document.querySelector("#profile-fields"),
+  savedAnswers: document.querySelector("#saved-answers"),
+  cancelProfile: document.querySelector("#cancel-profile"),
   resumeFile: document.querySelector("#resume-file"),
   resumeStatus: document.querySelector("#resume-status"),
   captureJob: document.querySelector("#capture-job"),
   openApplication: document.querySelector("#open-application"),
   tailorResume: document.querySelector("#tailor-resume"),
+  analyzeFit: document.querySelector("#analyze-fit"),
+  fitResult: document.querySelector("#fit-result"),
   tailorResult: document.querySelector("#tailor-result"),
   artifactActions: document.querySelector("#artifact-actions"),
   downloadDocx: document.querySelector("#download-docx"),
@@ -52,6 +69,7 @@ const elements = {
 const state = {
   apiBase: DEFAULT_API_BASE,
   profile: null,
+  answers: [],
   onboarding: null,
   provider: null,
   job: null,
@@ -63,7 +81,57 @@ const state = {
   formPlan: null,
   localMode: false,
   chatImages: [],
+  sourceTabId: null,
+  jobQueue: [],
+  automationRunning: false,
+  automationPolicy: "review_each",
+  resumePolicy: "ask_each",
+  fitAnalysis: null,
+  seenJobUrls: new Set(),
+  jobsProcessed: 0,
+  applicationsSubmitted: 0,
+  minimumFit: 60,
+  siteAccessGranted: false,
 };
+
+const SITE_ORIGINS = ["https://*/*", "http://*/*"];
+
+const PROFILE_FIELDS = [
+  { section: "Personal information", key: "legal_name", label: "Full legal name" },
+  { key: "preferred_name", label: "Preferred name" },
+  { key: "pronouns", label: "Pronouns" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "phone", label: "Phone", type: "tel" },
+  { section: "Address", key: "address_line_1", label: "Address line 1" },
+  { key: "address_line_2", label: "Address line 2" },
+  { key: "city", label: "City" },
+  { key: "region", label: "State / region" },
+  { key: "postal_code", label: "Postal / ZIP code" },
+  { key: "country", label: "Country" },
+  { section: "Professional", key: "current_title", label: "Current title" },
+  { key: "years_of_experience", label: "Years of experience" },
+  { key: "linkedin_url", label: "LinkedIn URL", type: "url" },
+  { key: "github_url", label: "GitHub URL", type: "url" },
+  { key: "portfolio_url", label: "Portfolio URL", type: "url" },
+  { key: "notice_period", label: "Notice period" },
+  { key: "desired_salary", label: "Desired salary" },
+  { section: "Eligibility", key: "work_authorization", label: "Work authorization" },
+  { key: "requires_sponsorship", label: "Requires sponsorship", type: "boolean" },
+  { key: "willing_to_relocate", label: "Willing to relocate", type: "boolean" },
+  { key: "willing_to_travel", label: "Willing to travel", type: "boolean" },
+  { key: "age_18_or_older", label: "At least 18 years old", type: "boolean" },
+  { key: "background_check_consent", label: "Background check consent", type: "boolean" },
+  {
+    key: "remote_preference",
+    label: "Work arrangement",
+    type: "choice",
+    choices: ["", "remote", "hybrid", "onsite", "flexible"],
+  },
+  { section: "Voluntary self-identification", key: "gender_identity", label: "Gender identity" },
+  { key: "race_ethnicity", label: "Race / ethnicity" },
+  { key: "veteran_status", label: "Veteran status" },
+  { key: "disability_status", label: "Disability status" },
+];
 
 const PROVIDERS = {
   gemini: {
@@ -104,6 +172,8 @@ async function transitionApplication(status, message, metadata = {}) {
 }
 
 async function loadState() {
+  await loadAutomationSettings();
+  await refreshSiteAccess();
   elements.connection.textContent = "Connecting to agent…";
   elements.connection.classList.remove("connected");
 
@@ -124,11 +194,13 @@ async function loadState() {
       return;
     }
 
-    [state.profile, state.onboarding] = await Promise.all([
+    [state.profile, state.onboarding, state.answers] = await Promise.all([
       api("/api/profile"),
       api("/api/onboarding"),
+      api("/api/answers"),
     ]);
     renderOnboarding();
+    renderProfileEditor();
     await refreshResumeStatus();
   } catch (error) {
     elements.connection.textContent = "Agent is offline";
@@ -138,6 +210,83 @@ async function loadState() {
     state.localMode = false;
     updateChatAvailability();
   }
+}
+
+async function loadAutomationSettings() {
+  const saved = await chrome.storage.local.get({
+    automationPolicy: "review_each",
+    resumePolicy: "ask_each",
+    minimumFit: 60,
+    continueNext: true,
+  });
+  state.automationPolicy = saved.automationPolicy;
+  state.resumePolicy = saved.resumePolicy;
+  state.minimumFit = saved.minimumFit;
+  elements.automationPolicy.value = saved.automationPolicy;
+  elements.resumePolicy.value = saved.resumePolicy;
+  elements.minimumFit.value = String(saved.minimumFit);
+  elements.continueNext.checked = saved.continueNext;
+  renderAutomationPolicy();
+}
+
+function renderAutomationPolicy() {
+  const automatic = state.automationPolicy === "always_allow";
+  elements.automationWarning.classList.toggle("hidden", !automatic);
+  elements.startAutomation.textContent = automatic ? "Start automatic run" : "Run current job";
+}
+
+async function refreshSiteAccess() {
+  const granted = await chrome.permissions.contains({ origins: SITE_ORIGINS });
+  state.siteAccessGranted = granted;
+  elements.siteAccessBadge.textContent = granted ? "Access enabled" : "Access needed";
+  elements.siteAccessBadge.classList.toggle("connected", granted);
+  elements.enableSiteAccess.textContent = granted ? "Job-site access enabled" : "Enable job-site access";
+  return granted;
+}
+
+async function requestSiteAccess() {
+  const granted = await chrome.permissions.request({ origins: SITE_ORIGINS });
+  await refreshSiteAccess();
+  if (!granted) throw new Error("Job-site access was not granted.");
+  elements.automationStatus.textContent = "Site access enabled. ApplyPilot can read and fill job pages.";
+  return true;
+}
+
+async function requireSiteAccess() {
+  if (state.siteAccessGranted) return true;
+  return requestSiteAccess();
+}
+
+async function changeAutomationPolicy() {
+  const selected = elements.automationPolicy.value;
+  if (selected === "always_allow") {
+    const confirmed = window.confirm(
+      "Always allow lets ApplyPilot fill, submit, and continue to queued jobs without asking again. Login, CAPTCHA, MFA, missing answers, and ambiguous submit buttons still pause. Enable automatic mode?",
+    );
+    if (!confirmed) {
+      elements.automationPolicy.value = state.automationPolicy;
+      return;
+    }
+  }
+  state.automationPolicy = selected;
+  await chrome.storage.local.set({ automationPolicy: selected });
+  renderAutomationPolicy();
+}
+
+async function changeContinueNext() {
+  await chrome.storage.local.set({ continueNext: elements.continueNext.checked });
+}
+
+async function changeResumePolicy() {
+  state.resumePolicy = elements.resumePolicy.value;
+  await chrome.storage.local.set({ resumePolicy: state.resumePolicy });
+}
+
+async function changeMinimumFit() {
+  const value = Math.max(0, Math.min(100, Number(elements.minimumFit.value) || 0));
+  state.minimumFit = value;
+  elements.minimumFit.value = String(value);
+  await chrome.storage.local.set({ minimumFit: value });
 }
 
 function updateChatAvailability() {
@@ -230,7 +379,7 @@ function renderOnboarding() {
   const onboarding = state.onboarding;
   if (onboarding.complete) {
     elements.question.textContent = "Reusable application profile complete.";
-    elements.progress.textContent = "You can edit answers through chat or profile settings.";
+    elements.progress.textContent = "Saved locally and reused across job pages. Choose Edit saved profile to correct anything.";
     elements.answerForm.classList.add("hidden");
     return;
   }
@@ -252,6 +401,139 @@ function renderOnboarding() {
     elements.answerInput.value = "";
     elements.answerInput.focus();
   }
+}
+
+function renderProfileEditor() {
+  if (!state.profile) return;
+  const nodes = [];
+  for (const field of PROFILE_FIELDS) {
+    if (field.section) {
+      const heading = document.createElement("h3");
+      heading.textContent = field.section;
+      nodes.push(heading);
+    }
+    const label = document.createElement("label");
+    label.htmlFor = `profile-${field.key}`;
+    label.textContent = field.label;
+    let control;
+    if (field.type === "boolean") {
+      control = document.createElement("select");
+      [
+        ["", "Not provided"],
+        ["true", "Yes"],
+        ["false", "No"],
+      ].forEach(([value, text]) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = text;
+        control.append(option);
+      });
+      const current = state.profile[field.key];
+      control.value = current === true ? "true" : current === false ? "false" : "";
+    } else if (field.type === "choice") {
+      control = document.createElement("select");
+      field.choices.forEach((choice) => {
+        const option = document.createElement("option");
+        option.value = choice;
+        option.textContent = choice || "Not provided";
+        control.append(option);
+      });
+      control.value = state.profile[field.key] || "";
+    } else {
+      control = document.createElement("input");
+      control.type = field.type || "text";
+      control.value = state.profile[field.key] || "";
+      control.autocomplete = "off";
+    }
+    control.id = `profile-${field.key}`;
+    control.dataset.profileKey = field.key;
+    control.dataset.profileType = field.type || "text";
+    nodes.push(label, control);
+  }
+  elements.profileFields.replaceChildren(...nodes);
+  renderSavedAnswers();
+}
+
+function renderSavedAnswers() {
+  const heading = document.createElement("h3");
+  heading.textContent = "Saved custom application answers";
+  if (!state.answers.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted";
+    empty.textContent = "Answers to unfamiliar questions will appear here after you save them.";
+    elements.savedAnswers.replaceChildren(heading, empty);
+    return;
+  }
+  const rows = state.answers.map((answer) => {
+    const row = document.createElement("div");
+    row.className = "saved-answer";
+    const label = document.createElement("label");
+    label.htmlFor = `saved-answer-${answer.id}`;
+    label.textContent = answer.question;
+    const input = document.createElement("input");
+    input.id = `saved-answer-${answer.id}`;
+    input.value = answer.answer;
+    const actions = document.createElement("div");
+    actions.className = "button-row";
+    const save = document.createElement("button");
+    save.type = "button";
+    save.textContent = "Update";
+    save.addEventListener("click", async () => {
+      const updated = { ...answer, answer: input.value.trim() };
+      await api(`/api/answers/${answer.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+      state.answers = await api("/api/answers");
+      renderSavedAnswers();
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "secondary-button";
+    remove.textContent = "Delete";
+    remove.addEventListener("click", async () => {
+      if (!window.confirm(`Delete the saved answer for: ${answer.question}?`)) return;
+      await api(`/api/answers/${answer.id}`, { method: "DELETE" });
+      state.answers = await api("/api/answers");
+      renderSavedAnswers();
+    });
+    actions.append(save, remove);
+    row.append(label, input, actions);
+    return row;
+  });
+  elements.savedAnswers.replaceChildren(heading, ...rows);
+}
+
+function openProfileEditor() {
+  renderProfileEditor();
+  elements.profileEditor.classList.remove("hidden");
+  elements.answerForm.classList.add("hidden");
+  elements.profileEditor.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function saveProfile(event) {
+  event.preventDefault();
+  const updated = { ...state.profile };
+  elements.profileFields.querySelectorAll("[data-profile-key]").forEach((control) => {
+    const key = control.dataset.profileKey;
+    const type = control.dataset.profileType;
+    if (type === "boolean") {
+      updated[key] = control.value === "" ? null : control.value === "true";
+    } else {
+      updated[key] = control.value.trim();
+    }
+  });
+  state.profile = await api("/api/profile", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updated),
+  });
+  state.onboarding = await api("/api/onboarding");
+  elements.profileEditor.classList.add("hidden");
+  renderOnboarding();
+  renderProfileEditor();
+  elements.progress.textContent = "Saved. These values will be reused on future application pages.";
 }
 
 function setChoices(choices) {
@@ -310,17 +592,22 @@ async function uploadResume() {
   }
 }
 
-async function captureJob() {
+async function captureJob(options = {}) {
+  const throwOnError = options?.throwOnError === true;
   elements.captureJob.disabled = true;
   elements.captureJob.textContent = "Reading page…";
   try {
+    await requireSiteAccess();
     const captured = await chrome.runtime.sendMessage({ action: "captureJob" });
     if (captured.error) throw new Error(captured.error);
     if (!captured.description || captured.description.length < 80) {
       throw new Error("Could not find a complete job description on this page.");
     }
     state.job = captured;
+    state.sourceTabId = captured.tab_id;
     state.artifact = null;
+    state.fitAnalysis = null;
+    elements.fitResult.classList.add("hidden");
     elements.artifactActions.classList.add("hidden");
     state.submitClicked = false;
     elements.approveSubmit.classList.add("hidden");
@@ -330,6 +617,7 @@ async function captureJob() {
     elements.jobCompany.textContent = [captured.company, captured.location].filter(Boolean).join(" · ");
     elements.chatContext.textContent = captured.title || "Active job";
     elements.tailorResume.disabled = !(state.localMode && state.provider?.configured);
+    elements.analyzeFit.disabled = !(state.localMode && state.provider?.configured);
     state.route = await api("/api/application-route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -361,15 +649,26 @@ async function captureJob() {
       elements.openApplication.textContent = "No application route found";
       elements.openApplication.disabled = true;
     }
+    if (captured.adapter === "linkedin") {
+      const queue = await chrome.runtime.sendMessage({
+        action: "collectJobQueue",
+        tabId: captured.tab_id,
+      });
+      if (!queue.error) state.jobQueue = queue.urls;
+    }
+    return captured;
   } catch (error) {
     elements.jobCompany.textContent = error.message;
+    if (throwOnError) throw error;
+    return null;
   } finally {
     elements.captureJob.disabled = false;
     elements.captureJob.textContent = "Capture this job";
   }
 }
 
-async function openApplication() {
+async function openApplication(options = {}) {
+  const throwOnError = options?.throwOnError === true;
   if (!state.route?.target_url) return;
   elements.openApplication.disabled = true;
   try {
@@ -380,13 +679,54 @@ async function openApplication() {
     if (result.error) throw new Error(result.error);
     elements.openApplication.textContent = "Company application opened";
     await transitionApplication("filling", "Opened the company application route.");
+    return result;
   } catch (error) {
     elements.jobCompany.textContent = error.message;
     elements.openApplication.disabled = false;
+    if (throwOnError) throw error;
+    return null;
   }
 }
 
-async function tailorResume() {
+async function analyzeJobFit(options = {}) {
+  const throwOnError = options?.throwOnError === true;
+  if (!state.job) return null;
+  elements.analyzeFit.disabled = true;
+  elements.analyzeFit.textContent = "Analyzing fit…";
+  elements.fitResult.classList.remove("hidden");
+  elements.fitResult.textContent = "Comparing verified résumé evidence with the job requirements.";
+  try {
+    state.fitAnalysis = await api("/api/jobs/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job: state.job }),
+    });
+    const fit = state.fitAnalysis;
+    renderFitAnalysis(fit);
+    return fit;
+  } catch (error) {
+    elements.fitResult.textContent = error.message;
+    if (throwOnError) throw error;
+    return null;
+  } finally {
+    elements.analyzeFit.disabled = false;
+    elements.analyzeFit.textContent = "Analyze job fit";
+  }
+}
+
+function renderFitAnalysis(fit) {
+  elements.fitResult.classList.remove("hidden");
+  elements.fitResult.innerHTML = `
+    <strong>${fit.score}% match · ${escapeHtml(fit.verdict)}</strong>
+    <p>${escapeHtml(fit.summary)}</p>
+    <p><strong>Strengths:</strong> ${escapeHtml(fit.strengths.join(" · ") || "None verified")}</p>
+    <p><strong>Gaps:</strong> ${escapeHtml(fit.gaps.join(" · ") || "No material gaps identified")}</p>
+    <p><strong>Recommendation:</strong> ${escapeHtml(fit.recommendation)}</p>
+  `;
+}
+
+async function tailorResume(options = {}) {
+  const throwOnError = options?.throwOnError === true;
   if (!state.job) return;
   elements.tailorResume.disabled = true;
   elements.tailorResume.textContent = "Tailoring with evidence…";
@@ -398,32 +738,56 @@ async function tailorResume() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job: state.job, application_id: state.application?.id || "" }),
     });
-    const tailored = state.artifact.tailored;
-    const warnings = tailored.warnings.length
-      ? `<p><strong>Warnings:</strong> ${escapeHtml(tailored.warnings.join(" "))}</p>`
-      : "";
-    elements.tailorResult.innerHTML = `
-      <strong>${escapeHtml(tailored.headline)}</strong>
-      <p>${escapeHtml(tailored.summary)}</p>
-      <p><strong>Skills:</strong> ${escapeHtml(tailored.skills.join(", "))}</p>
-      ${warnings}
-    `;
-    elements.artifactActions.classList.remove("hidden");
-    updateAttachButton();
+    renderTailoredArtifact();
     await transitionApplication("materials_ready", "Created an evidence-grounded tailored draft.");
+    return state.artifact;
   } catch (error) {
     elements.tailorResult.textContent = error.message;
+    if (throwOnError) throw error;
+    return null;
   } finally {
     elements.tailorResume.disabled = false;
     elements.tailorResume.textContent = "Tailor résumé";
   }
 }
 
-async function scanForm() {
+function renderTailoredArtifact() {
+  const tailored = state.artifact.tailored;
+  const warnings = tailored.warnings.length
+    ? `<p><strong>Warnings:</strong> ${escapeHtml(tailored.warnings.join(" "))}</p>`
+    : "";
+  elements.tailorResult.classList.remove("hidden");
+  elements.tailorResult.innerHTML = `
+    <strong>${escapeHtml(tailored.headline)}</strong>
+    <p>${escapeHtml(tailored.summary)}</p>
+    <p><strong>Skills:</strong> ${escapeHtml(tailored.skills.join(", "))}</p>
+    ${warnings}
+  `;
+  elements.artifactActions.classList.remove("hidden");
+  updateAttachButton();
+}
+
+async function prepareJobMaterials() {
+  const prepared = await api("/api/jobs/prepare", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ job: state.job, application_id: state.application?.id || "" }),
+  });
+  state.fitAnalysis = prepared.analysis;
+  state.artifact = prepared.artifact;
+  renderFitAnalysis(state.fitAnalysis);
+  renderTailoredArtifact();
+  await transitionApplication("materials_ready", "Analyzed fit and created a verified job-specific résumé.");
+  return prepared;
+}
+
+async function scanForm(options = {}) {
+  const throwOnError = options?.throwOnError === true;
   elements.scanForm.disabled = true;
   elements.scanForm.textContent = "Analyzing fields…";
   elements.formResult.classList.remove("hidden");
   try {
+    await requireSiteAccess();
     const scan = await chrome.runtime.sendMessage({ action: "scanForm" });
     if (scan.error) throw new Error(scan.error);
     if (!scan.fields.length) throw new Error("No fillable fields were found on this page.");
@@ -433,9 +797,12 @@ async function scanForm() {
       field_count: String(scan.fields.length),
     });
     await replanForm();
+    return state.formPlan;
   } catch (error) {
     elements.formStatus.textContent = error.message;
     elements.formResult.textContent = "Nothing was changed on the page.";
+    if (throwOnError) throw error;
+    return null;
   } finally {
     elements.scanForm.disabled = false;
     elements.scanForm.textContent = "Analyze visible fields";
@@ -448,7 +815,7 @@ async function replanForm() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(state.formScan),
   });
-  const requiredUnknown = state.formPlan.unknown_fields.filter((field) => field.required);
+  const requiredUnknown = unresolvedRequiredUnknowns();
   const requiredBlocked = state.formPlan.blocked_fields.filter((field) => field.required);
   elements.formStatus.textContent = `${state.formScan.fields.length} fields found · ${state.formPlan.actions.length} known`;
   elements.formResult.innerHTML = `
@@ -480,6 +847,14 @@ async function replanForm() {
   }
 }
 
+function unresolvedRequiredUnknowns() {
+  return (state.formPlan?.unknown_fields || []).filter((field) => {
+    if (!field.required) return false;
+    const scanned = state.formScan?.fields.find((candidate) => candidate.id === field.field_id);
+    return !(scanned?.field_type === "file" && state.artifact);
+  });
+}
+
 function updateAttachButton() {
   const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
   elements.attachResume.disabled = !(state.artifact && fileField);
@@ -493,9 +868,10 @@ function openArtifact(extension) {
   });
 }
 
-async function attachTailoredResume() {
+async function attachTailoredResume(options = {}) {
+  const throwOnError = options?.throwOnError === true;
   const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
-  if (!state.artifact || !fileField) return;
+  if (!state.artifact || !fileField) return false;
   elements.attachResume.disabled = true;
   const result = await chrome.runtime.sendMessage({
     action: "attachResume",
@@ -506,10 +882,22 @@ async function attachTailoredResume() {
   if (result.error || !result.attached) {
     elements.formStatus.textContent = result.error || "The tailored resume could not be attached.";
     elements.attachResume.disabled = false;
-    return;
+    if (throwOnError) throw new Error(elements.formStatus.textContent);
+    return false;
   }
   elements.formStatus.textContent = `${result.filename} attached for review.`;
   elements.attachResume.textContent = "Tailored résumé attached";
+  return true;
+}
+
+async function maybeAttachTailoredResume() {
+  const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
+  if (!state.artifact || !fileField) return true;
+  const allowed = state.resumePolicy === "always_attach" || window.confirm(
+    "Attach the job-specific tailored résumé to this application? Your original résumé will not be changed.",
+  );
+  if (!allowed) return false;
+  return attachTailoredResume({ throwOnError: true });
 }
 
 async function saveUnknownAnswer(event) {
@@ -523,10 +911,12 @@ async function saveUnknownAnswer(event) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, question, answer, field_type: "text", sensitive: false }),
   });
+  state.answers = await api("/api/answers");
   await replanForm();
 }
 
-async function fillForm() {
+async function fillForm(options = {}) {
+  const throwOnError = options?.throwOnError === true;
   if (!state.formPlan) return;
   elements.fillForm.disabled = true;
   elements.fillForm.textContent = "Filling…";
@@ -542,7 +932,7 @@ async function fillForm() {
       <p>${result.errors.length ? escapeHtml(result.errors.join(" ")) : "No fill errors detected."}</p>
       <p>ApplyPilot did not submit the application.</p>
     `;
-    const requiredUnknown = state.formPlan.unknown_fields.some((field) => field.required);
+    const requiredUnknown = unresolvedRequiredUnknowns().length > 0;
     const requiredBlocked = state.formPlan.blocked_fields.some((field) => field.required);
     if (!requiredUnknown && !requiredBlocked) {
       await transitionApplication(
@@ -551,18 +941,23 @@ async function fillForm() {
       );
       elements.approveSubmit.classList.remove("hidden");
     }
+    return result;
   } catch (error) {
     elements.formStatus.textContent = error.message;
+    if (throwOnError) throw error;
+    return null;
   } finally {
     elements.fillForm.disabled = false;
     elements.fillForm.textContent = "Fill known fields";
   }
 }
 
-async function approveAndSubmit() {
+async function approveAndSubmit(options = {}) {
+  const automatic = options?.automatic === true;
+  const throwOnError = options?.throwOnError === true;
   try {
     if (!state.submitClicked) {
-      const confirmed = window.confirm(
+      const confirmed = automatic || window.confirm(
         "ApplyPilot will click the final Submit button now. Confirm that you reviewed every field.",
       );
       if (!confirmed) return;
@@ -583,7 +978,7 @@ async function approveAndSubmit() {
         verification.error || "Submit was clicked, but site confirmation is not visible yet.";
       elements.approveSubmit.disabled = false;
       elements.approveSubmit.textContent = "Verify site result";
-      return;
+      return false;
     }
     await transitionApplication(
       "submitted",
@@ -591,12 +986,181 @@ async function approveAndSubmit() {
       { signal: verification.signal },
     );
     elements.approveSubmit.textContent = "Submission confirmed";
+    if (!automatic && state.automationRunning) {
+      await advanceAutomationQueue({ submitted: true });
+    }
+    return true;
   } catch (error) {
     elements.formStatus.textContent = error.message;
     elements.approveSubmit.disabled = false;
     elements.approveSubmit.textContent = state.submitClicked
       ? "Verify site result"
       : "Approve and submit application";
+    if (throwOnError) throw error;
+    return false;
+  }
+}
+
+function setAutomationRunning(running, message) {
+  state.automationRunning = running;
+  elements.startAutomation.disabled = running;
+  elements.stopAutomation.disabled = !running;
+  if (message) elements.automationStatus.textContent = message;
+}
+
+async function startAutomation() {
+  if (state.automationRunning) return;
+  state.jobsProcessed = 0;
+  state.applicationsSubmitted = 0;
+  state.seenJobUrls = new Set();
+  state.jobQueue = [];
+  setAutomationRunning(true, "Starting from the active job page…");
+  try {
+    await requireSiteAccess();
+    await runAutomationCycle();
+  } catch (error) {
+    setAutomationRunning(false, `Paused: ${error.message}`);
+  }
+}
+
+function stopAutomation() {
+  setAutomationRunning(false, "Stopped by you.");
+}
+
+async function runAutomationCycle() {
+  if (!state.automationRunning) return;
+  if (state.jobsProcessed >= 10) {
+    setAutomationRunning(false, "Run complete: reached the 10-job per-run safety limit.");
+    return;
+  }
+
+  state.job = null;
+  state.route = null;
+  state.application = null;
+  state.formPlan = null;
+  state.formScan = null;
+  state.artifact = null;
+  state.submitClicked = false;
+  elements.automationStatus.textContent = "Reading the current job and company route…";
+  const captured = await captureJob({ throwOnError: true });
+  state.seenJobUrls.add(normalizeJobUrl(captured.source_url));
+  state.jobQueue = state.jobQueue.filter(
+    (url) => !state.seenJobUrls.has(normalizeJobUrl(url)),
+  );
+
+  if (state.provider?.configured) {
+    elements.automationStatus.textContent = "Analyzing fit and preparing a job-specific résumé…";
+    await prepareJobMaterials();
+    if (
+      state.automationPolicy === "always_allow" &&
+      state.fitAnalysis &&
+      state.fitAnalysis.score < state.minimumFit
+    ) {
+      elements.automationStatus.textContent =
+        `Skipped ${state.job.title || "job"}: ${state.fitAnalysis.score}% is below your ${state.minimumFit}% minimum.`;
+      await advanceAutomationQueue({ submitted: false });
+      return;
+    }
+  }
+  if (!state.automationRunning) return;
+
+  const target = state.route?.target_url || "";
+  if (["company_site", "manual_review"].includes(state.route?.route) && target) {
+    if (normalizeJobUrl(target) !== normalizeJobUrl(captured.source_url)) {
+      elements.automationStatus.textContent = "Opening the company application…";
+      const opened = await openApplication({ throwOnError: true });
+      await waitForTabReady(opened.tab_id);
+    }
+  } else if (state.route?.route === "easy_apply") {
+    elements.automationStatus.textContent = "Opening LinkedIn Easy Apply fallback…";
+    const easyApply = await chrome.runtime.sendMessage({ action: "openEasyApply" });
+    if (easyApply.error || !easyApply.opened) {
+      throw new Error(easyApply.error || "Easy Apply could not be opened.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+
+  elements.automationStatus.textContent = "Scanning and filling known fields from your profile…";
+  const plan = await scanForm({ throwOnError: true });
+  const unknown = unresolvedRequiredUnknowns();
+  const blocked = plan.blocked_fields.filter((field) => field.required);
+  if (unknown.length) {
+    throw new Error(`Answer required: ${unknown[0].label}`);
+  }
+  if (blocked.length) {
+    throw new Error(`User action required: ${blocked[0].label}`);
+  }
+  if (plan.actions.length) await fillForm({ throwOnError: true });
+
+  if (state.artifact && state.formScan.fields.some((field) => field.field_type === "file")) {
+    elements.automationStatus.textContent = "Selecting the job-specific tailored résumé…";
+    const attached = await maybeAttachTailoredResume();
+    if (!attached && state.automationPolicy === "always_allow") {
+      throw new Error("Tailored résumé attachment was not approved.");
+    }
+  }
+
+  if (state.application?.status !== "review_required") {
+    await transitionApplication(
+      "review_required",
+      "All known fields and the selected résumé are ready for final review.",
+    );
+  }
+
+  if (state.automationPolicy === "review_each") {
+    elements.approveSubmit.classList.remove("hidden");
+    elements.automationStatus.textContent =
+      "Ready for review. Approve submission to send this application and continue.";
+    return;
+  }
+
+  elements.automationStatus.textContent = "Submitting automatically under Always allow…";
+  const submitted = await approveAndSubmit({ automatic: true, throwOnError: true });
+  if (!submitted) throw new Error("The employer site did not confirm submission.");
+  await advanceAutomationQueue({ submitted: true });
+}
+
+async function advanceAutomationQueue({ submitted = false } = {}) {
+  state.jobsProcessed += 1;
+  if (submitted) state.applicationsSubmitted += 1;
+  if (!state.automationRunning) return;
+  if (!elements.continueNext.checked || !state.jobQueue.length || !state.sourceTabId) {
+    setAutomationRunning(
+      false,
+      `Run complete: ${state.applicationsSubmitted} submitted, ${state.jobsProcessed - state.applicationsSubmitted} skipped or paused.`,
+    );
+    return;
+  }
+  const nextUrl = state.jobQueue.shift();
+  elements.automationStatus.textContent = "Moving to the next queued LinkedIn job…";
+  const opened = await chrome.runtime.sendMessage({
+    action: "openQueuedJob",
+    tabId: state.sourceTabId,
+    url: nextUrl,
+  });
+  if (opened.error) throw new Error(opened.error);
+  await runAutomationCycle();
+}
+
+async function waitForTabReady(tabId) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (!state.automationRunning) return;
+    const tab = await chrome.runtime.sendMessage({ action: "getTab", tabId });
+    if (tab.error) throw new Error(tab.error);
+    if (tab.status === "complete") return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error("The application page took too long to load.");
+}
+
+function normalizeJobUrl(value) {
+  try {
+    const url = new URL(value);
+    url.search = "";
+    url.hash = "";
+    return url.href;
+  } catch {
+    return value || "";
   }
 }
 
@@ -612,12 +1176,31 @@ async function sendChat(event) {
   elements.chatButton.disabled = true;
 
   try {
+    let activeJob = state.job;
+    if (!activeJob) {
+      try {
+        await requireSiteAccess();
+        const context = await chrome.runtime.sendMessage({ action: "readPageContext" });
+        if (!context.error && context.text) {
+          activeJob = {
+            source_url: context.url,
+            title: context.title || "Current page",
+            company: "",
+            location: "",
+            description: context.text,
+            adapter: "generic",
+          };
+        }
+      } catch {
+        // Chat can still answer without page context.
+      }
+    }
     const response = await api("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: message || "Analyze the attached image in the context of this application.",
-        job: state.job,
+        job: activeJob,
         images: images.map(({ filename, mediaType, dataBase64 }) => ({
           filename,
           media_type: mediaType,
@@ -719,10 +1302,14 @@ function escapeHtml(value) {
 }
 
 elements.answerForm.addEventListener("submit", saveOnboardingAnswer);
+elements.editProfile.addEventListener("click", openProfileEditor);
+elements.profileEditor.addEventListener("submit", saveProfile);
+elements.cancelProfile.addEventListener("click", () => elements.profileEditor.classList.add("hidden"));
 elements.resumeFile.addEventListener("change", uploadResume);
 elements.captureJob.addEventListener("click", captureJob);
 elements.openApplication.addEventListener("click", openApplication);
 elements.tailorResume.addEventListener("click", tailorResume);
+elements.analyzeFit.addEventListener("click", analyzeJobFit);
 elements.downloadDocx.addEventListener("click", () => openArtifact("docx"));
 elements.downloadPdf.addEventListener("click", () => openArtifact("pdf"));
 elements.attachResume.addEventListener("click", attachTailoredResume);
@@ -735,6 +1322,19 @@ elements.chatImages.addEventListener("change", addChatImages);
 elements.providerForm.addEventListener("submit", saveProvider);
 elements.disconnectProvider.addEventListener("click", disconnectProvider);
 elements.providerSelect.addEventListener("change", changeProvider);
+elements.enableSiteAccess.addEventListener("click", async () => {
+  try {
+    await requestSiteAccess();
+  } catch (error) {
+    elements.automationStatus.textContent = error.message;
+  }
+});
+elements.automationPolicy.addEventListener("change", changeAutomationPolicy);
+elements.resumePolicy.addEventListener("change", changeResumePolicy);
+elements.minimumFit.addEventListener("change", changeMinimumFit);
+elements.continueNext.addEventListener("change", changeContinueNext);
+elements.startAutomation.addEventListener("click", startAutomation);
+elements.stopAutomation.addEventListener("click", stopAutomation);
 elements.toggleKey.addEventListener("click", () => {
   const showing = elements.providerKey.type === "text";
   elements.providerKey.type = showing ? "password" : "text";

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 - 2026-06-30
+
+- Fixed job capture and form scanning across navigation by adding explicit,
+  user-granted persistent job-site access.
+- Added a complete editable profile with encrypted, optional gender, race or
+  ethnicity, veteran, and disability self-identification fields.
+- Added deterministic cross-page autofill for common profile fields without an
+  AI call, including safer semantic mapping for yes/no/decline choices.
+- Added evidence-grounded job-fit scoring, gap analysis, a minimum automatic
+  fit threshold, and one-pass job preparation that produces a tailored résumé.
+- Added independent ask/always-allow policies for final submission and tailored
+  résumé attachment.
+- Added a LinkedIn-to-company application runner with a visible warning,
+  queue continuation, stop control, and a 10-job safety cap.
+
 ## 0.3.0 - 2026-06-30
 
 - Added encrypted in-panel setup for Gemini, OpenAI, and Anthropic credentials.

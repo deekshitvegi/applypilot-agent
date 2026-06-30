@@ -6,7 +6,13 @@ import applypilot.main as main_module
 from applypilot.config import Settings
 from applypilot.ai import AIProviderManager
 from applypilot.main import app
-from applypilot.models import CandidateProfile, ResumeDocument, TailoredResume
+from applypilot.models import (
+    CandidateProfile,
+    JobFitAnalysis,
+    ResumeDocument,
+    ResumeEvidence,
+    TailoredResume,
+)
 from applypilot.store import ProfileStore
 
 
@@ -34,7 +40,10 @@ def test_local_capabilities_report_implemented_features() -> None:
     assert response.status_code == 200
     assert response.json()["company_site_first"] is True
     assert response.json()["live_site_automation"] is True
-    assert response.json()["resume_tailoring"] is False
+    assert isinstance(response.json()["resume_tailoring"], bool)
+    assert response.json()["deterministic_autofill"] is True
+    assert response.json()["editable_reusable_profile"] is True
+    assert response.json()["automation_policies"] == ["review_each", "always_allow"]
     assert response.json()["review_before_submit"] is True
 
 
@@ -201,3 +210,54 @@ def test_tailored_artifact_downloads(monkeypatch, tmp_path: Path) -> None:
     assert docx.content.startswith(b"PK")
     assert pdf.status_code == 200
     assert pdf.content.startswith(b"%PDF")
+
+
+def test_job_preparation_reuses_verified_evidence(monkeypatch, tmp_path: Path) -> None:
+    local_store = ProfileStore(tmp_path / "prepare.sqlite3")
+    local_store.save_resume(
+        ResumeDocument(
+            filename="resume.txt",
+            media_type="text/plain",
+            sha256="prepare-test",
+            extracted_text="Built Python automation services. " * 4,
+        )
+    )
+    monkeypatch.setattr(main_module, "store", local_store)
+    evidence = ResumeEvidence(summary="Verified Python experience")
+    calls: list[str] = []
+    monkeypatch.setattr(
+        main_module.ai_provider,
+        "extract_evidence",
+        lambda _resume: calls.append("evidence") or evidence,
+    )
+    monkeypatch.setattr(
+        main_module.ai_provider,
+        "analyze_job",
+        lambda _resume, _job, supplied: calls.append("analysis")
+        or JobFitAnalysis(
+            score=85,
+            verdict="strong",
+            summary="Strong fit",
+            recommendation="Apply",
+        )
+        if supplied is evidence
+        else None,
+    )
+    monkeypatch.setattr(
+        main_module.ai_provider,
+        "tailor_resume",
+        lambda _resume, _job, supplied: calls.append("tailor")
+        or TailoredResume(headline="Automation Engineer", summary="Python engineer")
+        if supplied is evidence
+        else None,
+    )
+
+    prepared = client.post(
+        "/api/jobs/prepare",
+        json={"job": {"description": "Build Python automation."}},
+    )
+
+    assert prepared.status_code == 200
+    assert prepared.json()["analysis"]["score"] == 85
+    assert prepared.json()["artifact"]["tailored"]["headline"] == "Automation Engineer"
+    assert calls == ["evidence", "analysis", "tailor"]

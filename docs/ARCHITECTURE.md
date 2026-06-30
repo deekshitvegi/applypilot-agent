@@ -23,6 +23,11 @@ entered in the dedicated side-panel form is sent only to the loopback service,
 encrypted immediately, and never persisted in extension storage or returned by
 the API.
 
+Common application fields are mapped deterministically from the encrypted
+profile and reusable-answer store; this path does not call an AI model. The AI
+provider is reserved for job-fit analysis, free-text assistance, evidence
+extraction, and job-specific résumé tailoring.
+
 ## Company-site-first routing
 
 The source listing is not assumed to be the application destination. For every

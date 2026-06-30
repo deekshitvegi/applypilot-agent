@@ -17,6 +17,9 @@ browser sessions.
 6. Use synthetic identities and mock job pages in automated tests.
 7. Provider credentials entered in the side panel must travel only to the
    loopback agent, be encrypted at rest, and never be returned by an API.
+8. Automatic mode must remain user-enabled, visibly indicated, stoppable, and
+   bounded. Login, CAPTCHA, MFA, missing data, and ambiguous submission controls
+   always pause automation.
 
 If a secret is committed, revoke it immediately and remove it from repository
 history before continuing.

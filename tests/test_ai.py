@@ -5,6 +5,7 @@ from applypilot.models import (
     ChatResponse,
     EvidenceItem,
     JobContext,
+    JobFitAnalysis,
     ResumeDocument,
     ResumeEvidence,
     TailoredBullet,
@@ -99,6 +100,44 @@ def test_tailoring_removes_bullets_without_valid_evidence(monkeypatch) -> None:
         "Built Python services"
     ]
     assert result.warnings
+
+
+def test_job_fit_analysis_uses_verified_evidence(monkeypatch) -> None:
+    provider = GeminiProvider("test-key", "test-model")
+    resume = ResumeDocument(
+        filename="resume.txt",
+        media_type="text/plain",
+        sha256="fit",
+        extracted_text="Built Python services.",
+    )
+    evidence = ResumeEvidence(
+        items=[
+            EvidenceItem(
+                id="python",
+                category="experience",
+                text="Built Python services",
+                source_quote="Built Python services",
+            )
+        ]
+    )
+    expected = JobFitAnalysis(
+        score=82,
+        verdict="strong",
+        summary="Strong Python match.",
+        strengths=["Python services"],
+        gaps=["No Kubernetes evidence"],
+        matched_keywords=["Python"],
+        recommendation="Apply",
+    )
+    monkeypatch.setattr(provider, "_structured", lambda _prompt, _schema: expected)
+
+    result = provider.analyze_job(
+        resume,
+        JobContext(description="Build Python services and Kubernetes systems."),
+        evidence,
+    )
+
+    assert result == expected
 
 
 def test_openai_structured_response(monkeypatch) -> None:

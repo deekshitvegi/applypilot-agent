@@ -45,6 +45,13 @@ This repository currently contains:
 - DOCX, PDF, and TXT résumé extraction;
 - a Chrome Manifest V3 side panel for onboarding, résumé upload, active-job
   capture, chat, and tailoring preview;
+- a fully editable encrypted profile, including optional voluntary
+  self-identification answers that are never inferred;
+- deterministic cross-page autofill for common fields without using an LLM;
+- evidence-grounded fit scoring, gap analysis, minimum-fit filtering, and a
+  job-specific résumé preparation pipeline;
+- ask-each-time and always-allow policies for tailored résumé attachment and
+  final submission, plus LinkedIn queue continuation with a 10-job run cap;
 - a company-site-first route planner;
 - a generic form scanner/filler that maps verified profile answers, leaves
   passwords and authentication fields untouched, and reports unknown required
@@ -154,6 +161,13 @@ choose **Fill known fields**. The page intercepts submission and stores nothing.
 
 The extension defaults to the local service. Its settings page can point to a
 hosted demo URL; Chrome will ask for permission to contact that exact origin.
+
+Profile values, reusable answers, résumés, provider credentials, and application
+history are encrypted in `data/applypilot.sqlite3`. The local encryption key is
+stored separately in `data/applypilot.sqlite3.key`; both paths are ignored by
+Git. Saved profile values are reused across supported application pages and do
+not require an AI provider. ApplyPilot never stores employer passwords and
+pauses when login, CAPTCHA, or MFA is required.
 
 ## Development
 
