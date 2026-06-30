@@ -1,5 +1,8 @@
-from applypilot.ai import GeminiProvider
+import json
+
+from applypilot.ai import AnthropicProvider, GeminiProvider, OpenAIProvider
 from applypilot.models import (
+    ChatResponse,
     EvidenceItem,
     JobContext,
     ResumeDocument,
@@ -8,6 +11,18 @@ from applypilot.models import (
     TailoredExperience,
     TailoredResume,
 )
+
+
+class FakeResponse:
+    def __init__(self, body: dict) -> None:
+        self.body = body
+        self.status_code = 200
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict:
+        return self.body
 
 
 def test_evidence_extractor_removes_non_verbatim_claims(monkeypatch) -> None:
@@ -84,3 +99,47 @@ def test_tailoring_removes_bullets_without_valid_evidence(monkeypatch) -> None:
         "Built Python services"
     ]
     assert result.warnings
+
+
+def test_openai_structured_response(monkeypatch) -> None:
+    expected = ChatResponse(answer="Review the salary field.")
+    response = FakeResponse(
+        {
+            "output": [
+                {
+                    "content": [
+                        {"type": "output_text", "text": expected.model_dump_json()}
+                    ]
+                }
+            ]
+        }
+    )
+    monkeypatch.setattr("applypilot.ai.httpx.post", lambda *args, **kwargs: response)
+
+    result = OpenAIProvider("test-key", "gpt-5-mini")._structured(
+        "prompt", ChatResponse
+    )
+
+    assert result == expected
+
+
+def test_anthropic_structured_response(monkeypatch) -> None:
+    expected = ChatResponse(answer="The screenshot shows a required field.")
+    response = FakeResponse(
+        {
+            "content": [
+                {
+                    "type": "tool_use",
+                    "name": "return_structured_result",
+                    "input": json.loads(expected.model_dump_json()),
+                }
+            ]
+        }
+    )
+    monkeypatch.setattr("applypilot.ai.httpx.post", lambda *args, **kwargs: response)
+
+    result = AnthropicProvider("test-key", "claude-test")._structured(
+        "prompt", ChatResponse
+    )
+
+    assert result == expected

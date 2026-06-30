@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 - 2026-06-30
+
+- Added encrypted in-panel setup for Gemini, OpenAI, and Anthropic credentials.
+- Added provider-independent structured resume evidence, tailoring, and chat.
+- Added multimodal chat with up to three validated image attachments.
+- Replaced the original stacked dark interface with a compact, conventional
+  workflow and a substantially larger chat workspace.
+
 ## 0.2.0 - 2026-06-30
 
 - Added encrypted candidate profiles, reusable answers, resumes, applications,

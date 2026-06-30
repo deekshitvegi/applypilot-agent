@@ -16,6 +16,6 @@ fi
 
 printf '%s\n' \
   "ApplyPilot setup complete." \
-  "1. Put a newly created Gemini key in .env (GEMINI_API_KEY=...)." \
-  "2. Run: ./scripts/start.sh" \
-  "3. Load the extension folder as an unpacked Chrome/Edge extension."
+  "1. Run: ./scripts/start.sh" \
+  "2. Load the extension folder as an unpacked Chrome/Edge extension." \
+  "3. Connect Gemini, OpenAI, or Anthropic securely inside the side panel."

@@ -6,6 +6,7 @@ from applypilot.models import (
     ApplicationRecord,
     CandidateProfile,
     JobContext,
+    ProviderConfigRequest,
     ResumeDocument,
     ReusableAnswer,
     TailoredArtifact,
@@ -83,3 +84,21 @@ def test_tailored_artifact_round_trip(tmp_path: Path) -> None:
     store.save_tailored_artifact(artifact)
 
     assert store.get_tailored_artifact(artifact.id) == artifact
+
+
+def test_provider_key_is_encrypted_and_can_be_removed(tmp_path: Path) -> None:
+    store = ProfileStore(tmp_path / "profile.sqlite3")
+    config = ProviderConfigRequest(
+        provider="gemini",
+        api_key="private-test-key",
+        model="gemini-2.5-flash",
+    )
+
+    store.save_provider_config(config)
+
+    assert store.get_provider_config() == config
+    with sqlite3.connect(tmp_path / "profile.sqlite3") as connection:
+        payload = connection.execute("SELECT payload FROM provider_config WHERE id = 1").fetchone()[0]
+    assert "private-test-key" not in payload
+    assert store.delete_provider_config() is True
+    assert store.get_provider_config() is None

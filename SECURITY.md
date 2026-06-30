@@ -15,6 +15,8 @@ browser sessions.
 4. Require an explicit user review before an application is submitted.
 5. Treat generated resume claims as untrusted until the user confirms them.
 6. Use synthetic identities and mock job pages in automated tests.
+7. Provider credentials entered in the side panel must travel only to the
+   loopback agent, be encrypted at rest, and never be returned by an API.
 
 If a secret is committed, revoke it immediately and remove it from repository
 history before continuing.

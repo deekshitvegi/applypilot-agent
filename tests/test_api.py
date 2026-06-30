@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 import applypilot.main as main_module
 from applypilot.config import Settings
+from applypilot.ai import AIProviderManager
 from applypilot.main import app
 from applypilot.models import CandidateProfile, ResumeDocument, TailoredResume
 from applypilot.store import ProfileStore
@@ -75,6 +76,55 @@ def test_local_resume_upload_and_provider_status(monkeypatch, tmp_path: Path) ->
     assert upload.json()["filename"] == "resume.txt"
     assert provider.status_code == 200
     assert provider.json()["provider"] == "gemini"
+
+
+def test_provider_can_be_configured_without_returning_key(monkeypatch, tmp_path: Path) -> None:
+    local_settings = Settings(database_path=tmp_path / "provider.sqlite3", demo_mode=False)
+    local_store = ProfileStore(local_settings.database_path)
+    monkeypatch.setattr(main_module, "settings", local_settings)
+    monkeypatch.setattr(main_module, "store", local_store)
+    monkeypatch.setattr(
+        main_module,
+        "ai_provider",
+        AIProviderManager(local_store, local_settings),
+    )
+
+    saved = client.put(
+        "/api/provider",
+        json={
+            "provider": "openai",
+            "api_key": "private-openai-test-key",
+            "model": "gpt-5-mini",
+        },
+    )
+
+    assert saved.status_code == 200
+    assert saved.json() == {
+        "provider": "openai",
+        "model": "gpt-5-mini",
+        "configured": True,
+        "source": "encrypted_local",
+    }
+    assert "private-openai-test-key" not in saved.text
+    assert client.delete("/api/provider").json()["configured"] is False
+
+
+def test_chat_rejects_oversized_or_invalid_images() -> None:
+    invalid = client.post(
+        "/api/chat",
+        json={
+            "message": "Read this screenshot",
+            "images": [
+                {
+                    "filename": "screenshot.png",
+                    "media_type": "image/png",
+                    "data_base64": "not-base64",
+                }
+            ],
+        },
+    )
+
+    assert invalid.status_code == 422
 
 
 def test_application_api_lifecycle(monkeypatch, tmp_path: Path) -> None:

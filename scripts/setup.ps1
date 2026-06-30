@@ -14,6 +14,6 @@ if (-not (Test-Path -LiteralPath ".env")) {
 }
 
 Write-Host "ApplyPilot setup complete." -ForegroundColor Green
-Write-Host "1. Put a newly created Gemini key in .env (GEMINI_API_KEY=...)."
-Write-Host "2. Run: .\scripts\start.ps1"
-Write-Host "3. Load the extension folder as an unpacked Chrome/Edge extension."
+Write-Host "1. Run: .\scripts\start.ps1"
+Write-Host "2. Load the extension folder as an unpacked Chrome/Edge extension."
+Write-Host "3. Connect Gemini, OpenAI, or Anthropic securely inside the side panel."

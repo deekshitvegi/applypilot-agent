@@ -14,12 +14,14 @@ Local FastAPI orchestrator
       |---- Job-page normalization and site adapters
       |---- Resume evidence extraction and tailoring
       |---- Application planning and validation
-      `---- AI provider (server-side key only)
+      `---- AI provider (encrypted local credential)
 ```
 
 The browser extension owns page interaction. The local service owns reasoning,
-personal data, document generation, audit history, and validation. Keeping the
-AI key out of the extension prevents it from being exposed in browser assets.
+personal data, document generation, audit history, and validation. A credential
+entered in the dedicated side-panel form is sent only to the loopback service,
+encrypted immediately, and never persisted in extension storage or returned by
+the API.
 
 ## Company-site-first routing
 
@@ -76,10 +78,6 @@ password/payment/authentication fields, and returns unknown required questions.
 Site adapters add stronger selectors and multi-step navigation without changing
 the review-before-submit boundary.
 
-The first adapters will target a synthetic test ATS, one common employer ATS,
-and LinkedIn Easy Apply. The company/ATS route remains preferred. Generic form
-support comes after these are reliable.
-
 Current adapter coverage:
 
 - **LinkedIn:** job extraction, Easy Apply detection, external company-route
@@ -98,7 +96,7 @@ Current adapter coverage:
 - Each job gets a separate generated document and audit record.
 - Generated DOCX/PDF files use a single-column US Letter layout and remain in
   the local service. The extension can attach a generated DOCX to a detected
-  resume file input without exposing the Gemini key or local file paths.
+  resume file input without exposing the provider key or local file paths.
 
 ## Delivery milestones
 

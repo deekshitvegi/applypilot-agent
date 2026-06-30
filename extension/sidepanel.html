@@ -7,94 +7,139 @@
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
-    <header>
-      <div class="brand-mark">AP</div>
+    <header class="app-header">
+      <div class="brand-mark" aria-hidden="true">A</div>
       <div class="brand-copy">
         <h1>ApplyPilot</h1>
-        <p id="connection" class="status">Connecting to agent…</p>
+        <p id="connection" class="status">Connecting…</p>
       </div>
-      <button id="settings" class="icon-button" type="button" title="Connection settings">⚙</button>
+      <button id="settings" class="icon-button" type="button" title="Agent connection settings" aria-label="Agent connection settings">⋯</button>
     </header>
 
     <main>
-      <section id="onboarding-card" class="card">
-        <p class="eyebrow">ONBOARDING</p>
-        <h2 id="question">Checking your candidate profile…</h2>
-        <p id="progress" class="muted"></p>
-        <form id="answer-form" class="hidden">
-          <label class="sr-only" for="answer-input">Your answer</label>
-          <input id="answer-input" type="text" autocomplete="off" />
-          <select id="answer-choice" class="hidden"></select>
-          <button type="submit">Save answer</button>
-        </form>
-        <button id="refresh" class="secondary-button" type="button">Refresh</button>
-      </section>
-
-      <section class="card">
-        <p class="eyebrow">BASE RÉSUMÉ</p>
-        <h2>Upload verified experience</h2>
-        <p id="resume-status" class="muted">DOCX, PDF, or TXT. Stored only by the local agent.</p>
-        <label class="file-button" for="resume-file">Choose résumé</label>
-        <input id="resume-file" class="sr-only" type="file" accept=".docx,.pdf,.txt" />
-      </section>
-
-      <section class="card">
-        <p class="eyebrow">ACTIVE JOB</p>
-        <h2 id="job-title">No job captured</h2>
-        <p id="job-company" class="muted">Open a job listing, then capture it.</p>
-        <button id="capture-job" type="button">Capture this job</button>
-        <button id="open-application" class="secondary-button" type="button" disabled>
-          Find company application
-        </button>
-        <button id="tailor-resume" class="secondary-button" type="button" disabled>
-          Tailor résumé
-        </button>
-        <div id="tailor-result" class="result-box hidden"></div>
-        <div id="artifact-actions" class="button-grid hidden">
-          <button id="download-docx" class="secondary-button" type="button">Download DOCX</button>
-          <button id="download-pdf" class="secondary-button" type="button">Download PDF</button>
-          <button id="attach-resume" class="secondary-button" type="button" disabled>
-            Attach tailored résumé
-          </button>
+      <section id="provider-card" class="panel setup-panel">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">AI provider</p>
+            <h2 id="provider-title">Connect a model</h2>
+          </div>
+          <span id="provider-badge" class="badge">Not configured</span>
         </div>
-      </section>
-
-      <section class="card">
-        <p class="eyebrow">APPLICATION FORM</p>
-        <h2>Review before filling</h2>
-        <p id="form-status" class="muted">Open an employer application form.</p>
-        <button id="scan-form" type="button">Analyze visible fields</button>
-        <button id="fill-form" class="secondary-button" type="button" disabled>
-          Fill known fields
-        </button>
-        <form id="unknown-answer-form" class="hidden">
-          <label id="unknown-question" for="unknown-answer">Unknown required question</label>
-          <input id="unknown-answer" type="text" autocomplete="off" />
-          <button type="submit">Remember answer and replan</button>
+        <p class="muted">Your key is encrypted by the local agent and never saved in the extension.</p>
+        <form id="provider-form">
+          <label for="provider-select">Provider</label>
+          <select id="provider-select">
+            <option value="gemini">Google Gemini</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic Claude</option>
+          </select>
+          <label for="provider-key">API key</label>
+          <div class="password-row">
+            <input id="provider-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a newly generated key" />
+            <button id="toggle-key" class="inline-button" type="button" aria-label="Show or hide API key">Show</button>
+          </div>
+          <label for="provider-model">Model</label>
+          <input id="provider-model" type="text" autocomplete="off" spellcheck="false" />
+          <p id="provider-help" class="field-help"></p>
+          <div class="button-row">
+            <button id="save-provider" type="submit">Save securely</button>
+            <button id="disconnect-provider" class="secondary-button" type="button">Remove key</button>
+          </div>
         </form>
-        <button id="approve-submit" class="danger-button hidden" type="button">
-          Approve and submit application
-        </button>
-        <div id="form-result" class="result-box hidden"></div>
       </section>
 
-      <section class="card chat-card">
-        <p class="eyebrow">LIVE COPILOT</p>
+      <section class="panel chat-card">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Copilot</p>
+            <h2>Application chat</h2>
+          </div>
+          <span id="chat-context" class="badge neutral">No job</span>
+        </div>
         <div id="messages" class="messages" aria-live="polite">
-          <p class="agent-message">
-            Connect the local agent and configure Gemini to start chatting.
-          </p>
+          <div class="agent-message message">Ask about a job, résumé change, application question, or attach a screenshot.</div>
         </div>
-        <form id="chat-form">
+        <form id="chat-form" class="chat-form">
+          <div id="image-previews" class="image-previews hidden"></div>
           <label class="sr-only" for="chat-input">Message ApplyPilot</label>
-          <textarea
-            id="chat-input"
-            rows="2"
-            placeholder="Ask about this application…"
-            disabled
-          ></textarea>
-          <button type="submit" disabled>Send</button>
+          <textarea id="chat-input" rows="3" placeholder="Ask ApplyPilot…" disabled></textarea>
+          <div class="composer-actions">
+            <label id="attach-image-label" class="attach-button disabled" for="chat-images" title="Attach up to 3 images">
+              <span aria-hidden="true">＋</span> Image
+            </label>
+            <input id="chat-images" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple disabled />
+            <button id="chat-send" class="send-button" type="submit" disabled>Send</button>
+          </div>
         </form>
+      </section>
+
+      <section class="workflow">
+        <p class="workflow-title">Application workflow</p>
+
+        <details id="onboarding-card" class="panel workflow-step" open>
+          <summary>
+            <span class="step-number">1</span>
+            <span><strong>Candidate profile</strong><small id="progress">Checking profile…</small></span>
+          </summary>
+          <div class="step-content">
+            <h2 id="question">Checking your candidate profile…</h2>
+            <form id="answer-form" class="hidden">
+              <label class="sr-only" for="answer-input">Your answer</label>
+              <input id="answer-input" type="text" autocomplete="off" />
+              <select id="answer-choice" class="hidden"></select>
+              <button type="submit">Save answer</button>
+            </form>
+            <button id="refresh" class="secondary-button" type="button">Refresh status</button>
+          </div>
+        </details>
+
+        <details class="panel workflow-step">
+          <summary>
+            <span class="step-number">2</span>
+            <span><strong>Base résumé</strong><small id="resume-status">DOCX, PDF, or TXT</small></span>
+          </summary>
+          <div class="step-content">
+            <p class="muted">Stored only by your local agent.</p>
+            <label class="file-button" for="resume-file">Choose résumé</label>
+            <input id="resume-file" class="sr-only" type="file" accept=".docx,.pdf,.txt" />
+          </div>
+        </details>
+
+        <details class="panel workflow-step">
+          <summary>
+            <span class="step-number">3</span>
+            <span><strong id="job-title">Capture a job</strong><small id="job-company">Open a job listing first</small></span>
+          </summary>
+          <div class="step-content">
+            <button id="capture-job" type="button">Capture this job</button>
+            <button id="open-application" class="secondary-button" type="button" disabled>Find company application</button>
+            <button id="tailor-resume" class="secondary-button" type="button" disabled>Tailor résumé</button>
+            <div id="tailor-result" class="result-box hidden"></div>
+            <div id="artifact-actions" class="button-grid hidden">
+              <button id="download-docx" class="secondary-button" type="button">Download DOCX</button>
+              <button id="download-pdf" class="secondary-button" type="button">Download PDF</button>
+              <button id="attach-resume" class="secondary-button" type="button" disabled>Attach tailored résumé</button>
+            </div>
+          </div>
+        </details>
+
+        <details class="panel workflow-step">
+          <summary>
+            <span class="step-number">4</span>
+            <span><strong>Fill and review</strong><small id="form-status">Open an employer application form</small></span>
+          </summary>
+          <div class="step-content">
+            <button id="scan-form" type="button">Analyze visible fields</button>
+            <button id="fill-form" class="secondary-button" type="button" disabled>Fill known fields</button>
+            <form id="unknown-answer-form" class="hidden">
+              <label id="unknown-question" for="unknown-answer">Unknown required question</label>
+              <input id="unknown-answer" type="text" autocomplete="off" />
+              <button type="submit">Remember answer and replan</button>
+            </form>
+            <button id="approve-submit" class="danger-button hidden" type="button">Approve and submit application</button>
+            <div id="form-result" class="result-box hidden"></div>
+          </div>
+        </details>
       </section>
     </main>
 

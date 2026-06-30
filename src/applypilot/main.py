@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .config import settings
 from .documents import artifact_filename, build_docx, build_pdf
-from .ai import AIProviderError, GeminiProvider
+from .ai import AIProviderError, AIProviderManager
 from .applications import (
     InvalidApplicationTransition,
     create_application,
@@ -32,6 +32,7 @@ from .models import (
     JobApplicationOptions,
     OnboardingState,
     ProviderStatus,
+    ProviderConfigRequest,
     ResumeDocument,
     ResumeEvidence,
     ReusableAnswer,
@@ -47,7 +48,7 @@ from .routing import choose_application_route
 from .store import ProfileStore
 
 store = ProfileStore(settings.database_path)
-ai_provider = GeminiProvider(settings.gemini_api_key, settings.ai_model)
+ai_provider = AIProviderManager(store, settings)
 web_directory = Path(__file__).parent / "web"
 
 
@@ -113,11 +114,19 @@ def capabilities() -> dict[str, object]:
 
 @app.get("/api/provider", response_model=ProviderStatus)
 def provider_status() -> ProviderStatus:
-    return ProviderStatus(
-        provider=settings.ai_provider,
-        model=settings.ai_model,
-        configured=ai_provider.configured,
-    )
+    return ai_provider.status()
+
+
+@app.put("/api/provider", response_model=ProviderStatus)
+def configure_provider(config: ProviderConfigRequest) -> ProviderStatus:
+    require_local_data_mode()
+    return ai_provider.configure(config)
+
+
+@app.delete("/api/provider", response_model=ProviderStatus)
+def disconnect_provider() -> ProviderStatus:
+    require_local_data_mode()
+    return ai_provider.disconnect()
 
 
 @app.get("/api/profile", response_model=CandidateProfile)
@@ -271,6 +280,7 @@ def chat(request: ChatRequest) -> ChatResponse:
             answers=store.list_answers(),
             resume=store.get_active_resume(),
             job=request.job,
+            images=request.images,
         )
     except AIProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -10,6 +10,7 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from .config import Settings, settings
+from .store import ProfileStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,15 +34,7 @@ def run_checks(config: Settings, root: Path | None = None) -> list[DoctorCheck]:
             ok=(root / ".env").exists(),
             detail="Local .env exists" if (root / ".env").exists() else "Run the setup script",
         ),
-        DoctorCheck(
-            name="gemini",
-            ok=bool(config.gemini_api_key),
-            detail=(
-                f"Gemini configured for {config.ai_model}"
-                if config.gemini_api_key
-                else "GEMINI_API_KEY is empty; create a new restricted key and add it to .env"
-            ),
-        ),
+        _provider_check(config),
         DoctorCheck(
             name="extension",
             ok=_extension_is_complete(root / "extension"),
@@ -77,7 +70,48 @@ def _extension_is_complete(directory: Path) -> bool:
 def _dependencies_are_available() -> bool:
     return all(
         importlib.util.find_spec(module) is not None
-        for module in ("fastapi", "google.genai", "cryptography", "docx", "pypdf", "reportlab")
+        for module in (
+            "fastapi",
+            "google.genai",
+            "httpx",
+            "cryptography",
+            "docx",
+            "pypdf",
+            "reportlab",
+        )
+    )
+
+
+def _provider_check(config: Settings) -> DoctorCheck:
+    try:
+        local = ProfileStore(config.database_path).get_provider_config()
+    except (OSError, ValueError):
+        local = None
+    if local is not None:
+        return DoctorCheck(
+            "ai_provider",
+            True,
+            f"{local.provider.title()} configured for {local.model} in encrypted local storage",
+            required=False,
+        )
+    environment_keys = {
+        "gemini": config.gemini_api_key,
+        "openai": config.openai_api_key,
+        "anthropic": config.anthropic_api_key,
+    }
+    configured = next((name for name, key in environment_keys.items() if key), "")
+    if configured:
+        return DoctorCheck(
+            "ai_provider",
+            True,
+            f"{configured.title()} configured from the local environment",
+            required=False,
+        )
+    return DoctorCheck(
+        "ai_provider",
+        False,
+        "No provider configured yet; connect one securely in the side panel",
+        required=False,
     )
 
 

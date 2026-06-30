@@ -40,7 +40,7 @@ def test_doctor_required_checks_pass_for_configured_installation(tmp_path: Path)
     assert next(check for check in checks if check.name == "service").required is False
 
 
-def test_doctor_reports_missing_gemini_key_without_revealing_values(tmp_path: Path) -> None:
+def test_doctor_reports_missing_provider_without_revealing_values(tmp_path: Path) -> None:
     create_installation(tmp_path)
     config = Settings(
         database_path=tmp_path / "data" / "applypilot.sqlite3",
@@ -50,7 +50,8 @@ def test_doctor_reports_missing_gemini_key_without_revealing_values(tmp_path: Pa
     )
 
     checks = run_checks(config, tmp_path)
-    gemini = next(check for check in checks if check.name == "gemini")
+    provider = next(check for check in checks if check.name == "ai_provider")
 
-    assert gemini.ok is False
-    assert "GEMINI_API_KEY is empty" in gemini.detail
+    assert provider.ok is False
+    assert provider.required is False
+    assert "side panel" in provider.detail

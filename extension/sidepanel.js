@@ -6,6 +6,16 @@ const elements = {
   progress: document.querySelector("#progress"),
   refresh: document.querySelector("#refresh"),
   settings: document.querySelector("#settings"),
+  providerCard: document.querySelector("#provider-card"),
+  providerForm: document.querySelector("#provider-form"),
+  providerSelect: document.querySelector("#provider-select"),
+  providerKey: document.querySelector("#provider-key"),
+  providerModel: document.querySelector("#provider-model"),
+  providerHelp: document.querySelector("#provider-help"),
+  providerTitle: document.querySelector("#provider-title"),
+  providerBadge: document.querySelector("#provider-badge"),
+  disconnectProvider: document.querySelector("#disconnect-provider"),
+  toggleKey: document.querySelector("#toggle-key"),
   answerForm: document.querySelector("#answer-form"),
   answerInput: document.querySelector("#answer-input"),
   answerChoice: document.querySelector("#answer-choice"),
@@ -31,7 +41,11 @@ const elements = {
   approveSubmit: document.querySelector("#approve-submit"),
   chatForm: document.querySelector("#chat-form"),
   chatInput: document.querySelector("#chat-input"),
-  chatButton: document.querySelector("#chat-form button"),
+  chatButton: document.querySelector("#chat-send"),
+  chatImages: document.querySelector("#chat-images"),
+  imagePreviews: document.querySelector("#image-previews"),
+  attachImageLabel: document.querySelector("#attach-image-label"),
+  chatContext: document.querySelector("#chat-context"),
   messages: document.querySelector("#messages"),
 };
 
@@ -48,6 +62,25 @@ const state = {
   formScan: null,
   formPlan: null,
   localMode: false,
+  chatImages: [],
+};
+
+const PROVIDERS = {
+  gemini: {
+    label: "Google Gemini",
+    model: "gemini-2.5-flash",
+    help: "Create a key in Google AI Studio. Gemini offers a limited free tier.",
+  },
+  openai: {
+    label: "OpenAI",
+    model: "gpt-5-mini",
+    help: "Use an OpenAI Platform API key. ChatGPT subscriptions do not include API usage.",
+  },
+  anthropic: {
+    label: "Anthropic Claude",
+    model: "claude-sonnet-4-20250514",
+    help: "Use a key from the Anthropic Console. Claude API usage is billed separately.",
+  },
 };
 
 async function api(path, options = {}) {
@@ -83,9 +116,8 @@ async function loadState() {
     elements.connection.classList.add("connected");
 
     state.provider = await api("/api/provider");
-    const chatReady = state.localMode && state.provider.configured;
-    elements.chatInput.disabled = !chatReady;
-    elements.chatButton.disabled = !chatReady;
+    renderProvider();
+    updateChatAvailability();
 
     if (!state.localMode) {
       showDemoMode();
@@ -103,7 +135,88 @@ async function loadState() {
     elements.question.textContent = "Start the ApplyPilot service, then refresh.";
     elements.progress.textContent = error.message;
     elements.answerForm.classList.add("hidden");
+    state.localMode = false;
+    updateChatAvailability();
   }
+}
+
+function updateChatAvailability() {
+  const ready = Boolean(state.localMode && state.provider?.configured);
+  elements.chatInput.disabled = !ready;
+  elements.chatButton.disabled = !ready;
+  elements.chatImages.disabled = !ready;
+  elements.attachImageLabel.classList.toggle("disabled", !ready);
+}
+
+function renderProvider() {
+  const provider = state.provider || {
+    provider: elements.providerSelect.value,
+    model: PROVIDERS[elements.providerSelect.value].model,
+    configured: false,
+    source: "none",
+  };
+  elements.providerSelect.value = provider.provider;
+  elements.providerModel.value = provider.model || PROVIDERS[provider.provider].model;
+  elements.providerKey.value = "";
+  elements.providerKey.placeholder = provider.configured
+    ? "Paste a new key to replace the saved key"
+    : "Paste a newly generated key";
+  elements.providerTitle.textContent = provider.configured
+    ? PROVIDERS[provider.provider].label
+    : "Connect a model";
+  elements.providerBadge.textContent = provider.configured ? "Connected" : "Not configured";
+  elements.providerBadge.classList.toggle("connected", provider.configured);
+  elements.disconnectProvider.disabled = !provider.configured || provider.source === "environment";
+  elements.providerHelp.textContent = provider.configured
+    ? `Using ${provider.model}. The key is ${provider.source === "environment" ? "loaded from the local environment" : "encrypted locally"}.`
+    : PROVIDERS[provider.provider].help;
+}
+
+async function saveProvider(event) {
+  event.preventDefault();
+  const apiKey = elements.providerKey.value.trim();
+  const provider = elements.providerSelect.value;
+  const model = elements.providerModel.value.trim();
+  if (!state.localMode) {
+    elements.providerHelp.textContent = "Start the local ApplyPilot service before saving a key.";
+    return;
+  }
+  if (!apiKey || !model) {
+    elements.providerHelp.textContent = "Enter both an API key and model name.";
+    return;
+  }
+  elements.providerHelp.textContent = "Encrypting and saving locally…";
+  try {
+    state.provider = await api("/api/provider", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, api_key: apiKey, model }),
+    });
+    renderProvider();
+    updateChatAvailability();
+    appendMessage(`${PROVIDERS[provider].label} is connected.`, "agent-message");
+  } catch (error) {
+    elements.providerHelp.textContent = error.message;
+  } finally {
+    elements.providerKey.value = "";
+  }
+}
+
+async function disconnectProvider() {
+  if (!state.localMode || !state.provider?.configured) return;
+  try {
+    state.provider = await api("/api/provider", { method: "DELETE" });
+    renderProvider();
+    updateChatAvailability();
+  } catch (error) {
+    elements.providerHelp.textContent = error.message;
+  }
+}
+
+function changeProvider() {
+  const provider = elements.providerSelect.value;
+  elements.providerModel.value = PROVIDERS[provider].model;
+  elements.providerHelp.textContent = PROVIDERS[provider].help;
 }
 
 function showDemoMode() {
@@ -215,6 +328,7 @@ async function captureJob() {
     elements.approveSubmit.textContent = "Approve and submit application";
     elements.jobTitle.textContent = captured.title || "Captured job";
     elements.jobCompany.textContent = [captured.company, captured.location].filter(Boolean).join(" · ");
+    elements.chatContext.textContent = captured.title || "Active job";
     elements.tailorResume.disabled = !(state.localMode && state.provider?.configured);
     state.route = await api("/api/application-route", {
       method: "POST",
@@ -277,7 +391,7 @@ async function tailorResume() {
   elements.tailorResume.disabled = true;
   elements.tailorResume.textContent = "Tailoring with evidence…";
   elements.tailorResult.classList.remove("hidden");
-  elements.tailorResult.textContent = "Gemini is matching the job to verified résumé facts.";
+  elements.tailorResult.textContent = `${PROVIDERS[state.provider.provider].label} is matching the job to verified résumé facts.`;
   try {
     state.artifact = await api("/api/tailored", {
       method: "POST",
@@ -489,31 +603,113 @@ async function approveAndSubmit() {
 async function sendChat(event) {
   event.preventDefault();
   const message = elements.chatInput.value.trim();
-  if (!message) return;
-  appendMessage(message, "user-message");
+  if (!message && !state.chatImages.length) return;
+  const images = [...state.chatImages];
+  appendMessage(message || "Analyze the attached image.", "user-message", images);
   elements.chatInput.value = "";
+  state.chatImages = [];
+  renderImagePreviews();
   elements.chatButton.disabled = true;
 
   try {
     const response = await api("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, job: state.job }),
+      body: JSON.stringify({
+        message: message || "Analyze the attached image in the context of this application.",
+        job: state.job,
+        images: images.map(({ filename, mediaType, dataBase64 }) => ({
+          filename,
+          media_type: mediaType,
+          data_base64: dataBase64,
+        })),
+      }),
     });
     appendMessage(response.answer, "agent-message");
   } catch (error) {
     appendMessage(error.message, "agent-message");
   } finally {
-    elements.chatButton.disabled = false;
+    updateChatAvailability();
   }
 }
 
-function appendMessage(text, className) {
-  const paragraph = document.createElement("p");
-  paragraph.className = className;
-  paragraph.textContent = text;
-  elements.messages.append(paragraph);
-  paragraph.scrollIntoView({ behavior: "smooth", block: "end" });
+function appendMessage(text, className, images = []) {
+  const message = document.createElement("div");
+  message.className = `message ${className}`;
+  if (images.length) {
+    const imageRow = document.createElement("div");
+    imageRow.className = "message-images";
+    images.forEach((image) => {
+      const thumbnail = document.createElement("img");
+      thumbnail.src = `data:${image.mediaType};base64,${image.dataBase64}`;
+      thumbnail.alt = image.filename;
+      imageRow.append(thumbnail);
+    });
+    message.append(imageRow);
+  }
+  const copy = document.createElement("div");
+  copy.textContent = text;
+  message.append(copy);
+  elements.messages.append(message);
+  message.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+async function addChatImages() {
+  const files = [...elements.chatImages.files];
+  elements.chatImages.value = "";
+  for (const file of files) {
+    if (state.chatImages.length >= 3) {
+      appendMessage("You can attach up to 3 images per message.", "agent-message");
+      break;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      appendMessage(`${file.name} is larger than 4 MB.`, "agent-message");
+      continue;
+    }
+    if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) {
+      appendMessage(`${file.name} is not a supported image type.`, "agent-message");
+      continue;
+    }
+    const dataUrl = await readFileAsDataUrl(file);
+    state.chatImages.push({
+      filename: file.name,
+      mediaType: file.type,
+      dataBase64: dataUrl.split(",", 2)[1],
+    });
+  }
+  renderImagePreviews();
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderImagePreviews() {
+  elements.imagePreviews.classList.toggle("hidden", state.chatImages.length === 0);
+  elements.imagePreviews.replaceChildren(
+    ...state.chatImages.map((image, index) => {
+      const wrapper = document.createElement("div");
+      wrapper.className = "image-preview";
+      const thumbnail = document.createElement("img");
+      thumbnail.src = `data:${image.mediaType};base64,${image.dataBase64}`;
+      thumbnail.alt = image.filename;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "×";
+      remove.title = `Remove ${image.filename}`;
+      remove.addEventListener("click", () => {
+        state.chatImages.splice(index, 1);
+        renderImagePreviews();
+      });
+      wrapper.append(thumbnail, remove);
+      return wrapper;
+    }),
+  );
 }
 
 function escapeHtml(value) {
@@ -535,6 +731,18 @@ elements.fillForm.addEventListener("click", fillForm);
 elements.unknownAnswerForm.addEventListener("submit", saveUnknownAnswer);
 elements.approveSubmit.addEventListener("click", approveAndSubmit);
 elements.chatForm.addEventListener("submit", sendChat);
+elements.chatImages.addEventListener("change", addChatImages);
+elements.providerForm.addEventListener("submit", saveProvider);
+elements.disconnectProvider.addEventListener("click", disconnectProvider);
+elements.providerSelect.addEventListener("change", changeProvider);
+elements.toggleKey.addEventListener("click", () => {
+  const showing = elements.providerKey.type === "text";
+  elements.providerKey.type = showing ? "password" : "text";
+  elements.toggleKey.textContent = showing ? "Show" : "Hide";
+});
 elements.refresh.addEventListener("click", loadState);
-elements.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());
+elements.settings.addEventListener("click", () => {
+  elements.providerCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  elements.providerSelect.focus();
+});
 loadState();

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CandidateProfile(BaseModel):
@@ -152,6 +152,27 @@ class TailoredArtifact(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     job: JobContext | None = None
+    images: list["ChatImage"] = Field(default_factory=list, max_length=3)
+
+
+class ChatImage(BaseModel):
+    filename: str = Field(max_length=180)
+    media_type: Literal["image/png", "image/jpeg", "image/webp", "image/gif"]
+    data_base64: str = Field(max_length=8_000_000)
+
+    @field_validator("data_base64")
+    @classmethod
+    def validate_base64_size(cls, value: str) -> str:
+        import base64
+        import binascii
+
+        try:
+            decoded = base64.b64decode(value, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("Image data must be valid base64") from exc
+        if len(decoded) > 4 * 1024 * 1024:
+            raise ValueError("Each image must be 4 MB or smaller")
+        return value
 
 
 class ChatResponse(BaseModel):
@@ -163,6 +184,18 @@ class ProviderStatus(BaseModel):
     provider: str
     model: str
     configured: bool
+    source: Literal["encrypted_local", "environment", "none"] = "none"
+
+
+class ProviderConfigRequest(BaseModel):
+    provider: Literal["gemini", "openai", "anthropic"]
+    api_key: str = Field(min_length=8, max_length=500)
+    model: str = Field(min_length=2, max_length=120)
+
+    @field_validator("api_key", "model", mode="before")
+    @classmethod
+    def strip_config_value(cls, value: str) -> str:
+        return str(value).strip()
 
 
 class FormOption(BaseModel):

@@ -39,7 +39,7 @@ verified company application route is available.
 
 This repository currently contains:
 
-- a FastAPI service with onboarding, reusable-answer, résumé, Gemini chat, and
+- a FastAPI service with onboarding, reusable-answer, résumé, multi-provider chat, and
   evidence-grounded tailoring endpoints;
 - encrypted local SQLite persistence with a separate local encryption key;
 - DOCX, PDF, and TXT résumé extraction;
@@ -96,7 +96,7 @@ Quick setup on macOS/Linux:
 ./scripts/setup.sh
 ```
 
-Then add a newly generated Gemini key to `.env` and start the local service:
+Start the local service:
 
 ```powershell
 .\scripts\start.ps1
@@ -121,15 +121,19 @@ Copy-Item .env.example .env
 applypilot
 ```
 
-Create a Gemini API key in [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key),
-then put it in the local `.env` file:
+In the side panel, choose Gemini, OpenAI, or Anthropic, paste a newly generated
+API key, and choose **Save securely**. The local agent encrypts the credential;
+the extension never stores it or receives it back. Environment variables remain
+available for headless setups:
 
 ```dotenv
 GEMINI_API_KEY=your_new_key_here
+# Or: OPENAI_API_KEY=...
+# Or: ANTHROPIC_API_KEY=...
 ```
 
-Never paste a key into an issue, chat, commit, browser extension, or hosted demo.
-The backend reads it locally; the extension never receives it.
+Never paste a key into an issue, commit, hosted demo, or ordinary chat message.
+Only use the dedicated provider form while connected to the local agent.
 
 The API will be available at `http://127.0.0.1:8765`. Check it with:
 

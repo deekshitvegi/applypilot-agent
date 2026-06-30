@@ -47,7 +47,7 @@ async function saveAndTest(event) {
     input.value = apiBase;
     renderDiagnostics(health, provider, capabilities);
     if (health.mode === "local" && !provider.configured) {
-      result.textContent = "Local service connected, but Gemini is not configured.";
+      result.textContent = "Local service connected, but an AI provider is not configured.";
       result.classList.add("error");
     } else {
       result.textContent = `Connected to the ${health.mode} service.`;
@@ -71,7 +71,7 @@ function renderDiagnostics(health, provider, capabilities) {
     ? "The hosted demo intentionally disables personal data and AI calls. Use the local service to apply."
     : provider.configured
       ? "The AI provider is ready. The key remains inside the local backend."
-      : "Add a newly generated GEMINI_API_KEY to the local .env file, then restart ApplyPilot.";
+      : "Open the ApplyPilot side panel and connect Gemini, OpenAI, or Anthropic.";
 }
 
 form.addEventListener("submit", saveAndTest);
