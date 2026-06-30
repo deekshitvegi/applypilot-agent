@@ -137,6 +137,18 @@ class TailorRequest(BaseModel):
     job: JobContext
 
 
+class TailoredArtifactRequest(BaseModel):
+    job: JobContext
+    application_id: str = ""
+
+
+class TailoredArtifact(BaseModel):
+    id: str = Field(default_factory=new_id)
+    application_id: str = ""
+    tailored: TailoredResume
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class ChatRequest(BaseModel):
     message: str
     job: JobContext | None = None

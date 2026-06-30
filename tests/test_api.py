@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 import applypilot.main as main_module
 from applypilot.config import Settings
 from applypilot.main import app
+from applypilot.models import CandidateProfile, ResumeDocument, TailoredResume
 from applypilot.store import ProfileStore
 
 
@@ -109,3 +110,44 @@ def test_application_api_lifecycle(monkeypatch, tmp_path: Path) -> None:
     assert transitioned.status_code == 200
     assert transitioned.json()["status"] == "analyzed"
     assert listed.json()[0]["id"] == application_id
+
+
+def test_tailored_artifact_downloads(monkeypatch, tmp_path: Path) -> None:
+    local_store = ProfileStore(tmp_path / "tailored.sqlite3")
+    local_store.save(
+        CandidateProfile(
+            legal_name="Test Candidate",
+            email="candidate@example.test",
+        )
+    )
+    local_store.save_resume(
+        ResumeDocument(
+            filename="resume.txt",
+            media_type="text/plain",
+            sha256="tailored-test",
+            extracted_text="Verified Python automation experience. " * 5,
+        )
+    )
+    monkeypatch.setattr(main_module, "store", local_store)
+    monkeypatch.setattr(
+        main_module.ai_provider,
+        "tailor_resume",
+        lambda _resume, _job: TailoredResume(
+            headline="Software Engineer",
+            summary="Python automation engineer.",
+        ),
+    )
+
+    created = client.post(
+        "/api/tailored",
+        json={"job": {"description": "Build Python automation."}},
+    )
+    artifact_id = created.json()["id"]
+    docx = client.get(f"/api/tailored/{artifact_id}.docx")
+    pdf = client.get(f"/api/tailored/{artifact_id}.pdf")
+
+    assert created.status_code == 200
+    assert docx.status_code == 200
+    assert docx.content.startswith(b"PK")
+    assert pdf.status_code == 200
+    assert pdf.content.startswith(b"%PDF")

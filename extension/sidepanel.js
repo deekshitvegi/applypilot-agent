@@ -15,6 +15,10 @@ const elements = {
   openApplication: document.querySelector("#open-application"),
   tailorResume: document.querySelector("#tailor-resume"),
   tailorResult: document.querySelector("#tailor-result"),
+  artifactActions: document.querySelector("#artifact-actions"),
+  downloadDocx: document.querySelector("#download-docx"),
+  downloadPdf: document.querySelector("#download-pdf"),
+  attachResume: document.querySelector("#attach-resume"),
   jobTitle: document.querySelector("#job-title"),
   jobCompany: document.querySelector("#job-company"),
   scanForm: document.querySelector("#scan-form"),
@@ -39,6 +43,7 @@ const state = {
   job: null,
   route: null,
   application: null,
+  artifact: null,
   submitClicked: false,
   formScan: null,
   formPlan: null,
@@ -202,6 +207,8 @@ async function captureJob() {
       throw new Error("Could not find a complete job description on this page.");
     }
     state.job = captured;
+    state.artifact = null;
+    elements.artifactActions.classList.add("hidden");
     state.submitClicked = false;
     elements.approveSubmit.classList.add("hidden");
     elements.approveSubmit.disabled = false;
@@ -272,11 +279,12 @@ async function tailorResume() {
   elements.tailorResult.classList.remove("hidden");
   elements.tailorResult.textContent = "Gemini is matching the job to verified résumé facts.";
   try {
-    const tailored = await api("/api/tailor", {
+    state.artifact = await api("/api/tailored", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job: state.job }),
+      body: JSON.stringify({ job: state.job, application_id: state.application?.id || "" }),
     });
+    const tailored = state.artifact.tailored;
     const warnings = tailored.warnings.length
       ? `<p><strong>Warnings:</strong> ${escapeHtml(tailored.warnings.join(" "))}</p>`
       : "";
@@ -286,6 +294,8 @@ async function tailorResume() {
       <p><strong>Skills:</strong> ${escapeHtml(tailored.skills.join(", "))}</p>
       ${warnings}
     `;
+    elements.artifactActions.classList.remove("hidden");
+    updateAttachButton();
     await transitionApplication("materials_ready", "Created an evidence-grounded tailored draft.");
   } catch (error) {
     elements.tailorResult.textContent = error.message;
@@ -334,6 +344,7 @@ async function replanForm() {
     <p>The final Submit button will not be clicked.</p>
   `;
   elements.fillForm.disabled = state.formPlan.actions.length === 0;
+  updateAttachButton();
 
   if (requiredUnknown.length) {
     const [firstUnknown] = requiredUnknown;
@@ -353,6 +364,38 @@ async function replanForm() {
       await transitionApplication("filling", "All required questions now have verified answers.");
     }
   }
+}
+
+function updateAttachButton() {
+  const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
+  elements.attachResume.disabled = !(state.artifact && fileField);
+}
+
+function openArtifact(extension) {
+  if (!state.artifact) return;
+  chrome.tabs.create({
+    url: `${state.apiBase}/api/tailored/${state.artifact.id}.${extension}`,
+    active: false,
+  });
+}
+
+async function attachTailoredResume() {
+  const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
+  if (!state.artifact || !fileField) return;
+  elements.attachResume.disabled = true;
+  const result = await chrome.runtime.sendMessage({
+    action: "attachResume",
+    fieldId: fileField.id,
+    url: `${state.apiBase}/api/tailored/${state.artifact.id}.docx`,
+    filename: "tailored-resume.docx",
+  });
+  if (result.error || !result.attached) {
+    elements.formStatus.textContent = result.error || "The tailored resume could not be attached.";
+    elements.attachResume.disabled = false;
+    return;
+  }
+  elements.formStatus.textContent = `${result.filename} attached for review.`;
+  elements.attachResume.textContent = "Tailored résumé attached";
 }
 
 async function saveUnknownAnswer(event) {
@@ -484,6 +527,9 @@ elements.resumeFile.addEventListener("change", uploadResume);
 elements.captureJob.addEventListener("click", captureJob);
 elements.openApplication.addEventListener("click", openApplication);
 elements.tailorResume.addEventListener("click", tailorResume);
+elements.downloadDocx.addEventListener("click", () => openArtifact("docx"));
+elements.downloadPdf.addEventListener("click", () => openArtifact("pdf"));
+elements.attachResume.addEventListener("click", attachTailoredResume);
 elements.scanForm.addEventListener("click", scanForm);
 elements.fillForm.addEventListener("click", fillForm);
 elements.unknownAnswerForm.addEventListener("submit", saveUnknownAnswer);

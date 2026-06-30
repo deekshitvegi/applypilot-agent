@@ -54,6 +54,9 @@ This repository currently contains:
 - blocked-question recovery that remembers a new answer and replans the form;
 - an explicit two-step final-submit approval that pauses for CAPTCHA/MFA and
   records `submitted` only after the site displays a confirmation signal;
+- ATS-friendly DOCX and PDF generation from the evidence-grounded tailored
+  draft, with download controls and local DOCX attachment to detected file
+  inputs;
 - tests for encryption, resume extraction, evidence validation, routing, and APIs;
 - architecture and delivery milestones in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

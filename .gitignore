@@ -19,6 +19,7 @@ build/
 data/
 resumes/
 applications/
+tmp/
 browser-profiles/
 *.sqlite3
 *.db
@@ -28,4 +29,3 @@ browser-profiles/
 .vscode/
 .DS_Store
 Thumbs.db
-

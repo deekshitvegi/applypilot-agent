@@ -8,6 +8,8 @@ from applypilot.models import (
     JobContext,
     ResumeDocument,
     ReusableAnswer,
+    TailoredArtifact,
+    TailoredResume,
 )
 from applypilot.store import ProfileStore
 
@@ -66,3 +68,18 @@ def test_application_round_trip(tmp_path: Path) -> None:
 
     assert store.get_application(application.id) == application
     assert store.list_applications() == [application]
+
+
+def test_tailored_artifact_round_trip(tmp_path: Path) -> None:
+    store = ProfileStore(tmp_path / "profile.sqlite3")
+    artifact = TailoredArtifact(
+        application_id="application-1",
+        tailored=TailoredResume(
+            headline="Software Engineer",
+            summary="Python automation engineer.",
+        ),
+    )
+
+    store.save_tailored_artifact(artifact)
+
+    assert store.get_tailored_artifact(artifact.id) == artifact

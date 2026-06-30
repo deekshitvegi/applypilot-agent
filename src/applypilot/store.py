@@ -4,7 +4,13 @@ import json
 import sqlite3
 from pathlib import Path
 
-from .models import ApplicationRecord, CandidateProfile, ResumeDocument, ReusableAnswer
+from .models import (
+    ApplicationRecord,
+    CandidateProfile,
+    ResumeDocument,
+    ReusableAnswer,
+    TailoredArtifact,
+)
 from .security import LocalCipher
 
 
@@ -22,6 +28,16 @@ class ProfileStore:
                     id INTEGER PRIMARY KEY CHECK (id = 1),
                     payload TEXT NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS tailored_artifacts (
+                    id TEXT PRIMARY KEY,
+                    application_id TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
@@ -193,6 +209,32 @@ class ProfileStore:
             ApplicationRecord.model_validate_json(self.cipher.decrypt(row[0]))
             for row in rows
         ]
+
+    def save_tailored_artifact(self, artifact: TailoredArtifact) -> TailoredArtifact:
+        self.initialize()
+        payload = self.cipher.encrypt(artifact.model_dump_json())
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO tailored_artifacts (id, application_id, payload, created_at)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    application_id = excluded.application_id,
+                    payload = excluded.payload
+                """,
+                (artifact.id, artifact.application_id, payload),
+            )
+        return artifact
+
+    def get_tailored_artifact(self, artifact_id: str) -> TailoredArtifact | None:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM tailored_artifacts WHERE id = ?", (artifact_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return TailoredArtifact.model_validate_json(self.cipher.decrypt(row[0]))
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self.database_path)

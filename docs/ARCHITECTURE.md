@@ -96,6 +96,9 @@ Current adapter coverage:
 - It may not invent employers, dates, degrees, metrics, tools, or experience.
 - A generated claim retains links to its source evidence for review.
 - Each job gets a separate generated document and audit record.
+- Generated DOCX/PDF files use a single-column US Letter layout and remain in
+  the local service. The extension can attach a generated DOCX to a detected
+  resume file input without exposing the Gemini key or local file paths.
 
 ## Delivery milestones
 

@@ -10,6 +10,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     openApplication: () => openApplicationRoute(message.url),
     submitApplication: submitActiveApplication,
     verifySubmission: verifyActiveSubmission,
+    attachResume: () => attachResumeFile(message.fieldId, message.url, message.filename),
   };
   const action = actions[message.action];
   if (!action) return false;
@@ -66,6 +67,27 @@ async function verifyActiveSubmission() {
   const [result] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: detectSubmissionConfirmation,
+  });
+  return result.result;
+}
+
+async function attachResumeFile(fieldId, url, filename) {
+  const source = new URL(url);
+  if (!["127.0.0.1", "localhost"].includes(source.hostname)) {
+    throw new Error("Resume files can only be attached from the local ApplyPilot service.");
+  }
+  const response = await fetch(source.href);
+  if (!response.ok) throw new Error("Could not download the tailored resume from the local agent.");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  const tab = await getActiveHttpTab();
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: applyFileToInput,
+    args: [fieldId, btoa(binary), filename],
   });
   return result.result;
 }
@@ -266,6 +288,29 @@ function detectSubmissionConfirmation() {
     confirmed: Boolean(matched || urlSignal),
     signal: matched || (urlSignal ? "confirmation URL" : ""),
   };
+}
+
+function applyFileToInput(fieldId, base64, filename) {
+  const input = document.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`);
+  if (!input || input.type !== "file") {
+    return { attached: false, error: "The resume upload field is no longer available." };
+  }
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  const file = new File(
+    [bytes],
+    filename,
+    { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+  );
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  input.files = transfer.files;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+  return { attached: input.files?.length === 1, filename: file.name };
 }
 
 function extractJobFromPage() {

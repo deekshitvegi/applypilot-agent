@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
+from .documents import artifact_filename, build_docx, build_pdf
 from .ai import AIProviderError, GeminiProvider
 from .applications import (
     InvalidApplicationTransition,
@@ -33,6 +34,8 @@ from .models import (
     ResumeEvidence,
     ReusableAnswer,
     TailoredResume,
+    TailoredArtifact,
+    TailoredArtifactRequest,
     TailorRequest,
 )
 from .onboarding import get_onboarding_state
@@ -204,6 +207,54 @@ def tailor_resume(request: TailorRequest) -> TailoredResume:
         return ai_provider.tailor_resume(resume, request.job)
     except AIProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/tailored", response_model=TailoredArtifact)
+def create_tailored_artifact(request: TailoredArtifactRequest) -> TailoredArtifact:
+    require_local_data_mode()
+    resume = store.get_active_resume()
+    if resume is None:
+        raise HTTPException(status_code=404, detail="Upload a resume before tailoring")
+    if request.application_id and store.get_application(request.application_id) is None:
+        raise HTTPException(status_code=404, detail="Application not found")
+    try:
+        tailored = ai_provider.tailor_resume(resume, request.job)
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return store.save_tailored_artifact(
+        TailoredArtifact(application_id=request.application_id, tailored=tailored)
+    )
+
+
+def load_artifact(artifact_id: str) -> TailoredArtifact:
+    artifact = store.get_tailored_artifact(artifact_id)
+    if artifact is None:
+        raise HTTPException(status_code=404, detail="Tailored resume not found")
+    return artifact
+
+
+@app.get("/api/tailored/{artifact_id}.docx")
+def download_tailored_docx(artifact_id: str) -> Response:
+    require_local_data_mode()
+    artifact = load_artifact(artifact_id)
+    filename = artifact_filename(store.load(), "docx")
+    return Response(
+        content=build_docx(artifact, store.load()),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/tailored/{artifact_id}.pdf")
+def download_tailored_pdf(artifact_id: str) -> Response:
+    require_local_data_mode()
+    artifact = load_artifact(artifact_id)
+    filename = artifact_filename(store.load(), "pdf")
+    return Response(
+        content=build_pdf(artifact, store.load()),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/api/chat", response_model=ChatResponse)
