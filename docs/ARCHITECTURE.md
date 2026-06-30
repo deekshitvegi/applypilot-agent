@@ -63,6 +63,12 @@ Every supported application surface implements the same small contract:
 5. validate the filled form;
 6. stop at review before final submission.
 
+The generic form mapper runs before site-specific logic. It handles standard
+HTML controls, maps high-confidence profile fields and reusable answers, blocks
+password/payment/authentication fields, and returns unknown required questions.
+Site adapters add stronger selectors and multi-step navigation without changing
+the review-before-submit boundary.
+
 The first adapters will target a synthetic test ATS, one common employer ATS,
 and LinkedIn Easy Apply. The company/ATS route remains preferred. Generic form
 support comes after these are reliable.

@@ -148,3 +148,59 @@ class ProviderStatus(BaseModel):
     provider: str
     model: str
     configured: bool
+
+
+class FormOption(BaseModel):
+    value: str
+    label: str
+
+
+class FormField(BaseModel):
+    id: str
+    label: str
+    name: str = ""
+    field_type: Literal[
+        "text",
+        "email",
+        "tel",
+        "url",
+        "number",
+        "textarea",
+        "select",
+        "checkbox",
+        "radio",
+        "file",
+        "password",
+        "other",
+    ] = "text"
+    required: bool = False
+    value: str = ""
+    options: list[FormOption] = Field(default_factory=list)
+
+
+class FormFillAction(BaseModel):
+    field_id: str
+    value: str
+    source: str
+    confidence: float = Field(ge=0, le=1)
+
+
+class UnknownField(BaseModel):
+    field_id: str
+    label: str
+    required: bool
+    reason: str
+
+
+class FormPlanRequest(BaseModel):
+    page_url: str
+    fields: list[FormField]
+
+
+class FormFillPlan(BaseModel):
+    page_url: str
+    actions: list[FormFillAction] = Field(default_factory=list)
+    unknown_fields: list[UnknownField] = Field(default_factory=list)
+    blocked_fields: list[UnknownField] = Field(default_factory=list)
+    confirmation_required: bool = True
+    submit_allowed: bool = False

@@ -3,9 +3,15 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message.action !== "captureJob") return false;
+  const actions = {
+    captureJob: captureActiveJob,
+    scanForm: scanActiveForm,
+    fillForm: () => fillActiveForm(message.actions || []),
+  };
+  const action = actions[message.action];
+  if (!action) return false;
 
-  captureActiveJob()
+  action()
     .then(sendResponse)
     .catch((error) => sendResponse({ error: error.message }));
   return true;
@@ -22,6 +28,133 @@ async function captureActiveJob() {
     func: extractJobFromPage,
   });
   return result.result;
+}
+
+async function scanActiveForm() {
+  const tab = await getActiveHttpTab();
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: extractFormFields,
+  });
+  return { page_url: tab.url, fields: result.result };
+}
+
+async function fillActiveForm(actions) {
+  const tab = await getActiveHttpTab();
+  const [result] = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: applyFormFillPlan,
+    args: [actions],
+  });
+  return result.result;
+}
+
+async function getActiveHttpTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !tab.url || !/^https?:/.test(tab.url)) {
+    throw new Error("Open an application form in the active tab first.");
+  }
+  return tab;
+}
+
+function extractFormFields() {
+  const controls = [...document.querySelectorAll("input, textarea, select")].filter((control) => {
+    const type = (control.type || "").toLowerCase();
+    return !control.disabled && !["hidden", "submit", "button", "reset", "image"].includes(type);
+  });
+
+  return controls.map((control, index) => {
+    const applypilotId = `ap-${index}`;
+    control.dataset.applypilotId = applypilotId;
+    const explicitLabel = control.id
+      ? document.querySelector(`label[for="${CSS.escape(control.id)}"]`)?.textContent
+      : "";
+    const wrappingLabel = control.closest("label")?.textContent || "";
+    const legend = control.closest("fieldset")?.querySelector("legend")?.textContent || "";
+    const label = [legend, explicitLabel || wrappingLabel]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const fallbackLabel =
+      control.getAttribute("aria-label") ||
+      control.getAttribute("placeholder") ||
+      control.name ||
+      control.id ||
+      `Field ${index + 1}`;
+    const tag = control.tagName.toLowerCase();
+    let fieldType = tag === "textarea" ? "textarea" : tag === "select" ? "select" : control.type || "text";
+    if (!["text", "email", "tel", "url", "number", "textarea", "select", "checkbox", "radio", "file", "password"].includes(fieldType)) {
+      fieldType = "other";
+    }
+    const options = tag === "select"
+      ? [...control.options]
+          .filter((option) => option.value || option.textContent.trim())
+          .map((option) => ({ value: option.value, label: option.textContent.trim() }))
+      : [];
+
+    return {
+      id: applypilotId,
+      label: (label || fallbackLabel).replace(/\s+/g, " ").trim(),
+      name: control.name || "",
+      field_type: fieldType,
+      required: control.required || control.getAttribute("aria-required") === "true",
+      value: fieldType === "checkbox" || fieldType === "radio"
+        ? (control.checked ? control.value || "true" : "")
+        : control.value || "",
+      options,
+    };
+  });
+}
+
+function applyFormFillPlan(actions) {
+  let filled = 0;
+  const errors = [];
+  const dispatch = (control) => {
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+    control.dispatchEvent(new Event("blur", { bubbles: true }));
+  };
+
+  for (const action of actions) {
+    const control = document.querySelector(`[data-applypilot-id="${CSS.escape(action.field_id)}"]`);
+    if (!control || control.disabled) {
+      errors.push(`${action.field_id}: field is no longer available`);
+      continue;
+    }
+
+    try {
+      const type = (control.type || control.tagName).toLowerCase();
+      if (type === "file" || type === "password") continue;
+      if (type === "checkbox") {
+        control.checked = ["true", "yes", "1", "on"].includes(String(action.value).toLowerCase());
+      } else if (type === "radio") {
+        const target = String(action.value).toLowerCase();
+        control.checked = [control.value, control.labels?.[0]?.textContent || ""]
+          .some((value) => String(value).trim().toLowerCase() === target);
+      } else if (control.tagName === "SELECT") {
+        const target = String(action.value).toLowerCase();
+        const option = [...control.options].find((candidate) =>
+          [candidate.value, candidate.textContent].some(
+            (value) => String(value).trim().toLowerCase() === target,
+          ),
+        );
+        if (!option) throw new Error("matching option not found");
+        control.value = option.value;
+      } else {
+        const prototype = Object.getPrototypeOf(control);
+        const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+        if (descriptor?.set) descriptor.set.call(control, action.value);
+        else control.value = action.value;
+      }
+      dispatch(control);
+      filled += 1;
+    } catch (error) {
+      errors.push(`${action.field_id}: ${error.message}`);
+    }
+  }
+
+  return { filled, errors, submit_clicked: false };
 }
 
 function extractJobFromPage() {

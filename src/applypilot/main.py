@@ -16,6 +16,8 @@ from .models import (
     CandidateProfile,
     ChatRequest,
     ChatResponse,
+    FormFillPlan,
+    FormPlanRequest,
     JobApplicationOptions,
     OnboardingState,
     ProviderStatus,
@@ -26,6 +28,7 @@ from .models import (
     TailorRequest,
 )
 from .onboarding import get_onboarding_state
+from .form_mapper import plan_form_fill
 from .resume import ResumeExtractionError, extract_resume
 from .routing import choose_application_route
 from .store import ProfileStore
@@ -64,6 +67,11 @@ def require_local_data_mode() -> None:
 @app.get("/", include_in_schema=False)
 def dashboard() -> FileResponse:
     return FileResponse(web_directory / "index.html")
+
+
+@app.get("/demo/ats", include_in_schema=False)
+def synthetic_ats() -> FileResponse:
+    return FileResponse(web_directory / "synthetic-ats.html")
 
 
 @app.get("/health")
@@ -206,6 +214,17 @@ def chat(request: ChatRequest) -> ChatResponse:
 @app.post("/api/application-route", response_model=ApplicationRouteDecision)
 def application_route(options: JobApplicationOptions) -> ApplicationRouteDecision:
     return choose_application_route(options)
+
+
+@app.post("/api/forms/plan", response_model=FormFillPlan)
+def form_plan(request: FormPlanRequest) -> FormFillPlan:
+    require_local_data_mode()
+    return plan_form_fill(
+        page_url=request.page_url,
+        fields=request.fields,
+        profile=store.load(),
+        answers=store.list_answers(),
+    )
 
 
 def run() -> None:

@@ -16,6 +16,10 @@ const elements = {
   tailorResult: document.querySelector("#tailor-result"),
   jobTitle: document.querySelector("#job-title"),
   jobCompany: document.querySelector("#job-company"),
+  scanForm: document.querySelector("#scan-form"),
+  fillForm: document.querySelector("#fill-form"),
+  formStatus: document.querySelector("#form-status"),
+  formResult: document.querySelector("#form-result"),
   chatForm: document.querySelector("#chat-form"),
   chatInput: document.querySelector("#chat-input"),
   chatButton: document.querySelector("#chat-form button"),
@@ -28,6 +32,7 @@ const state = {
   onboarding: null,
   provider: null,
   job: null,
+  formPlan: null,
   localMode: false,
 };
 
@@ -218,6 +223,61 @@ async function tailorResume() {
   }
 }
 
+async function scanForm() {
+  elements.scanForm.disabled = true;
+  elements.scanForm.textContent = "Analyzing fields…";
+  elements.formResult.classList.remove("hidden");
+  try {
+    const scan = await chrome.runtime.sendMessage({ action: "scanForm" });
+    if (scan.error) throw new Error(scan.error);
+    if (!scan.fields.length) throw new Error("No fillable fields were found on this page.");
+    state.formPlan = await api("/api/forms/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(scan),
+    });
+    const requiredUnknown = state.formPlan.unknown_fields.filter((field) => field.required);
+    elements.formStatus.textContent = `${scan.fields.length} fields found · ${state.formPlan.actions.length} known`;
+    elements.formResult.innerHTML = `
+      <strong>${state.formPlan.actions.length} fields ready</strong>
+      <p>${requiredUnknown.length} required questions need your answer.</p>
+      <p>${state.formPlan.blocked_fields.length} sensitive/authentication fields will be left alone.</p>
+      <p>The final Submit button will not be clicked.</p>
+    `;
+    elements.fillForm.disabled = state.formPlan.actions.length === 0;
+  } catch (error) {
+    elements.formStatus.textContent = error.message;
+    elements.formResult.textContent = "Nothing was changed on the page.";
+  } finally {
+    elements.scanForm.disabled = false;
+    elements.scanForm.textContent = "Analyze visible fields";
+  }
+}
+
+async function fillForm() {
+  if (!state.formPlan) return;
+  elements.fillForm.disabled = true;
+  elements.fillForm.textContent = "Filling…";
+  try {
+    const result = await chrome.runtime.sendMessage({
+      action: "fillForm",
+      actions: state.formPlan.actions,
+    });
+    if (result.error) throw new Error(result.error);
+    elements.formStatus.textContent = `${result.filled} fields filled for your review.`;
+    elements.formResult.innerHTML = `
+      <strong>Review the page carefully</strong>
+      <p>${result.errors.length ? escapeHtml(result.errors.join(" ")) : "No fill errors detected."}</p>
+      <p>ApplyPilot did not submit the application.</p>
+    `;
+  } catch (error) {
+    elements.formStatus.textContent = error.message;
+  } finally {
+    elements.fillForm.disabled = false;
+    elements.fillForm.textContent = "Fill known fields";
+  }
+}
+
 async function sendChat(event) {
   event.preventDefault();
   const message = elements.chatInput.value.trim();
@@ -258,6 +318,8 @@ elements.answerForm.addEventListener("submit", saveOnboardingAnswer);
 elements.resumeFile.addEventListener("change", uploadResume);
 elements.captureJob.addEventListener("click", captureJob);
 elements.tailorResume.addEventListener("click", tailorResume);
+elements.scanForm.addEventListener("click", scanForm);
+elements.fillForm.addEventListener("click", fillForm);
 elements.chatForm.addEventListener("submit", sendChat);
 elements.refresh.addEventListener("click", loadState);
 elements.settings.addEventListener("click", () => chrome.runtime.openOptionsPage());

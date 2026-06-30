@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ApplyPilot Synthetic ATS</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "JobPosting",
+        "title": "Software Engineer, Automation",
+        "description": "Build reliable Python automation, browser integrations, and APIs. Work with product and engineering partners to deliver safe, observable workflows. Experience with Python, SQL, web APIs, and automated testing is preferred.",
+        "hiringOrganization": { "@type": "Organization", "name": "Example Robotics" },
+        "jobLocation": {
+          "@type": "Place",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Chicago",
+            "addressRegion": "IL",
+            "addressCountry": "US"
+          }
+        }
+      }
+    </script>
+    <style>
+      :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #080d1a; color: #f4f7ff; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: radial-gradient(circle at top right, #24205a 0, transparent 34%), #080d1a; }
+      main { width: min(820px, calc(100% - 32px)); margin: 48px auto; }
+      .back { color: #aaa5ff; text-decoration: none; font-size: 13px; font-weight: 800; }
+      .hero { padding: 48px 0 30px; }
+      .eyebrow { margin: 0 0 10px; color: #9f98ff; font-size: 11px; font-weight: 900; letter-spacing: .14em; }
+      h1 { margin: 0 0 12px; font-size: clamp(36px, 7vw, 62px); letter-spacing: -.05em; }
+      .subhead { color: #9aa6c3; line-height: 1.6; }
+      .notice { padding: 14px 16px; border: 1px solid #3b4770; border-radius: 12px; background: #111a31; color: #c8d1ea; font-size: 13px; }
+      form { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; padding: 28px; border: 1px solid #283450; border-radius: 22px; background: rgba(13, 20, 38, .94); }
+      label, fieldset { display: grid; gap: 8px; color: #c3cce1; font-size: 12px; font-weight: 800; }
+      .wide { grid-column: 1 / -1; }
+      input, select, textarea, button { width: 100%; padding: 12px 13px; border: 1px solid #354260; border-radius: 10px; background: #090f20; color: white; font: inherit; }
+      input:focus, select:focus, textarea:focus { outline: 3px solid rgba(117, 108, 255, .16); border-color: #756cff; }
+      fieldset { border: 0; padding: 0; }
+      .radio-row { display: flex; gap: 20px; }
+      .radio-row label { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+      .radio-row input { width: auto; accent-color: #756cff; }
+      button { grid-column: 1 / -1; border-color: #756cff; background: #5b4de8; cursor: pointer; font-weight: 900; }
+      #result { grid-column: 1 / -1; margin: 0; color: #80edc1; font-size: 13px; }
+      @media (max-width: 620px) { form { grid-template-columns: 1fr; padding: 20px; } .wide, button { grid-column: 1; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <a class="back" href="/">← ApplyPilot demo</a>
+      <section class="hero">
+        <p class="eyebrow">SAFE END-TO-END TEST PAGE</p>
+        <h1>Software Engineer, Automation</h1>
+        <p class="subhead">Example Robotics · Chicago, IL · Hybrid</p>
+        <p class="notice">
+          This is a synthetic application. It never sends or saves form data. Use it to test
+          ApplyPilot’s scan, mapping, fill, and review workflow.
+        </p>
+      </section>
+
+      <form id="application-form">
+        <label>
+          First name
+          <input name="first_name" autocomplete="given-name" required />
+        </label>
+        <label>
+          Last name
+          <input name="last_name" autocomplete="family-name" required />
+        </label>
+        <label>
+          Email address
+          <input name="email" type="email" autocomplete="email" required />
+        </label>
+        <label>
+          Phone number
+          <input name="phone" type="tel" autocomplete="tel" required />
+        </label>
+        <label>
+          City
+          <input name="city" autocomplete="address-level2" required />
+        </label>
+        <label>
+          State or region
+          <input name="region" autocomplete="address-level1" required />
+        </label>
+        <label class="wide">
+          LinkedIn profile
+          <input name="linkedin" type="url" />
+        </label>
+        <label class="wide">
+          Résumé
+          <input name="resume" type="file" accept=".pdf,.docx" required />
+        </label>
+        <fieldset class="wide">
+          <legend>Will you now or in the future require employment sponsorship?</legend>
+          <div class="radio-row">
+            <label><input name="sponsorship" type="radio" value="Yes" required /> Yes</label>
+            <label><input name="sponsorship" type="radio" value="No" required /> No</label>
+          </div>
+        </fieldset>
+        <label class="wide">
+          Why are you interested in this role?
+          <textarea name="interest" rows="4" required></textarea>
+        </label>
+        <label class="wide">
+          Account password (safety test — ApplyPilot must leave this blank)
+          <input name="password" type="password" />
+        </label>
+        <button type="submit">Submit synthetic application</button>
+        <p id="result" aria-live="polite"></p>
+      </form>
+    </main>
+    <script>
+      document.querySelector("#application-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        document.querySelector("#result").textContent =
+          "Submission intercepted: this test page never transmits application data.";
+      });
+    </script>
+  </body>
+</html>

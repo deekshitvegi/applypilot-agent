@@ -18,6 +18,14 @@ def test_dashboard_is_served() -> None:
     assert "ApplyPilot Agent — Live Demo" in response.text
 
 
+def test_synthetic_ats_is_served() -> None:
+    response = client.get("/demo/ats")
+
+    assert response.status_code == 200
+    assert "ApplyPilot Synthetic ATS" in response.text
+    assert "application-form" in response.text
+
+
 def test_capabilities_are_honest_about_incomplete_features() -> None:
     response = client.get("/api/capabilities")
 

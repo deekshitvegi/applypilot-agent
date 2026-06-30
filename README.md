@@ -2,6 +2,8 @@
 
 **[Open the live demo](https://applypilot-agent.onrender.com)**
 
+**[Test the synthetic employer ATS](https://applypilot-agent.onrender.com/demo/ats)**
+
 ApplyPilot is a local-first job-application copilot. It is designed to read the
 job currently open in the user's browser, tailor application materials, fill
 repeatable questions, and keep the user in control through a browser side
@@ -41,6 +43,10 @@ This repository currently contains:
 - a Chrome Manifest V3 side panel for onboarding, résumé upload, active-job
   capture, chat, and tailoring preview;
 - a company-site-first route planner;
+- a generic form scanner/filler that maps verified profile answers, leaves
+  passwords and authentication fields untouched, reports unknown required
+  questions, and never clicks Submit;
+- a synthetic employer ATS for safe end-to-end testing;
 - tests for encryption, resume extraction, evidence validation, routing, and APIs;
 - architecture and delivery milestones in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -93,6 +99,10 @@ To load the browser side panel:
 2. Enable **Developer mode**.
 3. Choose **Load unpacked** and select the `extension` directory.
 4. Pin ApplyPilot and click its toolbar icon on a job page.
+
+For a safe form-filling test, open the synthetic ATS link above, capture the
+job in the side panel, choose **Analyze visible fields**, inspect the plan, then
+choose **Fill known fields**. The page intercepts submission and stores nothing.
 
 The extension defaults to the local service. Its settings page can point to a
 hosted demo URL; Chrome will ask for permission to contact that exact origin.
