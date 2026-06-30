@@ -1,5 +1,7 @@
 # ApplyPilot Agent
 
+**[Open the live demo](https://applypilot-agent.onrender.com)**
+
 ApplyPilot is a local-first job-application copilot. It is designed to read the
 job currently open in the user's browser, tailor application materials, fill
 repeatable questions, and keep the user in control through a browser side
