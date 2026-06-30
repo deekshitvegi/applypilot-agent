@@ -21,3 +21,12 @@ button { padding: 11px 14px; border: 1px solid #675fff; border-radius: 10px; bac
 button.secondary { border-color: #35415f; background: #172139; color: #ccd4e9; }
 .result { min-height: 22px; margin: 20px 0 0; color: #79e5b8; font-size: 13px; }
 .result.error { color: #fda4af; }
+.hidden { display: none; }
+.diagnostics { margin-top: 24px; padding-top: 22px; border-top: 1px solid #29334e; }
+.diagnostics h2 { margin: 0 0 14px; font-size: 18px; }
+.diagnostics dl { display: grid; gap: 8px; margin: 0; }
+.diagnostics dl div { display: grid; grid-template-columns: 130px 1fr; gap: 12px; }
+.diagnostics dt { color: #8793b1; font-size: 12px; font-weight: 800; }
+.diagnostics dd { margin: 0; color: #dce3f5; font-size: 12px; overflow-wrap: anywhere; }
+.provider-help { margin: 16px 0 8px; color: #fcd570; font-size: 13px; line-height: 1.5; }
+.diagnostics a { color: #aaa8ff; font-size: 12px; font-weight: 800; }

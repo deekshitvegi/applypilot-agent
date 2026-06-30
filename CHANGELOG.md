@@ -14,3 +14,5 @@
 - Added an encrypted application state machine and audit history.
 - Added a public stateless Render demo and synthetic ATS test page.
 - Added setup, start, extension packaging, CI, and MIT licensing.
+- Added Windows/macOS/Linux setup and start scripts plus secret-safe local
+  installation diagnostics.

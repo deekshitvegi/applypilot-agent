@@ -29,6 +29,7 @@ dev = [
 
 [project.scripts]
 applypilot = "applypilot.main:run"
+applypilot-doctor = "applypilot.doctor:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

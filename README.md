@@ -90,11 +90,26 @@ Quick setup on Windows:
 .\scripts\setup.ps1
 ```
 
+Quick setup on macOS/Linux:
+
+```bash
+./scripts/setup.sh
+```
+
 Then add a newly generated Gemini key to `.env` and start the local service:
 
 ```powershell
 .\scripts\start.ps1
 ```
+
+Before loading the extension, check the local installation without revealing
+the key:
+
+```powershell
+.\scripts\doctor.ps1
+```
+
+On macOS/Linux, run `.venv/bin/applypilot-doctor` and `./scripts/start.sh`.
 
 Manual setup:
 

@@ -23,6 +23,20 @@
         </div>
       </form>
       <p id="result" class="result" aria-live="polite"></p>
+      <section id="diagnostics" class="diagnostics hidden">
+        <h2>Connection diagnostics</h2>
+        <dl>
+          <div><dt>Service</dt><dd id="diag-service">—</dd></div>
+          <div><dt>Mode</dt><dd id="diag-mode">—</dd></div>
+          <div><dt>AI provider</dt><dd id="diag-provider">—</dd></div>
+          <div><dt>Model</dt><dd id="diag-model">—</dd></div>
+          <div><dt>Site adapters</dt><dd id="diag-adapters">—</dd></div>
+        </dl>
+        <p id="provider-help" class="provider-help"></p>
+        <a href="https://ai.google.dev/gemini-api/docs/api-key" target="_blank" rel="noreferrer">
+          Gemini API key guidance ↗
+        </a>
+      </section>
     </main>
     <script src="options.js"></script>
   </body>
