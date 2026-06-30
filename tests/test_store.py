@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from applypilot.models import CandidateProfile
+import sqlite3
+
+from applypilot.models import CandidateProfile, ResumeDocument, ReusableAnswer
 from applypilot.store import ProfileStore
 
 
@@ -16,3 +18,28 @@ def test_profile_round_trip(tmp_path: Path) -> None:
 
     assert store.load() == profile
 
+    with sqlite3.connect(tmp_path / "profile.sqlite3") as connection:
+        payload = connection.execute(
+            "SELECT payload FROM candidate_profile WHERE id = 1"
+        ).fetchone()[0]
+    assert "candidate@example.test" not in payload
+
+
+def test_answer_and_resume_round_trip(tmp_path: Path) -> None:
+    store = ProfileStore(tmp_path / "profile.sqlite3")
+    answer = ReusableAnswer(question="Are you willing to travel?", answer="Yes")
+    resume = ResumeDocument(
+        filename="resume.txt",
+        media_type="text/plain",
+        sha256="abc123",
+        extracted_text="Verified resume text " * 10,
+    )
+
+    store.save_answer(answer)
+    store.save_resume(resume)
+
+    assert store.list_answers() == [answer]
+    assert store.get_active_resume() == resume
+    assert store.list_resumes() == [resume]
+    assert store.delete_answer(answer.id) is True
+    assert store.list_answers() == []

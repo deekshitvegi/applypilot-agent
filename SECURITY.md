@@ -8,6 +8,7 @@ browser sessions.
 
 1. Never commit `.env`, candidate data, resumes, cookies, access tokens, or
    passwords.
+   If a key is pasted into chat or an issue, revoke it and create a replacement.
 2. Do not collect or store LinkedIn or employer credentials. Authentication is
    completed by the user in their own browser.
 3. Do not attempt to defeat CAPTCHA, MFA, bot detection, or access controls.
@@ -17,4 +18,3 @@ browser sessions.
 
 If a secret is committed, revoke it immediately and remove it from repository
 history before continuing.
-

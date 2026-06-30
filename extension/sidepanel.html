@@ -9,26 +9,51 @@
   <body>
     <header>
       <div class="brand-mark">AP</div>
-      <div>
+      <div class="brand-copy">
         <h1>ApplyPilot</h1>
-        <p id="connection" class="status">Connecting to local agent…</p>
+        <p id="connection" class="status">Connecting to agent…</p>
       </div>
       <button id="settings" class="icon-button" type="button" title="Connection settings">⚙</button>
     </header>
 
     <main>
-      <section class="card">
+      <section id="onboarding-card" class="card">
         <p class="eyebrow">ONBOARDING</p>
         <h2 id="question">Checking your candidate profile…</h2>
         <p id="progress" class="muted"></p>
-        <button id="refresh" type="button">Refresh</button>
+        <form id="answer-form" class="hidden">
+          <label class="sr-only" for="answer-input">Your answer</label>
+          <input id="answer-input" type="text" autocomplete="off" />
+          <select id="answer-choice" class="hidden"></select>
+          <button type="submit">Save answer</button>
+        </form>
+        <button id="refresh" class="secondary-button" type="button">Refresh</button>
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">BASE RÉSUMÉ</p>
+        <h2>Upload verified experience</h2>
+        <p id="resume-status" class="muted">DOCX, PDF, or TXT. Stored only by the local agent.</p>
+        <label class="file-button" for="resume-file">Choose résumé</label>
+        <input id="resume-file" class="sr-only" type="file" accept=".docx,.pdf,.txt" />
+      </section>
+
+      <section class="card">
+        <p class="eyebrow">ACTIVE JOB</p>
+        <h2 id="job-title">No job captured</h2>
+        <p id="job-company" class="muted">Open a job listing, then capture it.</p>
+        <button id="capture-job" type="button">Capture this job</button>
+        <button id="tailor-resume" class="secondary-button" type="button" disabled>
+          Tailor résumé
+        </button>
+        <div id="tailor-result" class="result-box hidden"></div>
       </section>
 
       <section class="card chat-card">
         <p class="eyebrow">LIVE COPILOT</p>
         <div id="messages" class="messages" aria-live="polite">
           <p class="agent-message">
-            I’m ready. Job-aware chat and page actions arrive in the next checkpoint.
+            Connect the local agent and configure Gemini to start chatting.
           </p>
         </div>
         <form id="chat-form">

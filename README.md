@@ -30,15 +30,22 @@ verified company application route is available.
 - Site-specific automation must respect the site's current terms and the
   user's authorization.
 
-## First checkpoint
+## Current working checkpoint
 
 This repository currently contains:
 
-- a FastAPI service with health, candidate-profile, and onboarding endpoints;
-- local SQLite persistence for reusable application answers;
-- a Chrome Manifest V3 side panel that connects to the local service;
-- tests for the profile store and onboarding question flow;
+- a FastAPI service with onboarding, reusable-answer, résumé, Gemini chat, and
+  evidence-grounded tailoring endpoints;
+- encrypted local SQLite persistence with a separate local encryption key;
+- DOCX, PDF, and TXT résumé extraction;
+- a Chrome Manifest V3 side panel for onboarding, résumé upload, active-job
+  capture, chat, and tailoring preview;
+- a company-site-first route planner;
+- tests for encryption, resume extraction, evidence validation, routing, and APIs;
 - architecture and delivery milestones in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+Live form filling and ATS-specific adapters are under active development. The
+hosted dashboard does not pretend those unfinished actions have occurred.
 
 ## Hosted demo
 
@@ -63,6 +70,16 @@ pip install -e ".[dev]"
 Copy-Item .env.example .env
 applypilot
 ```
+
+Create a Gemini API key in [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key),
+then put it in the local `.env` file:
+
+```dotenv
+GEMINI_API_KEY=your_new_key_here
+```
+
+Never paste a key into an issue, chat, commit, browser extension, or hosted demo.
+The backend reads it locally; the extension never receives it.
 
 The API will be available at `http://127.0.0.1:8765`. Check it with:
 

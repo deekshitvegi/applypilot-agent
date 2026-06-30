@@ -4,6 +4,11 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
 
 def env_flag(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -20,6 +25,9 @@ class Settings:
         os.getenv("APPLYPILOT_DATABASE_PATH", "data/applypilot.sqlite3")
     )
     demo_mode: bool = env_flag("APPLYPILOT_DEMO_MODE")
+    ai_provider: str = os.getenv("APPLYPILOT_AI_PROVIDER", "gemini")
+    ai_model: str = os.getenv("APPLYPILOT_AI_MODEL", "gemini-3-flash-preview")
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
 
 
 settings = Settings()

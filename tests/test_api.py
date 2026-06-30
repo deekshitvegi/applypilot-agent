@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 import applypilot.main as main_module
 from applypilot.config import Settings
 from applypilot.main import app
+from applypilot.store import ProfileStore
 
 
 client = TestClient(app)
@@ -40,3 +41,27 @@ def test_demo_mode_refuses_candidate_profile_access(
 
     assert response.status_code == 403
     assert "does not store candidate data" in response.json()["detail"]
+
+
+def test_local_resume_upload_and_provider_status(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(
+        main_module,
+        "settings",
+        Settings(database_path=tmp_path / "local.sqlite3", demo_mode=False),
+    )
+    monkeypatch.setattr(main_module, "store", ProfileStore(tmp_path / "local.sqlite3"))
+    resume_text = (
+        "Test Candidate\nSoftware Engineer\n"
+        "Built reliable Python services and automated deployment workflows.\n" * 3
+    )
+
+    upload = client.post(
+        "/api/resumes",
+        files={"file": ("resume.txt", resume_text, "text/plain")},
+    )
+    provider = client.get("/api/provider")
+
+    assert upload.status_code == 200
+    assert upload.json()["filename"] == "resume.txt"
+    assert provider.status_code == 200
+    assert provider.json()["provider"] == "gemini"
