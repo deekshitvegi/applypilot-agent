@@ -2,6 +2,8 @@ import json
 
 from applypilot.ai import AnthropicProvider, GeminiProvider, OpenAIProvider
 from applypilot.models import (
+    ApplicationAnswerDraft,
+    CandidateProfile,
     ChatResponse,
     EvidenceItem,
     JobContext,
@@ -179,6 +181,23 @@ def test_anthropic_structured_response(monkeypatch) -> None:
 
     result = AnthropicProvider("test-key", "claude-test")._structured(
         "prompt", ChatResponse
+    )
+
+    assert result == expected
+
+
+def test_application_answer_draft_uses_structured_provider(monkeypatch) -> None:
+    provider = GeminiProvider("test-key", "test-model")
+    expected = ApplicationAnswerDraft(
+        answer="I am interested in applying my verified Python automation experience."
+    )
+    monkeypatch.setattr(provider, "_structured", lambda _prompt, _schema: expected)
+
+    result = provider.draft_application_answer(
+        question="Why are you interested in this role?",
+        profile=CandidateProfile(current_title="Software Engineer"),
+        resume=None,
+        job=JobContext(description="Build automation systems."),
     )
 
     assert result == expected

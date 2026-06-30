@@ -130,8 +130,12 @@ applypilot
 
 In the side panel, choose Gemini, OpenAI, or Anthropic, paste a newly generated
 API key, and choose **Save securely**. The local agent encrypts the credential;
-the extension never stores it or receives it back. Environment variables remain
-available for headless setups:
+the extension never stores it or receives it back. After saving, the key field
+is intentionally blank and marked **Saved key is active**; the **Connected**
+badge means AI features are using that encrypted key. **Remove key** deletes it
+and turns off AI chat and AI drafting. Common-field scanning, mapping, and
+filling still work without any API key. Environment variables remain available
+for headless setups:
 
 ```dotenv
 GEMINI_API_KEY=your_new_key_here

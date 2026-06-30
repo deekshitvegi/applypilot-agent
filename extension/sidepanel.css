@@ -176,6 +176,13 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
 .user-message { align-self: flex-end; background: #1f2937; color: white; }
 .message-images { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
 .message-images img { width: 58px; height: 58px; border-radius: 7px; object-fit: cover; }
+.message-copy { white-space: normal; }
+.message-copy p { margin: 0 0 8px; }
+.message-copy p:last-child { margin-bottom: 0; }
+.message-copy ul { margin: 6px 0; padding-left: 19px; }
+.message-copy li { margin-bottom: 4px; }
+.chat-card .section-heading h2 { white-space: nowrap; }
+#chat-context { max-width: 58%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-form textarea { min-height: 74px; resize: vertical; }
 .composer-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .attach-button { width: auto; min-height: 34px; margin: 0; border: 1px solid #d0d5dd; border-radius: 8px; background: white; color: #344054; }
@@ -201,6 +208,8 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
 .file-button { width: 100%; margin: 9px 0 0; border-radius: 8px; }
 .result-box { margin-top: 10px; padding: 10px; border: 1px solid #e4e7ec; border-radius: 8px; background: #f9fafb; color: #475467; font-size: 12px; line-height: 1.5; }
 .result-box p:last-child { margin-bottom: 0; }
+.error-list { margin: 8px 0; padding-left: 18px; }
+.error-list li { margin-bottom: 5px; }
 .button-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .button-grid #attach-resume { grid-column: 1 / -1; }
 .profile-editor { margin-top: 12px; padding-top: 4px; border-top: 1px solid #e4e7ec; }

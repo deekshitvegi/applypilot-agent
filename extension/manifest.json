@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ApplyPilot",
   "description": "Local-first job application copilot",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "permissions": ["activeTab", "sidePanel", "storage", "scripting", "tabs"],
   "host_permissions": ["http://127.0.0.1:8765/*"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],

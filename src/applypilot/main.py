@@ -24,6 +24,8 @@ from .models import (
     ApplicationCreate,
     ApplicationRecord,
     ApplicationTransition,
+    ApplicationAnswerDraft,
+    ApplicationQuestionDraftRequest,
     CandidateProfile,
     ChatRequest,
     ChatResponse,
@@ -319,6 +321,20 @@ def chat(request: ChatRequest) -> ChatResponse:
             resume=store.get_active_resume(),
             job=request.job,
             images=request.images,
+        )
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/questions/draft", response_model=ApplicationAnswerDraft)
+def draft_application_answer(request: ApplicationQuestionDraftRequest) -> ApplicationAnswerDraft:
+    require_local_data_mode()
+    try:
+        return ai_provider.draft_application_answer(
+            question=request.question,
+            profile=store.load(),
+            resume=store.get_active_resume(),
+            job=request.job,
         )
     except AIProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

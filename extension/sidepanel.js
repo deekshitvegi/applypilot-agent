@@ -55,6 +55,7 @@ const elements = {
   unknownAnswerForm: document.querySelector("#unknown-answer-form"),
   unknownQuestion: document.querySelector("#unknown-question"),
   unknownAnswer: document.querySelector("#unknown-answer"),
+  draftUnknown: document.querySelector("#draft-unknown"),
   approveSubmit: document.querySelector("#approve-submit"),
   chatForm: document.querySelector("#chat-form"),
   chatInput: document.querySelector("#chat-input"),
@@ -290,11 +291,15 @@ async function changeMinimumFit() {
 }
 
 function updateChatAvailability() {
-  const ready = Boolean(state.localMode && state.provider?.configured);
-  elements.chatInput.disabled = !ready;
-  elements.chatButton.disabled = !ready;
-  elements.chatImages.disabled = !ready;
-  elements.attachImageLabel.classList.toggle("disabled", !ready);
+  const localReady = Boolean(state.localMode);
+  const aiReady = Boolean(state.localMode && state.provider?.configured);
+  elements.chatInput.disabled = !localReady;
+  elements.chatButton.disabled = !localReady;
+  elements.chatImages.disabled = !aiReady;
+  elements.attachImageLabel.classList.toggle("disabled", !aiReady);
+  elements.chatInput.placeholder = aiReady
+    ? "Ask ApplyPilot…"
+    : "Try “fill this page” or connect an AI provider for questions";
 }
 
 function renderProvider() {
@@ -308,7 +313,7 @@ function renderProvider() {
   elements.providerModel.value = provider.model || PROVIDERS[provider.provider].model;
   elements.providerKey.value = "";
   elements.providerKey.placeholder = provider.configured
-    ? "Paste a new key to replace the saved key"
+    ? "Saved key is active — paste only to replace it"
     : "Paste a newly generated key";
   elements.providerTitle.textContent = provider.configured
     ? PROVIDERS[provider.provider].label
@@ -317,7 +322,7 @@ function renderProvider() {
   elements.providerBadge.classList.toggle("connected", provider.configured);
   elements.disconnectProvider.disabled = !provider.configured || provider.source === "environment";
   elements.providerHelp.textContent = provider.configured
-    ? `Using ${provider.model}. The key is ${provider.source === "environment" ? "loaded from the local environment" : "encrypted locally"}.`
+    ? `AI features are active with ${provider.model}. ${provider.source === "environment" ? "Loaded from the local environment." : "The saved key is encrypted in your local ApplyPilot database."}`
     : PROVIDERS[provider.provider].help;
 }
 
@@ -830,8 +835,19 @@ async function replanForm() {
   if (requiredUnknown.length) {
     const [firstUnknown] = requiredUnknown;
     elements.unknownAnswerForm.classList.remove("hidden");
-    elements.unknownQuestion.textContent = firstUnknown.label;
+    const unreadable = /^(field\s+\d+|unlabeled)/i.test(firstUnknown.label);
+    elements.unknownQuestion.textContent = unreadable
+      ? "Highlighted required question on the page"
+      : firstUnknown.label;
+    elements.unknownAnswerForm.dataset.fieldId = firstUnknown.field_id;
+    elements.unknownAnswerForm.dataset.unreadable = String(unreadable);
     elements.unknownAnswer.value = "";
+    elements.draftUnknown.classList.toggle("hidden", !isNarrativeUnknown(firstUnknown));
+    elements.draftUnknown.disabled = !state.provider?.configured;
+    chrome.runtime.sendMessage({
+      action: "highlightField",
+      fieldId: firstUnknown.field_id,
+    }).catch(() => {});
     await transitionApplication("blocked", "A required question needs a verified answer.", {
       question: firstUnknown.label,
     });
@@ -845,6 +861,56 @@ async function replanForm() {
       await transitionApplication("filling", "All required questions now have verified answers.");
     }
   }
+}
+
+function isNarrativeUnknown(unknown) {
+  const scanned = state.formScan?.fields.find((field) => field.id === unknown.field_id);
+  return scanned?.field_type === "textarea" && /why|interest|motivat|describe|tell us|cover letter/i.test(unknown.label);
+}
+
+async function requestApplicationAnswer(question) {
+  return api("/api/questions/draft", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, job: state.job }),
+  });
+}
+
+async function draftUnknownAnswer() {
+  const question = elements.unknownQuestion.textContent.trim();
+  elements.draftUnknown.disabled = true;
+  elements.draftUnknown.textContent = "Drafting…";
+  try {
+    const draft = await requestApplicationAnswer(question);
+    elements.unknownAnswer.value = draft.answer;
+    elements.unknownAnswer.focus();
+  } catch (error) {
+    elements.formStatus.textContent = error.message;
+  } finally {
+    elements.draftUnknown.disabled = false;
+    elements.draftUnknown.textContent = "Draft with AI";
+  }
+}
+
+async function resolveNarrativeUnknowns() {
+  if (!state.provider?.configured) return;
+  const narrative = unresolvedRequiredUnknowns().filter(isNarrativeUnknown).slice(0, 3);
+  for (const unknown of narrative) {
+    const draft = await requestApplicationAnswer(unknown.label);
+    const result = await chrome.runtime.sendMessage({
+      action: "fillForm",
+      actions: [
+        {
+          field_id: unknown.field_id,
+          value: draft.answer,
+          source: "ai.job_specific",
+          confidence: 0.9,
+        },
+      ],
+    });
+    if (result.error) throw new Error(result.error);
+  }
+  if (narrative.length) await scanForm({ throwOnError: true });
 }
 
 function unresolvedRequiredUnknowns() {
@@ -905,6 +971,22 @@ async function saveUnknownAnswer(event) {
   const answer = elements.unknownAnswer.value.trim();
   const question = elements.unknownQuestion.textContent.trim();
   if (!answer || !question) return;
+  if (elements.unknownAnswerForm.dataset.unreadable === "true") {
+    const result = await chrome.runtime.sendMessage({
+      action: "fillForm",
+      actions: [
+        {
+          field_id: elements.unknownAnswerForm.dataset.fieldId,
+          value: answer,
+          source: "user.current_page",
+          confidence: 1,
+        },
+      ],
+    });
+    if (result.error) throw new Error(result.error);
+    await scanForm();
+    return;
+  }
   const id = crypto.randomUUID();
   await api(`/api/answers/${id}`, {
     method: "PUT",
@@ -927,9 +1009,12 @@ async function fillForm(options = {}) {
     });
     if (result.error) throw new Error(result.error);
     elements.formStatus.textContent = `${result.filled} fields filled for your review.`;
+    const fillErrors = humanizeFillErrors(result.errors || []);
     elements.formResult.innerHTML = `
       <strong>Review the page carefully</strong>
-      <p>${result.errors.length ? escapeHtml(result.errors.join(" ")) : "No fill errors detected."}</p>
+      ${fillErrors.length
+        ? `<ul class="error-list">${fillErrors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ul>`
+        : "<p>All mapped fields were filled successfully.</p>"}
       <p>ApplyPilot did not submit the application.</p>
     `;
     const requiredUnknown = unresolvedRequiredUnknowns().length > 0;
@@ -950,6 +1035,19 @@ async function fillForm(options = {}) {
     elements.fillForm.disabled = false;
     elements.fillForm.textContent = "Fill known fields";
   }
+}
+
+function humanizeFillErrors(errors) {
+  return errors.map((error) => {
+    if (typeof error === "string") {
+      const match = error.match(/^(ap-\d+):\s*(.*)$/);
+      if (!match) return error;
+      const field = state.formScan?.fields.find((candidate) => candidate.id === match[1]);
+      return `${field?.label || "A form field"}: ${match[2]}`;
+    }
+    const field = state.formScan?.fields.find((candidate) => candidate.id === error.field_id);
+    return `${field?.label || "A form field"}: ${error.message || "Could not fill this field."}`;
+  });
 }
 
 async function approveAndSubmit(options = {}) {
@@ -1081,7 +1179,9 @@ async function runAutomationCycle() {
   }
 
   elements.automationStatus.textContent = "Scanning and filling known fields from your profile…";
-  const plan = await scanForm({ throwOnError: true });
+  let plan = await scanForm({ throwOnError: true });
+  await resolveNarrativeUnknowns();
+  plan = state.formPlan;
   const unknown = unresolvedRequiredUnknowns();
   const blocked = plan.blocked_fields.filter((field) => field.required);
   if (unknown.length) {
@@ -1176,6 +1276,14 @@ async function sendChat(event) {
   elements.chatButton.disabled = true;
 
   try {
+    if (await handlePageActionCommand(message)) return;
+    if (!state.provider?.configured) {
+      appendMessage(
+        "AI chat is off because no provider key is saved. Common-field scanning and filling still work without AI.",
+        "agent-message",
+      );
+      return;
+    }
     let activeJob = state.job;
     if (!activeJob) {
       try {
@@ -1216,6 +1324,31 @@ async function sendChat(event) {
   }
 }
 
+async function handlePageActionCommand(message) {
+  if (!/(fill|complete|apply).*(everything|fields|form|page)/i.test(message)) return false;
+  let plan = await scanForm({ throwOnError: true });
+  await resolveNarrativeUnknowns();
+  plan = state.formPlan;
+  let result = { filled: 0, errors: [] };
+  if (plan.actions.length) result = await fillForm({ throwOnError: true });
+  const unknown = unresolvedRequiredUnknowns();
+  const blocked = plan.blocked_fields.filter((field) => field.required);
+  const details = [`Filled ${result.filled} known field${result.filled === 1 ? "" : "s"}.`];
+  if (unknown.length) {
+    details.push(`I still need your answer for: ${unknown.map((field) => field.label).join("; ")}.`);
+  }
+  if (blocked.length) {
+    details.push(`You must complete: ${blocked.map((field) => field.label).join("; ")}.`);
+  }
+  const errors = humanizeFillErrors(result.errors || []);
+  if (errors.length) details.push(`Could not fill: ${errors.join("; ")}.`);
+  if (!unknown.length && !blocked.length && !errors.length) {
+    details.push("The form is ready for your configured résumé and submission policy.");
+  }
+  appendMessage(details.join("\n"), "agent-message");
+  return true;
+}
+
 function appendMessage(text, className, images = []) {
   const message = document.createElement("div");
   message.className = `message ${className}`;
@@ -1231,10 +1364,52 @@ function appendMessage(text, className, images = []) {
     message.append(imageRow);
   }
   const copy = document.createElement("div");
-  copy.textContent = text;
+  copy.className = "message-copy";
+  if (className === "agent-message") renderFormattedMessage(copy, text);
+  else copy.textContent = text;
   message.append(copy);
   elements.messages.append(message);
   message.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+function renderFormattedMessage(container, text) {
+  const lines = String(text || "").split(/\r?\n/);
+  let list = null;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      list = null;
+      continue;
+    }
+    const bullet = line.match(/^[-*]\s+(.*)$/);
+    if (bullet) {
+      if (!list) {
+        list = document.createElement("ul");
+        container.append(list);
+      }
+      const item = document.createElement("li");
+      appendInlineFormatting(item, bullet[1]);
+      list.append(item);
+      continue;
+    }
+    list = null;
+    const paragraph = document.createElement("p");
+    appendInlineFormatting(paragraph, line);
+    container.append(paragraph);
+  }
+}
+
+function appendInlineFormatting(container, text) {
+  const parts = String(text).split(/(\*\*[^*]+\*\*)/g);
+  parts.filter(Boolean).forEach((part) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      const strong = document.createElement("strong");
+      strong.textContent = part.slice(2, -2);
+      container.append(strong);
+    } else {
+      container.append(document.createTextNode(part.replace(/^\*\s*/, "")));
+    }
+  });
 }
 
 async function addChatImages() {
@@ -1316,6 +1491,7 @@ elements.attachResume.addEventListener("click", attachTailoredResume);
 elements.scanForm.addEventListener("click", scanForm);
 elements.fillForm.addEventListener("click", fillForm);
 elements.unknownAnswerForm.addEventListener("submit", saveUnknownAnswer);
+elements.draftUnknown.addEventListener("click", draftUnknownAnswer);
 elements.approveSubmit.addEventListener("click", approveAndSubmit);
 elements.chatForm.addEventListener("submit", sendChat);
 elements.chatImages.addEventListener("change", addChatImages);

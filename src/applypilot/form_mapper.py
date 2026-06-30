@@ -58,6 +58,8 @@ def plan_form_fill(
 
         if mapped is not None:
             value, source, confidence = mapped
+            if field.field_type == "checkbox":
+                value = checkbox_value(value, field)
             actions.append(
                 FormFillAction(
                     field_id=field.id,
@@ -105,7 +107,7 @@ def map_profile_field(
         (("country",), profile.country, "profile.country"),
         (("linkedin",), profile.linkedin_url, "profile.linkedin_url"),
         (("github",), profile.github_url, "profile.github_url"),
-        (("portfolio", "personal website"), profile.portfolio_url, "profile.portfolio_url"),
+        (("portfolio", "personal website", "website"), profile.portfolio_url, "profile.portfolio_url"),
         (("current title", "current position"), profile.current_title, "profile.current_title"),
         (("years of experience",), profile.years_of_experience, "profile.years_of_experience"),
         (("authorized to work", "work authorization"), profile.work_authorization, "profile.work_authorization"),
@@ -114,7 +116,7 @@ def map_profile_field(
         (("travel",), profile.willing_to_travel, "profile.willing_to_travel"),
         (("18 years", "at least 18"), profile.age_18_or_older, "profile.age_18_or_older"),
         (("background check",), profile.background_check_consent, "profile.background_check_consent"),
-        (("notice period", "available to start"), profile.notice_period, "profile.notice_period"),
+        (("notice period", "available to start", "start date", "start-date"), profile.notice_period, "profile.notice_period"),
         (("salary", "compensation", "pay expectation"), profile.desired_salary, "profile.desired_salary"),
         (("gender", "gender identity", "sex"), profile.gender_identity, "profile.gender_identity"),
         (("race", "ethnicity", "ethnic background"), profile.race_ethnicity, "profile.race_ethnicity"),
@@ -186,6 +188,17 @@ def boolean_value(value: str | bool, field: FormField) -> str:
             return "true" if value else "false"
         return "Yes" if value else "No"
     return value
+
+
+def checkbox_value(value: str, field: FormField) -> str:
+    normalized = normalize(value)
+    if normalized in {"yes", "true", "1", "on"}:
+        return "true"
+    if normalized in {"no", "false", "0", "off"}:
+        return "false"
+    choices = [normalize(item) for item in re.split(r"[,;|\n]+", value) if item.strip()]
+    label = normalize(f"{field.label} {field.name}")
+    return "true" if any(choice and choice in label for choice in choices) else "false"
 
 
 def split_name(name: str) -> tuple[str, str]:

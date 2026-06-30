@@ -98,3 +98,29 @@ def test_maps_voluntary_demographics_without_an_ai_provider() -> None:
         "veteran": "not-protected",
         "disability": "yes",
     }
+
+
+def test_maps_a_saved_multi_choice_answer_to_checkbox_group() -> None:
+    answer = ReusableAnswer(
+        question="Which office location(s) are you interested in?",
+        answer="Remote, US",
+    )
+    fields = [
+        FormField(
+            id="redwood",
+            label="Which office location(s) are you interested in? Redwood City, CA",
+            field_type="checkbox",
+        ),
+        FormField(
+            id="remote",
+            label="Which office location(s) are you interested in? Remote, US",
+            field_type="checkbox",
+        ),
+    ]
+
+    plan = plan_form_fill("https://example.test", fields, CandidateProfile(), [answer])
+
+    assert {action.field_id: action.value for action in plan.actions} == {
+        "redwood": "false",
+        "remote": "true",
+    }

@@ -200,6 +200,15 @@ class ChatResponse(BaseModel):
     suggested_actions: list[str] = Field(default_factory=list)
 
 
+class ApplicationQuestionDraftRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=1000)
+    job: JobContext | None = None
+
+
+class ApplicationAnswerDraft(BaseModel):
+    answer: str
+
+
 class ProviderStatus(BaseModel):
     provider: str
     model: str

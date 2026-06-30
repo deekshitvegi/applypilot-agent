@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 - 2026-06-30
+
+- Replaced leaked internal field identifiers with human-readable labels and
+  highlighted any question whose label a job site hides from the scanner.
+- Improved native and custom dropdown matching plus remembered checkbox-group
+  answers for office-location and similar multi-select questions.
+- Made deterministic page filling available from chat without an AI key and
+  rendered AI responses as clean, safe text and lists rather than raw Markdown.
+- Clarified when an encrypted provider key is active, added reviewed AI drafts
+  for narrative application questions, and expanded website/start-date mapping.
+
 ## 0.4.0 - 2026-06-30
 
 - Fixed job capture and form scanning across navigation by adding explicit,

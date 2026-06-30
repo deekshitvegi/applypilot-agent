@@ -17,6 +17,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     collectJobQueue: () => collectLinkedInJobQueue(message.tabId),
     openQueuedJob: () => openQueuedJob(message.tabId, message.url),
     openEasyApply: openLinkedInEasyApply,
+    highlightField: () => highlightActiveField(message.fieldId),
   };
   const action = actions[message.action];
   if (!action) return false;
@@ -156,6 +157,11 @@ async function openLinkedInEasyApply() {
   return runInTab(tab.id, clickLinkedInEasyApply);
 }
 
+async function highlightActiveField(fieldId) {
+  const tab = await getActiveHttpTab();
+  return runInTab(tab.id, highlightFormField, [fieldId]);
+}
+
 function detectAdapterFromUrl(url) {
   const host = new URL(url).hostname.toLowerCase();
   if (host === "linkedin.com" || host.endsWith(".linkedin.com")) return "linkedin";
@@ -184,15 +190,54 @@ function extractFormFields() {
     return visible && !control.disabled && (customCombobox || !["hidden", "submit", "button", "reset", "image"].includes(type));
   });
 
+  const cleanText = (value) => String(value || "").replace(/\s+/g, " ").replace(/\s*\*+\s*$/, "").trim();
+  const labelledByText = (control) => cleanText(
+    (control.getAttribute("aria-labelledby") || "")
+      .split(/\s+/)
+      .map((id) => document.getElementById(id)?.textContent || "")
+      .join(" "),
+  );
+  const nearbyLabel = (control) => {
+    const generic = new Set(["select", "select...", "choose", "choose...", "yes", "no"]);
+    let container = control.parentElement;
+    for (let depth = 0; container && depth < 5; depth += 1, container = container.parentElement) {
+      const candidates = [...container.querySelectorAll(
+        "label, legend, [data-testid*='label'], [class*='label'], [class*='question'], p",
+      )];
+      for (const candidate of candidates) {
+        if (candidate.contains(control)) continue;
+        const value = cleanText(candidate.textContent);
+        if (value.length >= 3 && value.length <= 240 && !generic.has(value.toLowerCase())) {
+          return value;
+        }
+      }
+    }
+    return "";
+  };
+  const readableName = (control) => {
+    const raw = control.name || control.id || "";
+    if (!raw || /^ap-\d+$/.test(raw) || /\[\d+\]/.test(raw)) return "";
+    const value = cleanText(raw.replace(/[\[\]_.-]+/g, " "));
+    return /[a-z]{3}/i.test(value) ? value : "";
+  };
+
   return controls.map((control, index) => {
     const applypilotId = `ap-${index}`;
     control.dataset.applypilotId = applypilotId;
     const explicitLabel = control.id
       ? document.querySelector(`label[for="${CSS.escape(control.id)}"]`)?.textContent
       : "";
+    const nativeLabels = [...(control.labels || [])].map((label) => label.textContent).join(" ");
     const wrappingLabel = control.closest("label")?.textContent || "";
     const legend = control.closest("fieldset")?.querySelector("legend")?.textContent || "";
-    const label = [legend, explicitLabel || wrappingLabel]
+    const label = [
+      legend,
+      labelledByText(control),
+      explicitLabel,
+      nativeLabels,
+      wrappingLabel,
+      nearbyLabel(control),
+    ]
       .filter(Boolean)
       .join(" ")
       .replace(/\s+/g, " ")
@@ -200,9 +245,7 @@ function extractFormFields() {
     const fallbackLabel =
       control.getAttribute("aria-label") ||
       control.getAttribute("placeholder") ||
-      control.name ||
-      control.id ||
-      `Field ${index + 1}`;
+      readableName(control);
     const tag = control.tagName.toLowerCase();
     let fieldType = tag === "textarea" ? "textarea" : tag === "select" || control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox" ? "select" : control.type || "text";
     if (!["text", "email", "tel", "url", "number", "textarea", "select", "checkbox", "radio", "file", "password"].includes(fieldType)) {
@@ -216,7 +259,7 @@ function extractFormFields() {
 
     return {
       id: applypilotId,
-      label: (label || fallbackLabel).replace(/\s+/g, " ").trim(),
+      label: cleanText(label || fallbackLabel || `Unlabeled ${fieldType} field`),
       name: control.name || "",
       field_type: fieldType,
       required: control.required || control.getAttribute("aria-required") === "true",
@@ -240,7 +283,7 @@ async function applyFormFillPlan(actions) {
   for (const action of actions) {
     const control = document.querySelector(`[data-applypilot-id="${CSS.escape(action.field_id)}"]`);
     if (!control || control.disabled) {
-      errors.push(`${action.field_id}: field is no longer available`);
+      errors.push({ field_id: action.field_id, message: "The field is no longer available." });
       continue;
     }
 
@@ -260,22 +303,36 @@ async function applyFormFillPlan(actions) {
         } else {
           control.click();
         }
-        await new Promise((resolve) => setTimeout(resolve, 150));
-        const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+        const normalize = (value) => String(value || "")
+          .normalize("NFKD")
+          .replace(/[^a-z0-9]+/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
         const target = normalize(action.value);
-        const options = [...document.querySelectorAll("[role='option']")].filter((option) => {
-          const style = getComputedStyle(option);
-          return style.display !== "none" && style.visibility !== "hidden";
-        });
-        const option = options.find((candidate) =>
-          [candidate.textContent, candidate.getAttribute("data-value")]
-            .filter(Boolean)
-            .some((value) => {
-              const candidate = normalize(value);
-              return candidate === target || candidate.startsWith(`${target} `) || target.startsWith(`${candidate} `);
-            }),
-        );
-        if (!option) throw new Error("matching dropdown option not found");
+        let option = null;
+        for (let attempt = 0; attempt < 10 && !option; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          const popup = document.getElementById(control.getAttribute("aria-controls") || "") || document;
+          const options = [...popup.querySelectorAll(
+            "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], li",
+          )].filter((candidate) => {
+            const style = getComputedStyle(candidate);
+            const rect = candidate.getBoundingClientRect();
+            return style.display !== "none" && style.visibility !== "hidden" && rect.height > 0;
+          });
+          option = options.find((candidate) =>
+            [candidate.textContent, candidate.getAttribute("data-value"), candidate.getAttribute("value")]
+              .filter(Boolean)
+              .some((value) => {
+                const optionValue = normalize(value);
+                if (optionValue === target) return true;
+                if (target.length < 3 || optionValue.length < 3) return false;
+                return optionValue.startsWith(`${target} `) || target.startsWith(`${optionValue} `);
+              }),
+          );
+        }
+        if (!option) throw new Error(`No dropdown option matched "${action.value}".`);
         option.click();
         filled += 1;
         continue;
@@ -283,17 +340,26 @@ async function applyFormFillPlan(actions) {
       if (type === "checkbox") {
         control.checked = ["true", "yes", "1", "on"].includes(String(action.value).toLowerCase());
       } else if (type === "radio") {
-        const target = String(action.value).toLowerCase();
+        const target = String(action.value).trim().toLowerCase();
         control.checked = [control.value, control.labels?.[0]?.textContent || ""]
           .some((value) => String(value).trim().toLowerCase() === target);
       } else if (control.tagName === "SELECT") {
-        const target = String(action.value).toLowerCase();
+        const normalizeOption = (value) => String(value || "")
+          .normalize("NFKD")
+          .replace(/[^a-z0-9]+/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+        const target = normalizeOption(action.value);
         const option = [...control.options].find((candidate) =>
-          [candidate.value, candidate.textContent].some(
-            (value) => String(value).trim().toLowerCase() === target,
-          ),
+          [candidate.value, candidate.textContent].some((value) => {
+            const candidateValue = normalizeOption(value);
+            if (candidateValue === target) return true;
+            if (target.length < 3 || candidateValue.length < 3) return false;
+            return candidateValue.startsWith(`${target} `) || target.startsWith(`${candidateValue} `);
+          }),
         );
-        if (!option) throw new Error("matching option not found");
+        if (!option) throw new Error(`No dropdown option matched "${action.value}".`);
         control.value = option.value;
       } else {
         const prototype = Object.getPrototypeOf(control);
@@ -304,7 +370,7 @@ async function applyFormFillPlan(actions) {
       dispatch(control);
       filled += 1;
     } catch (error) {
-      errors.push(`${action.field_id}: ${error.message}`);
+      errors.push({ field_id: action.field_id, message: error.message });
     }
   }
 
@@ -385,6 +451,21 @@ function clickLinkedInEasyApply() {
   }
   buttons[0].click();
   return { opened: true };
+}
+
+function highlightFormField(fieldId) {
+  const control = document.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`);
+  if (!control) return { highlighted: false };
+  control.scrollIntoView({ behavior: "smooth", block: "center" });
+  const previousOutline = control.style.outline;
+  const previousOffset = control.style.outlineOffset;
+  control.style.outline = "3px solid #f59e0b";
+  control.style.outlineOffset = "3px";
+  setTimeout(() => {
+    control.style.outline = previousOutline;
+    control.style.outlineOffset = previousOffset;
+  }, 6000);
+  return { highlighted: true };
 }
 
 function applyFileToInput(fieldId, base64, filename) {
