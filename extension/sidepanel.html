@@ -102,14 +102,13 @@
         </label>
         <label class="check-row" for="login-assistance">
           <input id="login-assistance" type="checkbox" />
-          Allow browser-assisted login
+          Automatically continue normal login
         </label>
-        <p class="field-help">Uses fields already filled by your browser password manager. ApplyPilot checks only whether fields are filled and never captures or stores credentials.</p>
+        <p class="field-help">With your consent, waits for your browser password manager, clicks unique Sign in/Next controls, and resumes the application. It never stores credentials or bypasses CAPTCHA, MFA, verification codes, or security checks.</p>
         <button id="download-history" class="secondary-button" type="button">Download application history (CSV)</button>
         <p class="field-help">Includes local timestamps, job details, route, status, and the latest recorded event.</p>
         <div id="automation-warning" class="automation-warning hidden">
-          Automatic mode will fill, submit, and continue without asking again. Missing credentials,
-          CAPTCHA, MFA, missing answers, and ambiguous controls still pause the runner.
+          Automatic mode will fill, submit, and continue without asking again. Consented normal login can continue automatically. CAPTCHA, MFA, verification codes, missing answers, and ambiguous controls still pause the runner.
         </div>
       </section>
         </div>
