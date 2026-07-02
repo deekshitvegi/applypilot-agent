@@ -201,7 +201,11 @@ async function openExternalApply() {
       }
     }
     const originalMoved = original && /^https?:/i.test(original.url || "")
-      && original.url.split("#")[0] !== tab.url.split("#")[0];
+      && original.url.split("#")[0] !== tab.url.split("#")[0]
+      && (
+        !/(^|\.)linkedin\.com$/i.test(source.hostname)
+        || !/(^|\.)linkedin\.com$/i.test(new URL(original.url).hostname)
+      );
     const currentSurface = original
       ? await runInTab(tab.id, detectApplicationSurface).catch(() => ({ ready: false }))
       : { ready: false };
@@ -807,7 +811,9 @@ function resolveLinkedInContinueApplying() {
   if (rawUrl) {
     try {
       const href = new URL(rawUrl, location.href);
-      if (href.protocol === "https:") return { found: true, href: href.href, clicked: false };
+      if (href.protocol === "https:" && !/(^|\.)linkedin\.com$/i.test(href.hostname)) {
+        return { found: true, href: href.href, clicked: false };
+      }
     } catch {
       // Fall back to the control's click handler.
     }
