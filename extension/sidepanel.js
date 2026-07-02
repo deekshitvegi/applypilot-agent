@@ -1399,7 +1399,11 @@ async function attachConfiguredApplicationFiles() {
     reportActivity("Selecting the résumé configured for this application…");
     await maybeAttachResume();
   }
-  await maybeAttachCoverLetter();
+  try {
+    await maybeAttachCoverLetter();
+  } catch (error) {
+    reportActivity(`Cover letter was not attached: ${error.message} Continuing with the application form…`);
+  }
 }
 
 async function saveUnknownAnswer(event) {

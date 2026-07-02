@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.4 - 2026-07-02
+
+- Added plain-text Ollama cover-letter generation when the local server rejects
+  a structured JSON grammar.
+- Made cover-letter generation non-blocking so a model/document failure is
+  reported in activity chat while form filling continues.
+- Added custom ARIA checkbox support and fixed filtering that accidentally
+  excluded button-based radio/checkbox widgets from form scans.
+- Generalized question grouping across native inputs, ARIA choices, and pressed
+  buttons so technology, authorization, sponsorship, and source controls can be
+  mapped and clicked consistently.
+
 ## 0.9.3 - 2026-07-02
 
 - Detected employer iframe replacement between scanning and filling, then

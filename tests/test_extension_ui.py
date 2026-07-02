@@ -50,4 +50,7 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     worker = (root / "extension" / "service-worker.js").read_text(encoding="utf-8")
     assert "nearbyInstructions" in worker
     assert "fieldType === \"textarea\" ? nearbyInstructions(control)" in worker
+    assert "[role='checkbox']" in worker
+    assert "customCombobox || customChoice" in worker
+    assert "control.hasAttribute(\"aria-checked\")" in worker
 

@@ -43,6 +43,17 @@ OLLAMA_VISION_MODEL = "gemma3:4b"
 OLLAMA_VISION_MARKERS = ("gemma3", "llava", "minicpm-v", "qwen2.5vl", "qwen3-vl")
 
 
+def concise_cover_letter(text: str, max_words: int = 450) -> str:
+    paragraphs = [item.strip() for item in re.split(r"\n\s*\n", text) if item.strip()]
+    condensed = "\n\n".join(paragraphs[:4])
+    words = condensed.split()
+    if len(words) <= max_words:
+        return condensed
+    shortened = " ".join(words[:max_words])
+    sentence_end = max(shortened.rfind("."), shortened.rfind("!"), shortened.rfind("?"))
+    return shortened[: sentence_end + 1] if sentence_end > 100 else f"{shortened}…"
+
+
 class AIProviderError(RuntimeError):
     pass
 
@@ -287,7 +298,9 @@ RESUME:
 JOB:
 {job.model_dump_json(indent=2)}
 """
-        return self._structured(prompt, CoverLetterDraft)
+        draft = self._structured(prompt, CoverLetterDraft)
+        draft.body = concise_cover_letter(draft.body)
+        return draft
 
     def plan_page_action(self, request: PageActionRequest) -> PageActionDecision:
         prompt = f"""
@@ -565,6 +578,53 @@ class OllamaProvider(BaseAIProvider):
             ) from exc
         except Exception as exc:
             raise AIProviderError(f"Ollama request failed ({type(exc).__name__}).") from exc
+
+    def draft_cover_letter(
+        self,
+        profile: CandidateProfile,
+        resume: ResumeDocument,
+        job: JobContext,
+    ) -> CoverLetterDraft:
+        try:
+            return super().draft_cover_letter(profile, resume, job)
+        except AIProviderError as exc:
+            if "parse grammar" not in str(exc).lower():
+                raise
+        prompt = f"""
+Write a concise 3-4 paragraph cover letter for the job below. Use ONLY facts explicitly
+present in the profile and resume. Do not invent skills, metrics, dates, employers,
+motivation, or personal stories. Return plain cover-letter text only, without JSON,
+Markdown fences, headings, or placeholders.
+
+PROFILE:
+{profile.model_dump_json(exclude={"custom_answers", "gender_identity", "race_ethnicity", "veteran_status", "disability_status"}, indent=2)}
+
+RESUME:
+{resume.extracted_text[:20000]}
+
+JOB:
+{job.model_dump_json(indent=2)}
+"""
+        payload = {
+            "model": self.model,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+            "keep_alive": "45s",
+            "think": False,
+            "options": {"temperature": 0.2, "num_ctx": 8192, "num_predict": 700},
+        }
+        try:
+            response = httpx.post(
+                "http://127.0.0.1:11434/api/chat", json=payload, timeout=120
+            )
+            response.raise_for_status()
+            body = response.json().get("message", {}).get("content", "").strip()
+            body = re.sub(r"^```(?:text|markdown)?\s*|\s*```$", "", body).strip()
+            return CoverLetterDraft(body=concise_cover_letter(body))
+        except Exception as exc:
+            raise AIProviderError(
+                f"Ollama cover-letter fallback failed ({type(exc).__name__})."
+            ) from exc
 
 
 def create_provider(config: ProviderConfigRequest) -> BaseAIProvider:
