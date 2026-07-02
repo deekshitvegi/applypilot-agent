@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.1 - 2026-07-02
+
+- Made the configured AI provider refine free-text application answers before
+  they are saved; deterministic formatting is now fallback-only.
+- Included nearby employer instructions in textarea questions so the model sees
+  requested categories, units, and formatting rather than only a short heading.
+
 ## 0.9.0 - 2026-07-02
 
 - Added custom ARIA radio and pressed-button support for segmented Yes/No,
