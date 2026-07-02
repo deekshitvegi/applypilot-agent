@@ -104,6 +104,8 @@
           Allow browser-assisted login
         </label>
         <p class="field-help">Uses fields already filled by your browser password manager. ApplyPilot checks only whether fields are filled and never captures or stores credentials.</p>
+        <button id="download-history" class="secondary-button" type="button">Download application history (CSV)</button>
+        <p class="field-help">Includes local timestamps, job details, route, status, and the latest recorded event.</p>
         <div id="automation-warning" class="automation-warning hidden">
           Automatic mode will fill, submit, and continue without asking again. Missing credentials,
           CAPTCHA, MFA, missing answers, and ambiguous controls still pause the runner.
@@ -137,8 +139,9 @@
         </form>
       </section>
 
-      <section class="workflow">
-        <p class="workflow-title">Application workflow</p>
+      <details class="manual-workflow">
+        <summary><strong>Manual controls</strong><small>Profile, résumé, job capture, and form tools</small></summary>
+        <section class="workflow">
 
         <details id="onboarding-card" class="panel workflow-step" open>
           <summary>
@@ -228,7 +231,8 @@
             <div id="form-result" class="result-box hidden"></div>
           </div>
         </details>
-      </section>
+        </section>
+      </details>
     </main>
 
     <script src="sidepanel.js"></script>

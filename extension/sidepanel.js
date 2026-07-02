@@ -30,6 +30,7 @@ const elements = {
   continueNext: document.querySelector("#continue-next"),
   loginAssistance: document.querySelector("#login-assistance"),
   automationWarning: document.querySelector("#automation-warning"),
+  downloadHistory: document.querySelector("#download-history"),
   startAutomation: document.querySelector("#start-automation"),
   stopAutomation: document.querySelector("#stop-automation"),
   automationStatus: document.querySelector("#automation-status"),
@@ -110,6 +111,7 @@ const state = {
   questionnaireActive: false,
   questionnaireTotal: 0,
   skippedFieldIds: new Set(),
+  lastActivity: "",
 };
 
 const SITE_ORIGINS = ["https://*/*", "http://*/*"];
@@ -1328,7 +1330,20 @@ function setAutomationRunning(running, message) {
   state.automationRunning = running;
   elements.startAutomation.disabled = running;
   elements.stopAutomation.disabled = !running;
-  if (message) elements.automationStatus.textContent = message;
+  if (message) reportActivity(message);
+}
+
+function downloadApplicationHistory() {
+  chrome.tabs.create({ url: `${state.apiBase}/api/applications.csv`, active: false });
+  reportActivity("Exporting the local application history as CSV...");
+}
+
+function reportActivity(message) {
+  if (!message) return;
+  elements.automationStatus.textContent = message;
+  if (state.lastActivity === message) return;
+  state.lastActivity = message;
+  appendMessage(message, "agent-message activity-message");
 }
 
 async function startAutomation() {
@@ -1376,7 +1391,7 @@ async function runAutomationCycle() {
   state.artifact = null;
   state.submitClicked = false;
   state.applicationSteps = 0;
-  elements.automationStatus.textContent = "Reading the current job and company route…";
+  reportActivity("Reading the current job and company route…");
   const captured = await captureJob({ throwOnError: true });
   state.seenJobUrls.add(normalizeJobUrl(captured.source_url));
   state.jobQueue = state.jobQueue.filter(
@@ -1386,14 +1401,14 @@ async function runAutomationCycle() {
   const target = state.route?.target_url || "";
   let companyRouteReady = false;
   if (state.route?.route === "company_button") {
-    elements.automationStatus.textContent = "Opening the employer application from this job page...";
+    reportActivity("Opening the employer application from this job page...");
     const opened = await openApplication({ throwOnError: true, transition: false });
     await waitForTabReady(opened.tab_id);
     companyRouteReady = true;
   } else if (["company_site", "manual_review"].includes(state.route?.route) && target) {
     companyRouteReady = true;
     if (normalizeJobUrl(target) !== normalizeJobUrl(captured.source_url)) {
-      elements.automationStatus.textContent = "Opening the company application...";
+      reportActivity("Opening the company application...");
       const opened = await openApplication({ throwOnError: true, transition: false });
       await waitForTabReady(opened.tab_id);
     }
@@ -1401,13 +1416,13 @@ async function runAutomationCycle() {
   if (companyRouteReady) {
     const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
     if (entry.clicked) {
-      elements.automationStatus.textContent = "Opening the employer's application form...";
+      reportActivity("Opening the employer's application form...");
       await waitForTabReady(entry.tab_id);
     }
   }
 
   if (state.provider?.configured) {
-    elements.automationStatus.textContent = "Analyzing fit and preparing a job-specific résumé…";
+    reportActivity("Analyzing fit and preparing a job-specific résumé…");
     try {
       await prepareJobMaterials();
       if (
@@ -1415,13 +1430,19 @@ async function runAutomationCycle() {
         state.fitAnalysis &&
         state.fitAnalysis.score < state.minimumFit
       ) {
-        elements.automationStatus.textContent =
-          `Skipped ${state.job.title || "job"}: ${state.fitAnalysis.score}% is below your ${state.minimumFit}% minimum.`;
-        await advanceAutomationQueue({ submitted: false });
+        await transitionApplication(
+          "blocked",
+          "Application paused because the fit score is below the automatic-application minimum.",
+          { score: String(state.fitAnalysis.score), minimum: String(state.minimumFit) },
+        );
+        setAutomationRunning(
+          false,
+          `Paused: fit score ${state.fitAnalysis.score}% is below your ${state.minimumFit}% minimum. No application was submitted and the queue did not advance.`,
+        );
         return;
       }
     } catch (error) {
-      elements.automationStatus.textContent = `${error.message} Continuing with free deterministic autofill.`;
+      reportActivity(`${error.message} Continuing with free deterministic autofill.`);
     }
   }
   if (!state.automationRunning) return;
@@ -1429,7 +1450,7 @@ async function runAutomationCycle() {
   if (companyRouteReady) {
     await transitionApplication("filling", "Opened the company application route.");
   } else if (state.route?.route === "easy_apply") {
-    elements.automationStatus.textContent = "Opening LinkedIn Easy Apply fallback…";
+    reportActivity("Opening LinkedIn Easy Apply fallback…");
     const easyApply = await chrome.runtime.sendMessage({ action: "openEasyApply" });
     if (easyApply.error || !easyApply.opened) {
       throw new Error(easyApply.error || "Easy Apply could not be opened.");
@@ -1445,9 +1466,9 @@ async function runAutomationCycle() {
 async function runCurrentApplicationPage() {
   const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
   if (entry.error && !entry.already_form) {
-    elements.automationStatus.textContent = `${entry.error} Checking the current page for a form…`;
+    reportActivity(`${entry.error} Checking the current page for a form…`);
   } else if (entry.clicked) {
-    elements.automationStatus.textContent = "Opening the employer application form…";
+    reportActivity("Opening the employer application form…");
     await waitForTabReady(entry.tab_id);
   }
 
@@ -1459,11 +1480,11 @@ async function runCurrentApplicationPage() {
     throw new Error(login.error || "Login requires your attention.");
   }
   if (login.clicked) {
-    elements.automationStatus.textContent = "Browser-assisted login submitted; waiting for the application…";
+    reportActivity("Browser-assisted login submitted; waiting for the application…");
     await new Promise((resolve) => setTimeout(resolve, 700));
   }
 
-  elements.automationStatus.textContent = "Scanning and filling known fields from your profile…";
+  reportActivity("Scanning and filling known fields from your profile…");
   state.questionnaireActive = true;
   state.questionnaireTotal = 0;
   state.skippedFieldIds = new Set();
@@ -1510,7 +1531,7 @@ async function scanApplicationFormWithRetry() {
     } catch (error) {
       lastError = error;
       if (!/no fillable fields/i.test(error.message) || attempt === 15) throw error;
-      elements.automationStatus.textContent = "Waiting for the employer application form...";
+      reportActivity("Waiting for the employer application form...");
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
@@ -1528,7 +1549,7 @@ async function completeAutomationApplication() {
     return;
   }
   if (state.artifact && state.formScan?.fields?.some((field) => field.field_type === "file")) {
-    elements.automationStatus.textContent = "Selecting the job-specific tailored résumé…";
+    reportActivity("Selecting the job-specific tailored résumé…");
     const attached = await maybeAttachTailoredResume();
     if (!attached && state.automationPolicy === "always_allow") {
       throw new Error("Tailored résumé attachment was not approved.");
@@ -1542,7 +1563,7 @@ async function completeAutomationApplication() {
     if (state.applicationSteps > 15) {
       throw new Error("Application paused after 15 form steps to prevent an unintended loop.");
     }
-    elements.automationStatus.textContent = `Opening the next application step (${step.label})...`;
+    reportActivity(`Opening the next application step (${step.label})...`);
     state.formPlan = null;
     state.formScan = null;
     state.questionnaireTotal = 0;
@@ -1569,7 +1590,7 @@ async function completeAutomationApplication() {
     return;
   }
 
-  elements.automationStatus.textContent = "Submitting automatically under Always allow…";
+  reportActivity("Submitting automatically under Always allow…");
   const submitted = await approveAndSubmit({ automatic: true, throwOnError: true });
   if (!submitted) throw new Error("The employer site did not confirm submission.");
   await advanceAutomationQueue({ submitted: true });
@@ -1587,7 +1608,7 @@ async function advanceAutomationQueue({ submitted = false } = {}) {
     return;
   }
   const nextUrl = state.jobQueue.shift();
-  elements.automationStatus.textContent = "Moving to the next queued LinkedIn job…";
+  reportActivity("Submission confirmed. Moving to the next queued LinkedIn job…");
   const opened = await chrome.runtime.sendMessage({
     action: "openQueuedJob",
     tabId: state.sourceTabId,
@@ -1680,6 +1701,49 @@ async function sendChat(event) {
 }
 
 async function handlePageActionCommand(message) {
+  const remembered = message.match(
+    /^(?:remember|set|use)\s+(?:that\s+)?(.+?)(?:\s+is|\s+to|:)\s+(.+)$/i,
+  );
+  if (remembered) {
+    const requested = remembered[1].replace(/^my\s+/i, "").trim();
+    const answer = remembered[2].trim();
+    if (/password|passcode|captcha|verification code|one[- ]time code|mfa|social security|ssn|bank|credit card/i.test(requested)) {
+      appendMessage("I will not store credentials, verification codes, CAPTCHA answers, or financial identifiers.", "agent-message");
+      return true;
+    }
+    const requestedKey = normalizeQuestion(requested);
+    const scanned = state.formScan?.fields.find((field) => {
+      const label = normalizeQuestion(field.label);
+      return label.includes(requestedKey) || requestedKey.includes(label);
+    });
+    const question = scanned?.label || requested;
+    const existing = state.answers.find(
+      (item) => normalizeQuestion(item.question) === normalizeQuestion(question),
+    );
+    const answerId = existing?.id || crypto.randomUUID();
+    const fieldType = scanned?.field_type === "number"
+      ? "number"
+      : ["select", "radio", "checkbox"].includes(scanned?.field_type) ? "choice" : "text";
+    const sensitive = /race|ethnicity|gender|disability|veteran|hispanic|latino/i.test(question);
+    await api(`/api/answers/${answerId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: answerId,
+        question,
+        answer,
+        field_type: fieldType,
+        sensitive,
+      }),
+    });
+    state.answers = await api("/api/answers");
+    if (state.formScan) {
+      await replanForm();
+      if (state.formPlan.actions.length) await fillForm({ throwOnError: true });
+    }
+    appendMessage(`Saved “${question}” as “${answer}” and applied it to the current page when matched.`, "agent-message");
+    return true;
+  }
   if (!/(fill|complete|apply).*(everything|fields|form|page)/i.test(message)) return false;
   let plan = await scanForm({ throwOnError: true });
   await resolveNarrativeUnknowns();
@@ -1843,6 +1907,7 @@ elements.analyzeFit.addEventListener("click", analyzeJobFit);
 elements.downloadDocx.addEventListener("click", () => openArtifact("docx"));
 elements.downloadPdf.addEventListener("click", () => openArtifact("pdf"));
 elements.attachResume.addEventListener("click", attachTailoredResume);
+elements.downloadHistory.addEventListener("click", downloadApplicationHistory);
 elements.scanForm.addEventListener("click", startGuidedAnalysis);
 elements.fillForm.addEventListener("click", fillForm);
 elements.includeOptionalQuestions.addEventListener("change", async () => {

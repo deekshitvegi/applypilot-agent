@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0 - 2026-07-01
+
+- Enforced a strict queue invariant: the runner advances only after explicit
+  on-page submission confirmation; low-fit and uncertain applications pause.
+- Added LinkedIn “application sent” confirmation phrases and removed unsafe
+  URL-only submission inference.
+- Added a local CSV application-history export with timestamps, status, job,
+  company, route, URL, and latest audit event.
+- Added live runner activity to chat and deterministic chat commands such as
+  `remember expected salary is 120000` that save and reuse field answers.
+- Collapsed the legacy profile, résumé, capture, and form buttons under
+  **Manual controls**, leaving the primary runner, Settings, and chat focused.
+- Improved LinkedIn job-title and company extraction for application history.
+
 ## 0.5.4 - 2026-07-01
 
 - Fixed LinkedIn `/safety/go` links by preserving LinkedIn's in-page click
