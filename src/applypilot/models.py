@@ -265,6 +265,8 @@ class FormOption(BaseModel):
 class FormField(BaseModel):
     id: str
     label: str
+    group_label: str = ""
+    option_label: str = ""
     name: str = ""
     field_type: Literal[
         "text",
@@ -301,6 +303,7 @@ class UnknownField(BaseModel):
 
 class FormPlanRequest(BaseModel):
     page_url: str
+    source_url: str = ""
     fields: list[FormField]
     adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = "generic"
 

@@ -188,3 +188,131 @@ def test_phone_country_code_is_not_filled_with_the_whole_phone_number() -> None:
 
     assert plan.actions[0].value == "US"
     assert plan.actions[0].source == "profile.phone"
+
+
+def test_maps_grouped_authorization_and_sponsorship_radios() -> None:
+    profile = CandidateProfile(
+        work_authorization="Yes, I am authorized to work in the United States.",
+        requires_sponsorship=False,
+    )
+    fields = [
+        FormField(
+            id="authorized",
+            label="Are you legally authorized to work in the United States?",
+            group_label="Are you legally authorized to work in the United States?",
+            name="authorized",
+            field_type="radio",
+            required=True,
+            options=[FormOption(value="Yes", label="Yes"), FormOption(value="No", label="No")],
+        ),
+        FormField(
+            id="sponsorship",
+            label="Will you now or in the future require sponsorship?",
+            group_label="Will you now or in the future require sponsorship?",
+            name="sponsorship",
+            field_type="radio",
+            required=True,
+            options=[FormOption(value="Yes", label="Yes"), FormOption(value="No", label="No")],
+        ),
+    ]
+
+    plan = plan_form_fill("https://careers.example.test", fields, profile, [])
+
+    assert {action.field_id: action.value for action in plan.actions} == {
+        "authorized": "Yes",
+        "sponsorship": "No",
+    }
+
+
+def test_maps_referral_source_from_captured_job_url() -> None:
+    field = FormField(
+        id="source",
+        label="How did you find out about this position?",
+        field_type="radio",
+        options=[
+            FormOption(value="indeed", label="Indeed"),
+            FormOption(value="linkedin", label="LinkedIn"),
+            FormOption(value="other", label="Other"),
+        ],
+    )
+
+    plan = plan_form_fill(
+        "https://careers.example.test",
+        [field],
+        CandidateProfile(),
+        [],
+        source_url="https://www.linkedin.com/jobs/view/123",
+    )
+
+    assert plan.actions[0].value == "linkedin"
+    assert plan.actions[0].source == "job.source_url"
+
+
+def test_selects_only_resume_supported_skill_checkboxes() -> None:
+    group = "What development languages are you most experienced with?"
+    fields = [
+        FormField(
+            id="python",
+            label=f"{group} Python",
+            group_label=group,
+            option_label="Python",
+            field_type="checkbox",
+            required=True,
+        ),
+        FormField(
+            id="ruby",
+            label=f"{group} Ruby",
+            group_label=group,
+            option_label="Ruby",
+            field_type="checkbox",
+            required=True,
+        ),
+    ]
+
+    plan = plan_form_fill(
+        "https://careers.example.test",
+        fields,
+        CandidateProfile(),
+        [],
+        resume_text="Built production APIs and AI agents using Python.",
+    )
+
+    assert {action.field_id: action.value for action in plan.actions} == {
+        "python": "true",
+        "ruby": "false",
+    }
+    assert not plan.unknown_fields
+
+
+def test_relocation_willingness_does_not_select_every_city() -> None:
+    group = "Which city would you be interested in for a relocation package?"
+    fields = [
+        FormField(
+            id="san-jose",
+            label=f"{group} San Jose",
+            group_label=group,
+            option_label="San Jose, CA",
+            field_type="checkbox",
+            required=True,
+        ),
+        FormField(
+            id="kansas-city",
+            label=f"{group} Kansas City",
+            group_label=group,
+            option_label="Kansas City, MO",
+            field_type="checkbox",
+            required=True,
+        ),
+    ]
+
+    plan = plan_form_fill(
+        "https://careers.example.test",
+        fields,
+        CandidateProfile(willing_to_relocate=True),
+        [],
+    )
+
+    assert not plan.actions
+    assert [(item.field_id, item.label) for item in plan.unknown_fields] == [
+        ("san-jose", group)
+    ]

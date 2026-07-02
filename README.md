@@ -90,6 +90,8 @@ This repository currently contains:
 - a company-site-first route planner;
 - a generic form scanner/filler that maps verified profile answers, guides the
   user through every unanswered visible question, and remembers new answers;
+- grouped radio/checkbox support for styled application controls, with captured
+  job-source mapping and evidence-only résumé matching for technology choices;
 - optional browser-assisted login that clicks a unique login/continue control
   only after the browser password manager has filled credentials;
 - a synthetic employer ATS for safe end-to-end testing;
@@ -231,7 +233,9 @@ Invoke-RestMethod http://127.0.0.1:8765/health
 For a safe form-filling test, open the synthetic ATS link above, capture the
 job in the side panel, and choose **Run current job**. ApplyPilot analyzes the
 page, asks each unanswered question in human-readable form, remembers the
-answers, and fills the form. The page intercepts submission and stores nothing.
+answers, and fills the form. The page includes styled authorization radios,
+technology checkboxes, and a policy acknowledgement to exercise grouped-field
+handling. It intercepts submission and stores nothing.
 
 The extension defaults to the local service. Its settings page can point to a
 hosted demo URL; Chrome will ask for permission to contact that exact origin.

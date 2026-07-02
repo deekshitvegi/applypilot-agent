@@ -942,7 +942,10 @@ async function replanForm() {
   state.formPlan = await api("/api/forms/plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(state.formScan),
+    body: JSON.stringify({
+      ...state.formScan,
+      source_url: state.job?.source_url || "",
+    }),
   });
   const reviewUnknown = unresolvedUnknowns();
   const requiredUnknown = unresolvedRequiredUnknowns();
@@ -979,7 +982,11 @@ async function replanForm() {
     elements.unknownAnswer.value = "";
     elements.unknownAnswer.inputMode = scanned?.field_type === "number" ? "numeric" : "text";
     const options = uniqueQuestionOptions(scanned);
-    const useChoice = options.length > 0;
+    const multiChoice = scanned?.field_type === "checkbox" && options.length > 2;
+    const useChoice = options.length > 0 && !multiChoice;
+    elements.unknownAnswer.placeholder = multiChoice
+      ? `Enter one or more choices separated by commas: ${options.map((option) => option.label).join(", ")}`
+      : "Enter your answer";
     elements.unknownChoice.classList.toggle("hidden", !useChoice);
     elements.unknownAnswer.classList.toggle("hidden", useChoice);
     elements.unknownChoice.replaceChildren();
@@ -1902,7 +1909,9 @@ async function handlePageActionCommand(message) {
     appendMessage(`Saved “${question}” as “${answer}” and applied it to the current page when matched.`, "agent-message");
     return true;
   }
-  if (!/(fill|complete|apply).*(everything|fields|form|page)/i.test(message)) return false;
+  const explicitFillRequest = /(fill|complete|apply).*(everything|fields|form|page)/i.test(message)
+    || /^(?:then\s+)?(?:please\s+)?(?:fill|complete|apply)\s+(?:it|that|this|those|that\s+part|this\s+part|the\s+field|the\s+fields)\b/i.test(message);
+  if (!explicitFillRequest) return false;
   let plan = await scanForm({ throwOnError: true });
   await resolveNarrativeUnknowns();
   plan = state.formPlan;

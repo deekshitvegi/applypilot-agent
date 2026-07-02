@@ -33,11 +33,26 @@ def plan_form_fill(
     fields: list[FormField],
     profile: CandidateProfile,
     answers: list[ReusableAnswer],
+    source_url: str = "",
+    resume_text: str = "",
     adapter: str = "generic",
 ) -> FormFillPlan:
     actions: list[FormFillAction] = []
     unknown: list[UnknownField] = []
     blocked: list[UnknownField] = []
+    seen_checkbox_unknowns: set[str] = set()
+    resume_checkbox_groups = {
+        normalize(field.group_label)
+        for field in fields
+        if field.field_type == "checkbox"
+        and field.group_label
+        and is_resume_evidence_group(field.group_label)
+        and any(
+            resume_mentions_option(candidate.option_label, resume_text)
+            for candidate in fields
+            if normalize(candidate.group_label) == normalize(field.group_label)
+        )
+    }
 
     for field in fields:
         label = normalize(f"{field.label} {field.name}")
@@ -55,6 +70,18 @@ def plan_form_fill(
         mapped = map_profile_field(label, field, profile)
         if mapped is None:
             mapped = map_reusable_answer(label, field, answers)
+        if mapped is None:
+            mapped = map_source_field(label, field, source_url)
+        if (
+            mapped is None
+            and field.field_type == "checkbox"
+            and normalize(field.group_label) in resume_checkbox_groups
+        ):
+            mapped = (
+                "true" if resume_mentions_option(field.option_label, resume_text) else "false",
+                "resume.explicit_skill",
+                1.0,
+            )
 
         if mapped is not None:
             value, source, confidence = mapped
@@ -69,10 +96,15 @@ def plan_form_fill(
                 )
             )
         elif not field.value and field.field_type != "file":
+            unknown_key = normalize(field.group_label) if field.field_type == "checkbox" else ""
+            if unknown_key and unknown_key in seen_checkbox_unknowns:
+                continue
+            if unknown_key:
+                seen_checkbox_unknowns.add(unknown_key)
             unknown.append(
                 UnknownField(
                     field_id=field.id,
-                    label=field.label,
+                    label=field.group_label or field.label,
                     required=field.required,
                     reason="No verified reusable answer is available.",
                 )
@@ -97,6 +129,18 @@ def map_profile_field(
     ):
         country_code = phone_country_code(profile.phone, profile.country)
         return (country_code, "profile.phone", 0.98) if country_code else None
+    if field.field_type == "checkbox" and field.group_label and (
+        pattern_matches(label, "relocate") or pattern_matches(label, "relocation")
+    ):
+        if profile.willing_to_relocate is False:
+            option = normalize(field.option_label)
+            unable = any(
+                phrase in option
+                for phrase in ("unable to relocate", "only work remotely", "cannot relocate")
+            )
+            return ("true" if unable else "false", "profile.willing_to_relocate", 0.98)
+        # A general willingness to relocate does not identify a preferred city.
+        return None
     mappings: list[tuple[tuple[str, ...], str | bool | None, str]] = [
         (("first name", "given name"), first_name, "profile.legal_name"),
         (("last name", "family name", "surname"), last_name, "profile.legal_name"),
@@ -140,11 +184,12 @@ def map_profile_field(
 def map_reusable_answer(
     label: str, field: FormField, answers: list[ReusableAnswer]
 ) -> tuple[str, str, float] | None:
+    comparison_label = normalize(field.group_label) or label
     best: tuple[float, ReusableAnswer] | None = None
     for answer in answers:
         candidate = normalize(answer.question)
-        score = SequenceMatcher(None, label, candidate).ratio()
-        if candidate in label or label in candidate:
+        score = SequenceMatcher(None, comparison_label, candidate).ratio()
+        if candidate in comparison_label or comparison_label in candidate:
             score = max(score, 0.95)
         if best is None or score > best[0]:
             best = (score, answer)
@@ -205,8 +250,63 @@ def checkbox_value(value: str, field: FormField) -> str:
     if normalized in {"no", "false", "0", "off"}:
         return "false"
     choices = [normalize(item) for item in re.split(r"[,;|\n]+", value) if item.strip()]
-    label = normalize(f"{field.label} {field.name}")
+    label = normalize(f"{field.option_label or field.label} {field.name}")
     return "true" if any(choice and choice in label for choice in choices) else "false"
+
+
+def map_source_field(
+    label: str, field: FormField, source_url: str
+) -> tuple[str, str, float] | None:
+    if not any(
+        pattern_matches(label, pattern)
+        for pattern in ("how did you find", "how did you hear", "source of application")
+    ):
+        return None
+    source = normalize(source_url)
+    if "linkedin com" in source:
+        return coerce_option("LinkedIn", field), "job.source_url", 1.0
+    if "indeed com" in source:
+        return coerce_option("Indeed", field), "job.source_url", 1.0
+    if "dice com" in source:
+        return coerce_option("Dice", field), "job.source_url", 1.0
+    return None
+
+
+def is_resume_evidence_group(label: str) -> bool:
+    normalized = normalize(label)
+    return any(
+        marker in normalized
+        for marker in (
+            "development languages",
+            "programming languages",
+            "tools you have hands on experience",
+            "tools do you have experience",
+            "cloud environments",
+            "cloud platforms",
+        )
+    )
+
+
+def resume_mentions_option(option: str, resume_text: str) -> bool:
+    option = option.strip()
+    if not option or not resume_text:
+        return False
+    lowered = resume_text.lower()
+    special_patterns = {
+        "c++": r"(?<!\w)c\+\+(?!\w)",
+        "c#": r"(?<!\w)c#(?!\w)",
+        "go": r"\b(?:Go|Golang)\b",
+        "github ci": r"\bgithub\s+(?:ci|actions)\b",
+    }
+    special = special_patterns.get(option.lower())
+    if special:
+        flags = 0 if option.lower() == "go" else re.IGNORECASE
+        return re.search(special, resume_text, flags) is not None
+    normalized_option = normalize(option)
+    if len(normalized_option) < 2:
+        return False
+    expression = r"\b" + r"\s+".join(map(re.escape, normalized_option.split())) + r"\b"
+    return re.search(expression, lowered) is not None
 
 
 def split_name(name: str) -> tuple[str, str]:
