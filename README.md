@@ -46,6 +46,12 @@ ApplyPilot rescans each step, fills reusable answers, asks only for missing
 information, and advances through **Next** and **Review**. The configured
 ask/always-allow policy still controls the final submission.
 
+The runner tracks whether it is viewing a listing, an application form, a
+login step, a review step, or a confirmed result. Once a form is detected, its
+fields take precedence over any remaining **Apply** links on the page. ApplyPilot
+will not advance while visible required fields are empty, and it stops if a
+control leaves the page unchanged instead of repeating the same action.
+
 LinkedIn's job-search safety reminder is handled as part of the employer-site
 handoff: ApplyPilot resolves **Continue applying** and opens the disclosed
 destination without relying on the selected AI provider. LinkedIn-internal

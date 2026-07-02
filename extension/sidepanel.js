@@ -106,6 +106,8 @@ const state = {
   jobsProcessed: 0,
   applicationsSubmitted: 0,
   applicationSteps: 0,
+  applicationStarted: false,
+  lastStepFingerprint: "",
   minimumFit: 60,
   siteAccessGranted: false,
   loginAssistance: false,
@@ -212,6 +214,7 @@ async function persistJobContext() {
       application: state.application,
       sourceTabId: state.sourceTabId,
       jobQueue: state.jobQueue,
+      applicationStarted: state.applicationStarted,
     },
   });
 }
@@ -224,6 +227,7 @@ async function restoreJobContext() {
   state.application = context.application || null;
   state.sourceTabId = context.sourceTabId || null;
   state.jobQueue = context.jobQueue || [];
+  state.applicationStarted = context.applicationStarted === true;
   elements.jobTitle.textContent = state.job.title || "Captured job";
   elements.jobCompany.textContent = [state.job.company, state.job.location].filter(Boolean).join(" · ");
   elements.chatContext.textContent = state.job.title || "Active job";
@@ -1421,6 +1425,8 @@ async function runAutomationCycle() {
   state.artifact = null;
   state.submitClicked = false;
   state.applicationSteps = 0;
+  state.applicationStarted = false;
+  state.lastStepFingerprint = "";
   reportActivity("Reading the current job and company route…");
   const captured = await captureJob({ throwOnError: true });
   state.seenJobUrls.add(normalizeJobUrl(captured.source_url));
@@ -1446,6 +1452,8 @@ async function runAutomationCycle() {
   if (companyRouteReady) {
     const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
     if (entry.clicked) {
+      state.applicationStarted = true;
+      await persistJobContext();
       reportActivity("Opening the employer's application form...");
       await waitForTabReady(entry.tab_id);
     }
@@ -1494,19 +1502,28 @@ async function runAutomationCycle() {
 }
 
 async function runCurrentApplicationPage() {
-  const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
-  if (entry.error && !entry.already_form) {
-    reportActivity(`${entry.error} Checking the current page for a form…`);
-    const planned = await planAndClickPageAction(
-      "Open or start this job application. Do not submit the application.",
-    );
-    if (planned?.clicked) {
-      reportActivity(`AI page planner selected “${planned.label}”. Observing the changed page…`);
-      await new Promise((resolve) => setTimeout(resolve, 750));
+  if (!state.applicationStarted) {
+    const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
+    if (entry.error && !entry.already_form) {
+      reportActivity(`${entry.error} Checking the current page for a form…`);
+      const planned = await planAndClickPageAction(
+        "Open or start this job application. Do not submit the application.",
+      );
+      if (planned?.clicked) {
+        state.applicationStarted = true;
+        await persistJobContext();
+        reportActivity(`AI page planner selected “${planned.label}”. Observing the changed page…`);
+        await new Promise((resolve) => setTimeout(resolve, 750));
+      }
+    } else if (entry.clicked) {
+      state.applicationStarted = true;
+      await persistJobContext();
+      reportActivity("Opening the employer application form…");
+      await waitForTabReady(entry.tab_id);
+    } else if (entry.already_form) {
+      state.applicationStarted = true;
+      await persistJobContext();
     }
-  } else if (entry.clicked) {
-    reportActivity("Opening the employer application form…");
-    await waitForTabReady(entry.tab_id);
   }
 
   const login = await continueConsentedLogin();
@@ -1524,6 +1541,8 @@ async function runCurrentApplicationPage() {
   let plan;
   try {
     plan = await scanApplicationFormWithRetry();
+    state.applicationStarted = true;
+    await persistJobContext();
   } catch (error) {
     if (!/no fillable fields/i.test(error.message)) throw error;
     state.formScan = { page_url: "", fields: [], adapter: "generic" };
@@ -1621,6 +1640,10 @@ async function completeAutomationApplication() {
   const step = await chrome.runtime.sendMessage({ action: "advanceApplication" });
   if (step.error && step.intermediate) throw new Error(step.error);
   if (step.clicked) {
+    if (step.fingerprint && step.fingerprint === state.lastStepFingerprint) {
+      throw new Error("The page did not change after the previous action, so ApplyPilot stopped the repeated step.");
+    }
+    state.lastStepFingerprint = step.fingerprint || "";
     state.applicationSteps += 1;
     if (state.applicationSteps > 15) {
       throw new Error("Application paused after 15 form steps to prevent an unintended loop.");
@@ -1640,6 +1663,7 @@ async function completeAutomationApplication() {
     );
     if (planned?.clicked) {
       state.applicationSteps += 1;
+      state.lastStepFingerprint = planned.fingerprint || state.lastStepFingerprint;
       reportActivity(`AI page planner selected “${planned.label}”. Observing the next step…`);
       state.formPlan = null;
       state.formScan = null;
@@ -1705,11 +1729,15 @@ async function planAndClickPageAction(goal) {
     if (decision.intent !== "click" || !decision.action_id) {
       return { clicked: false, error: decision.explanation };
     }
+    const fingerprint = `${snapshot.page_title}|${snapshot.controls.map((control) => control.label).join("|")}`;
+    if (fingerprint === state.lastStepFingerprint) {
+      return { clicked: false, error: "The observed page has not changed since the previous planned action." };
+    }
     const result = await chrome.runtime.sendMessage({
       action: "clickPageAction",
       actionId: decision.action_id,
     });
-    return { ...result, explanation: decision.explanation };
+    return { ...result, fingerprint, explanation: decision.explanation };
   } catch (error) {
     return { clicked: false, error: error.message };
   }
