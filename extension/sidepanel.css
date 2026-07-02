@@ -10,6 +10,7 @@
 body {
   min-width: 320px;
   margin: 0;
+  overflow-x: hidden;
   background: #f5f6f8;
 }
 
@@ -54,16 +55,44 @@ h2 { margin-bottom: 9px; font-size: 17px; line-height: 1.35; }
 
 main {
   display: grid;
+  min-width: 0;
   gap: 12px;
   padding: 12px;
 }
 
 .panel {
+  min-width: 0;
   border: 1px solid #e0e3e7;
   border-radius: 12px;
   background: #fff;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
+
+.quick-run, .offline-panel { padding: 16px; }
+.quick-run h2, .offline-panel h2 { margin-bottom: 5px; }
+.quick-run .muted { margin-bottom: 8px; }
+.offline-panel { text-align: center; }
+.offline-panel p { color: #667085; font-size: 12px; line-height: 1.5; }
+.offline-icon { display: grid; width: 42px; height: 42px; margin: 0 auto 10px; place-items: center; border-radius: 12px; background: #1f2937; color: white; font-weight: 700; }
+.agent-offline main > :not(#offline-card) { display: none !important; }
+
+.advanced-settings { min-width: 0; }
+.advanced-settings > summary {
+  display: flex;
+  align-items: center;
+  padding: 13px 15px;
+  border: 1px solid #e0e3e7;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  list-style: none;
+}
+.advanced-settings > summary::-webkit-details-marker { display: none; }
+.advanced-settings > summary::after { content: "⌄"; margin-left: auto; color: #98a2b3; }
+.advanced-settings[open] > summary::after { transform: rotate(180deg); }
+.advanced-settings > summary span { display: grid; min-width: 0; gap: 2px; }
+.advanced-settings > summary strong { font-size: 13px; }
+.settings-stack { display: grid; min-width: 0; gap: 10px; margin-top: 10px; }
 
 .setup-panel, .automation-panel, .chat-card { padding: 15px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
@@ -92,6 +121,7 @@ main {
 
 button, textarea, input, select {
   width: 100%;
+  min-width: 0;
   border: 1px solid #d0d5dd;
   border-radius: 8px;
   font: inherit;
@@ -131,11 +161,13 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
 .icon-button:hover:not(:disabled) { background: #f2f4f7; }
 
 .password-row { display: grid; grid-template-columns: 1fr auto; }
+.password-row > * { min-width: 0; }
 .password-row input { border-radius: 8px 0 0 8px; }
 .inline-button { width: auto; min-height: 0; border-color: #d0d5dd; border-left: 0; border-radius: 0 8px 8px 0; background: #f9fafb; color: #344054; }
 .inline-button:hover:not(:disabled) { background: #f2f4f7; }
 .field-help { min-height: 18px; margin: 6px 0 0; color: #667085; font-size: 11px; }
 .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 11px; }
+.button-row > * { min-width: 0; }
 .secondary-button { border-color: #d0d5dd; background: white; color: #344054; }
 .secondary-button:hover:not(:disabled) { background: #f9fafb; }
 .danger-button { border-color: #b42318; background: #b42318; }
@@ -210,6 +242,11 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
 .result-box p:last-child { margin-bottom: 0; }
 .error-list { margin: 8px 0; padding-left: 18px; }
 .error-list li { margin-bottom: 5px; }
+.questionnaire { margin-top: 10px; padding: 11px; border: 1px solid #d0d5dd; border-radius: 9px; background: #f9fafb; }
+.questionnaire label { margin-top: 4px; font-size: 13px; line-height: 1.4; }
+.question-progress { margin-bottom: 2px; color: #667085; font-size: 11px; font-weight: 650; text-transform: uppercase; }
+.questionnaire textarea { min-height: 72px; resize: vertical; }
+.questionnaire button { min-height: 34px; }
 .button-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
 .button-grid #attach-resume { grid-column: 1 / -1; }
 .profile-editor { margin-top: 12px; padding-top: 4px; border-top: 1px solid #e4e7ec; }
@@ -229,6 +266,7 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
   :root { color-scheme: dark; background: #17191c; color: #f2f4f7; }
   body, main { background: #17191c; }
   .app-header, .panel { border-color: #30343a; background: #202327; }
+  .advanced-settings > summary { border-color: #30343a; background: #202327; }
   .app-header { background: rgba(32, 35, 39, 0.96); }
   .brand-mark, button, .user-message { background: #e5e7eb; color: #111827; }
   .status, .muted, small, .section-label, .workflow-title, .field-help { color: #a8b0bd; }
@@ -236,6 +274,7 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
   input, select, textarea { border-color: #424750; background: #17191c; color: #f2f4f7; }
   .secondary-button, .inline-button, .attach-button { border-color: #424750; background: #292d32; color: #e5e7eb; }
   .agent-message, .result-box { border-color: #383d44; background: #292d32; color: #e5e7eb; }
+  .questionnaire { border-color: #424750; background: #292d32; }
   .step-content { border-color: #30343a; }
   .profile-editor { border-color: #30343a; }
   .profile-fields h3 { color: #f2f4f7; }

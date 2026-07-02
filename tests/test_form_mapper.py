@@ -124,3 +124,67 @@ def test_maps_a_saved_multi_choice_answer_to_checkbox_group() -> None:
         "redwood": "false",
         "remote": "true",
     }
+
+
+def test_united_states_does_not_get_mistaken_for_state_field() -> None:
+    profile = CandidateProfile(
+        region="Illinois",
+        work_authorization="Yes, I am authorized to work in the United States.",
+    )
+    fields = [
+        FormField(
+            id="authorization",
+            label="Are you legally authorized to work in the United States?",
+            field_type="select",
+            required=True,
+            options=[FormOption(value="yes", label="Yes"), FormOption(value="no", label="No")],
+        ),
+        FormField(
+            id="state",
+            label="In what US state do you currently reside in?",
+            field_type="select",
+            required=True,
+            options=[FormOption(value="IL", label="Illinois")],
+        ),
+    ]
+
+    plan = plan_form_fill("https://example.test", fields, profile, [])
+
+    assert {action.field_id: action.value for action in plan.actions} == {
+        "authorization": "yes",
+        "state": "IL",
+    }
+
+
+def test_optional_unanswered_questions_are_included_for_guided_review() -> None:
+    fields = [
+        FormField(id="hispanic", label="Are you Hispanic/Latino?", field_type="select"),
+        FormField(id="portfolio", label="Website", field_type="url"),
+    ]
+
+    plan = plan_form_fill("https://example.test", fields, CandidateProfile(), [])
+
+    assert [(field.field_id, field.required) for field in plan.unknown_fields] == [
+        ("hispanic", False),
+        ("portfolio", False),
+    ]
+
+
+def test_phone_country_code_is_not_filled_with_the_whole_phone_number() -> None:
+    profile = CandidateProfile(phone="+1 (940) 843-6087", country="United States")
+    fields = [
+        FormField(
+            id="phone-code",
+            label="Mobile Phone Country Code",
+            field_type="select",
+            options=[
+                FormOption(value="US", label="US +1 United States"),
+                FormOption(value="IN", label="IN +91 India"),
+            ],
+        )
+    ]
+
+    plan = plan_form_fill("https://example.test", fields, profile, [])
+
+    assert plan.actions[0].value == "US"
+    assert plan.actions[0].source == "profile.phone"

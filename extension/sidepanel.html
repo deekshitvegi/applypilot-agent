@@ -17,6 +17,30 @@
     </header>
 
     <main>
+      <section id="offline-card" class="panel offline-panel hidden">
+        <div class="offline-icon" aria-hidden="true">A</div>
+        <h2>Open ApplyPilot</h2>
+        <p>The private desktop companion is not running yet. Start ApplyPilot, then try again.</p>
+        <button id="retry-connection" type="button">Try again</button>
+        <p class="field-help">Your profile, résumé, and AI settings remain on this computer.</p>
+      </section>
+
+      <section id="quick-run" class="panel quick-run">
+        <p class="section-label">Current page</p>
+        <h2>Apply to this job</h2>
+        <p class="muted">ApplyPilot will read the job, prepare the best truthful résumé, fill known fields, and pause only when it needs you.</p>
+        <div class="button-row">
+          <button id="start-automation" type="button">Start applying</button>
+          <button id="stop-automation" class="secondary-button" type="button" disabled>Stop</button>
+        </div>
+        <p id="automation-status" class="field-help">Open a job page when you are ready.</p>
+      </section>
+
+      <details id="advanced-settings" class="advanced-settings">
+        <summary>
+          <span><strong>Settings</strong><small>AI model, permissions, and automation preferences</small></span>
+        </summary>
+        <div class="settings-stack">
       <section id="provider-card" class="panel setup-panel">
         <div class="section-heading">
           <div>
@@ -25,25 +49,26 @@
           </div>
           <span id="provider-badge" class="badge">Not configured</span>
         </div>
-        <p class="muted">Your key is encrypted by the local agent and never saved in the extension.</p>
+        <p id="provider-privacy" class="muted">Runs on this computer with no API key or cloud quota.</p>
         <form id="provider-form">
           <label for="provider-select">Provider</label>
           <select id="provider-select">
+            <option value="ollama">Ollama (local and free)</option>
             <option value="gemini">Google Gemini</option>
             <option value="openai">OpenAI</option>
             <option value="anthropic">Anthropic Claude</option>
           </select>
-          <label for="provider-key">API key</label>
-          <div class="password-row">
+          <label id="provider-key-label" class="hidden" for="provider-key">API key</label>
+          <div id="provider-key-row" class="password-row hidden">
             <input id="provider-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a newly generated key" />
             <button id="toggle-key" class="inline-button" type="button" aria-label="Show or hide API key">Show</button>
           </div>
           <label for="provider-model">Model</label>
-          <input id="provider-model" type="text" autocomplete="off" spellcheck="false" />
-          <p id="provider-help" class="field-help"></p>
+          <input id="provider-model" type="text" autocomplete="off" spellcheck="false" value="qwen3:8b" />
+          <p id="provider-help" class="field-help">Qwen3 handles text; image attachments automatically use local gemma3:4b.</p>
           <div class="button-row">
             <button id="save-provider" type="submit">Save securely</button>
-            <button id="disconnect-provider" class="secondary-button" type="button">Remove key</button>
+            <button id="disconnect-provider" class="secondary-button" type="button">Disconnect</button>
           </div>
         </form>
       </section>
@@ -74,16 +99,18 @@
           <input id="continue-next" type="checkbox" checked />
           Continue to the next queued LinkedIn job
         </label>
+        <label class="check-row" for="login-assistance">
+          <input id="login-assistance" type="checkbox" />
+          Allow browser-assisted login
+        </label>
+        <p class="field-help">Uses fields already filled by your browser password manager. ApplyPilot checks only whether fields are filled and never captures or stores credentials.</p>
         <div id="automation-warning" class="automation-warning hidden">
-          Automatic mode will fill, submit, and continue without asking again. Login, CAPTCHA,
-          MFA, missing answers, and ambiguous controls still pause the runner.
+          Automatic mode will fill, submit, and continue without asking again. Missing credentials,
+          CAPTCHA, MFA, missing answers, and ambiguous controls still pause the runner.
         </div>
-        <div class="button-row">
-          <button id="start-automation" type="button">Run current job</button>
-          <button id="stop-automation" class="secondary-button" type="button" disabled>Stop</button>
-        </div>
-        <p id="automation-status" class="field-help">Waiting to start.</p>
       </section>
+        </div>
+      </details>
 
       <section class="panel chat-card">
         <div class="section-heading">
@@ -183,11 +210,19 @@
           <div class="step-content">
             <button id="scan-form" type="button">Analyze visible fields</button>
             <button id="fill-form" class="secondary-button" type="button" disabled>Fill known fields</button>
-            <form id="unknown-answer-form" class="hidden">
-              <label id="unknown-question" for="unknown-answer">Unknown required question</label>
-              <input id="unknown-answer" type="text" autocomplete="off" />
+            <label class="check-row" for="include-optional-questions">
+              <input id="include-optional-questions" type="checkbox" />
+              Also review optional blank fields
+            </label>
+            <p class="field-help">Required unanswered questions are shown first. Optional blanks stay untouched unless selected.</p>
+            <form id="unknown-answer-form" class="questionnaire hidden">
+              <p id="unknown-progress" class="question-progress">Question 1 of 1</p>
+              <label id="unknown-question" for="unknown-answer">Application question</label>
+              <select id="unknown-choice" class="hidden" aria-label="Choose an answer"></select>
+              <textarea id="unknown-answer" rows="3" autocomplete="off"></textarea>
               <button id="draft-unknown" class="secondary-button" type="button">Draft with AI</button>
-              <button type="submit">Remember answer and replan</button>
+              <button id="skip-unknown" class="secondary-button" type="button">Skip this question</button>
+              <button id="save-unknown" type="submit">Save answer and continue</button>
             </form>
             <button id="approve-submit" class="danger-button hidden" type="button">Approve and submit application</button>
             <div id="form-result" class="result-box hidden"></div>

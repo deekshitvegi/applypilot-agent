@@ -64,12 +64,15 @@ def test_demo_mode_refuses_candidate_profile_access(
 
 
 def test_local_resume_upload_and_provider_status(monkeypatch, tmp_path: Path) -> None:
+    local_settings = Settings(database_path=tmp_path / "local.sqlite3", demo_mode=False)
+    local_store = ProfileStore(local_settings.database_path)
+    monkeypatch.setattr(main_module, "settings", local_settings)
+    monkeypatch.setattr(main_module, "store", local_store)
     monkeypatch.setattr(
         main_module,
-        "settings",
-        Settings(database_path=tmp_path / "local.sqlite3", demo_mode=False),
+        "ai_provider",
+        AIProviderManager(local_store, local_settings),
     )
-    monkeypatch.setattr(main_module, "store", ProfileStore(tmp_path / "local.sqlite3"))
     resume_text = (
         "Test Candidate\nSoftware Engineer\n"
         "Built reliable Python services and automated deployment workflows.\n" * 3
@@ -116,6 +119,31 @@ def test_provider_can_be_configured_without_returning_key(monkeypatch, tmp_path:
     }
     assert "private-openai-test-key" not in saved.text
     assert client.delete("/api/provider").json()["configured"] is False
+
+
+def test_local_ollama_provider_requires_no_api_key(monkeypatch, tmp_path: Path) -> None:
+    local_settings = Settings(database_path=tmp_path / "ollama.sqlite3", demo_mode=False)
+    local_store = ProfileStore(local_settings.database_path)
+    monkeypatch.setattr(main_module, "settings", local_settings)
+    monkeypatch.setattr(main_module, "store", local_store)
+    monkeypatch.setattr(
+        main_module,
+        "ai_provider",
+        AIProviderManager(local_store, local_settings),
+    )
+
+    saved = client.put(
+        "/api/provider",
+        json={"provider": "ollama", "api_key": "", "model": "qwen3:8b"},
+    )
+
+    assert saved.status_code == 200
+    assert saved.json() == {
+        "provider": "ollama",
+        "model": "qwen3:8b",
+        "configured": True,
+        "source": "encrypted_local",
+    }
 
 
 def test_chat_rejects_oversized_or_invalid_images() -> None:

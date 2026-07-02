@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.5.0 - 2026-06-30
+
+- Added a fully local Ollama provider with no API key or cloud quota, using
+  Qwen3 8B by default and schema-validated structured responses.
+- Added a guided questionnaire that discovers every unanswered visible field,
+  captures custom dropdown and radio options, remembers each answer, fills the
+  page, and resumes the active runner automatically.
+- Preserved the source job description and application state across LinkedIn,
+  employer career pages, Apply-button redirects, and side-panel reloads.
+- Added optional browser-assisted login that can continue after the browser
+  password manager fills credentials without exposing passwords to the model.
+- Improved the one-action company-site runner, human-readable field labels,
+  custom-control filling, CAPTCHA/MFA pauses, and deterministic fallback when
+  AI preparation is unavailable.
+- Made field analysis non-invasive and form-scoped so custom dropdowns remain
+  closed, header controls are ignored, required questions are shown first, and
+  optional blanks are reviewed only when requested.
+- Simplified the side panel around one **Start applying** action, moved provider
+  and automation preferences into collapsed Settings, added a focused offline
+  recovery screen, and fixed narrow-panel horizontal overflow.
+- Added a Windows background launcher plus enable/disable startup scripts so
+  users do not need to understand or manually start a separate backend.
+- Added friendly Gemini quota messages and one automatic retry when Google
+  provides a reset delay of at most 60 seconds.
+- Fixed profile matching so location values cannot be mistaken for work
+  authorization answers, and included optional unanswered fields in analysis.
+
 ## 0.4.1 - 2026-06-30
 
 - Replaced leaked internal field identifiers with human-readable labels and

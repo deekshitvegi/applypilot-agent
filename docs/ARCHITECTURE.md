@@ -14,14 +14,15 @@ Local FastAPI orchestrator
       |---- Job-page normalization and site adapters
       |---- Resume evidence extraction and tailoring
       |---- Application planning and validation
-      `---- AI provider (encrypted local credential)
+      `---- AI provider (local Ollama or encrypted remote credential)
 ```
 
 The browser extension owns page interaction. The local service owns reasoning,
-personal data, document generation, audit history, and validation. A credential
-entered in the dedicated side-panel form is sent only to the loopback service,
-encrypted immediately, and never persisted in extension storage or returned by
-the API.
+personal data, document generation, audit history, and validation. A remote
+provider credential entered in the dedicated side-panel form is sent only to
+the loopback service, encrypted immediately, and never persisted in extension
+storage or returned by the API. Ollama uses a fixed loopback endpoint and
+requires no credential.
 
 Common application fields are mapped deterministically from the encrypted
 profile and reusable-answer store; this path does not call an AI model. The AI
@@ -75,13 +76,16 @@ Every supported application surface implements the same small contract:
 3. map known profile answers to visible inputs;
 4. report unknown or ambiguous questions;
 5. validate the filled form;
-6. stop at review before final submission.
+6. apply the user's ask-before-submit or always-allow policy.
 
 The generic form mapper runs before site-specific logic. It handles standard
-HTML controls, maps high-confidence profile fields and reusable answers, blocks
-password/payment/authentication fields, and returns unknown required questions.
+HTML and common custom controls, maps high-confidence profile fields and
+reusable answers, blocks payment fields, and returns every unanswered visible
+question. A guided queue asks, remembers, replans, fills, and resumes the
+runner. Login credentials remain browser-managed; the extension checks only
+whether login fields are already populated before clicking an allowed login.
 Site adapters add stronger selectors and multi-step navigation without changing
-the review-before-submit boundary.
+the submission-policy boundary.
 
 Current adapter coverage:
 

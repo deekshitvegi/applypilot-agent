@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Iterable
+import math
+import re
+import time
 from typing import Any
 
 import httpx
@@ -28,14 +31,47 @@ from .store import ProfileStore
 
 
 DEFAULT_MODELS = {
+    "ollama": "qwen3:8b",
     "gemini": "gemini-2.5-flash",
     "openai": "gpt-5-mini",
     "anthropic": "claude-sonnet-4-20250514",
 }
+OLLAMA_VISION_MODEL = "gemma3:4b"
+OLLAMA_VISION_MARKERS = ("gemma3", "llava", "minicpm-v", "qwen2.5vl", "qwen3-vl")
 
 
 class AIProviderError(RuntimeError):
     pass
+
+
+def gemini_retry_delay(exc: Exception) -> float | None:
+    code = getattr(exc, "code", None)
+    status = str(getattr(exc, "status", "") or "").upper()
+    if code != 429 and status != "RESOURCE_EXHAUSTED":
+        return None
+    message = str(getattr(exc, "message", "") or exc).lower()
+    retry = re.search(r"retry in\s+([0-9.]+)s", message)
+    return float(retry.group(1)) if retry else None
+
+
+def gemini_error_message(exc: Exception, retry_attempted: bool = False) -> str:
+    code = getattr(exc, "code", None)
+    status = str(getattr(exc, "status", "") or "").upper()
+    message = str(getattr(exc, "message", "") or exc)
+    lowered = message.lower()
+    if code == 429 or status == "RESOURCE_EXHAUSTED":
+        if retry_attempted:
+            return "Gemini request limit was reached. ApplyPilot waited for the reset and retried once, but the quota is still unavailable. Try again later; common-field autofill still works without AI."
+        retry = re.search(r"retry in\s+([0-9.]+)s", lowered)
+        wait = f" Wait about {math.ceil(float(retry.group(1)))} seconds and try again." if retry else " Try again shortly."
+        return f"Gemini free-tier rate limit reached.{wait} Common-field autofill still works without AI."
+    if code in {401, 403} or "api key not valid" in lowered or "permission_denied" in lowered:
+        return "Gemini rejected this API key. Create a new key in Google AI Studio, then replace the saved key in ApplyPilot."
+    if code == 404 or status == "NOT_FOUND" or "model" in lowered and "not found" in lowered:
+        return "The selected Gemini model is unavailable for this key. Choose an available Gemini model and save again."
+    if code == 400 or status == "INVALID_ARGUMENT":
+        return "Gemini rejected the request. Check the saved model name and API-key access, then try again."
+    return "Gemini could not complete the request. Check the saved key, model access, and Google AI Studio quota."
 
 
 class BaseAIProvider:
@@ -214,32 +250,48 @@ class GeminiProvider(BaseAIProvider):
     ) -> Any:
         if not self.configured:
             raise AIProviderError("Gemini is not configured. Add an API key in ApplyPilot.")
-        try:
-            parts = [types.Part.from_text(text=prompt)]
-            parts.extend(
-                types.Part.from_bytes(
-                    data=base64.b64decode(image.data_base64),
-                    mime_type=image.media_type,
+        parts = [types.Part.from_text(text=prompt)]
+        parts.extend(
+            types.Part.from_bytes(
+                data=base64.b64decode(image.data_base64),
+                mime_type=image.media_type,
+            )
+            for image in images or []
+        )
+        client = genai.Client(api_key=self.api_key)
+        retry_attempted = False
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=[types.Content(role="user", parts=parts)],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=schema,
+                        temperature=0.2,
+                    ),
                 )
-                for image in images or []
-            )
-            client = genai.Client(api_key=self.api_key)
-            response = client.models.generate_content(
-                model=self.model,
-                contents=[types.Content(role="user", parts=parts)],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=schema,
-                    temperature=0.2,
-                ),
-            )
-            if not response.text:
-                raise AIProviderError("Gemini returned an empty response")
-            return schema.model_validate_json(response.text)
-        except AIProviderError:
-            raise
-        except Exception as exc:
-            raise AIProviderError(f"Gemini request failed ({type(exc).__name__}).") from exc
+                if not response.text:
+                    raise AIProviderError("Gemini returned an empty response")
+                parsed = schema.model_validate_json(response.text)
+                if retry_attempted and isinstance(parsed, ChatResponse):
+                    parsed.answer = (
+                        "Gemini's request limit was reached, so ApplyPilot waited for the reset "
+                        "and retried once successfully.\n\n" + parsed.answer
+                    )
+                return parsed
+            except AIProviderError:
+                raise
+            except Exception as exc:
+                delay = gemini_retry_delay(exc)
+                if attempt == 0 and delay is not None and delay <= 60:
+                    retry_attempted = True
+                    time.sleep(min(delay + 0.5, 60))
+                    continue
+                raise AIProviderError(
+                    gemini_error_message(exc, retry_attempted=retry_attempted)
+                ) from exc
+        raise AIProviderError("Gemini could not complete the request after one retry.")
 
 
 class OpenAIProvider(BaseAIProvider):
@@ -260,8 +312,11 @@ class OpenAIProvider(BaseAIProvider):
             }
             for image in images or []
         )
+        request_model = self.model
+        if images and not any(marker in self.model.lower() for marker in OLLAMA_VISION_MARKERS):
+            request_model = OLLAMA_VISION_MODEL
         payload = {
-            "model": self.model,
+            "model": request_model,
             "input": [{"role": "user", "content": content}],
             "text": {
                 "format": {
@@ -371,8 +426,72 @@ class AnthropicProvider(BaseAIProvider):
             raise AIProviderError(f"Anthropic request failed ({type(exc).__name__}).") from exc
 
 
+class OllamaProvider(BaseAIProvider):
+    """Local-only Ollama provider; no API key or external request is required."""
+
+    @property
+    def configured(self) -> bool:
+        return True
+
+    def _structured(
+        self,
+        prompt: str,
+        schema: type[BaseModel],
+        images: list[ChatImage] | None = None,
+    ) -> Any:
+        json_schema = schema.model_json_schema()
+        grounded_prompt = (
+            f"{prompt}\n\nReturn only JSON that matches this schema exactly:\n{json_schema}"
+        )
+        message: dict[str, Any] = {"role": "user", "content": grounded_prompt}
+        if images:
+            message["images"] = [image.data_base64 for image in images]
+        request_model = self.model
+        if images and not any(
+            marker in self.model.lower() for marker in OLLAMA_VISION_MARKERS
+        ):
+            request_model = OLLAMA_VISION_MODEL
+        payload = {
+            "model": request_model,
+            "messages": [message],
+            "stream": False,
+            "format": json_schema,
+            "options": {"temperature": 0.2},
+        }
+        try:
+            response = httpx.post(
+                "http://127.0.0.1:11434/api/chat",
+                json=payload,
+                timeout=300,
+            )
+            response.raise_for_status()
+            output_text = response.json().get("message", {}).get("content", "")
+            if not output_text:
+                raise AIProviderError("Ollama returned an empty response.")
+            return schema.model_validate_json(output_text)
+        except AIProviderError:
+            raise
+        except httpx.ConnectError as exc:
+            raise AIProviderError(
+                "Ollama is not running. Start Ollama, then try again."
+            ) from exc
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text[:300]
+            if exc.response.status_code == 404:
+                raise AIProviderError(
+                    f'Ollama does not have "{request_model}" installed. '
+                    f"Run: ollama pull {request_model}"
+                ) from exc
+            raise AIProviderError(
+                f"Ollama rejected the request (HTTP {exc.response.status_code}): {detail}"
+            ) from exc
+        except Exception as exc:
+            raise AIProviderError(f"Ollama request failed ({type(exc).__name__}).") from exc
+
+
 def create_provider(config: ProviderConfigRequest) -> BaseAIProvider:
     providers = {
+        "ollama": OllamaProvider,
         "gemini": GeminiProvider,
         "openai": OpenAIProvider,
         "anthropic": AnthropicProvider,
@@ -394,6 +513,11 @@ class AIProviderManager:
             "openai": self.settings.openai_api_key,
             "anthropic": self.settings.anthropic_api_key,
         }
+        if self.settings.ai_provider == "ollama":
+            return ProviderConfigRequest(
+                provider="ollama",
+                model=self.settings.ai_model or DEFAULT_MODELS["ollama"],
+            ), "environment"
         requested = self.settings.ai_provider if self.settings.ai_provider in keys else "gemini"
         provider = requested if keys[requested] else next(
             (name for name, value in keys.items() if value), requested

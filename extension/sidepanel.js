@@ -2,6 +2,9 @@ const DEFAULT_API_BASE = "http://127.0.0.1:8765";
 
 const elements = {
   connection: document.querySelector("#connection"),
+  offlineCard: document.querySelector("#offline-card"),
+  retryConnection: document.querySelector("#retry-connection"),
+  advancedSettings: document.querySelector("#advanced-settings"),
   question: document.querySelector("#question"),
   progress: document.querySelector("#progress"),
   refresh: document.querySelector("#refresh"),
@@ -10,8 +13,11 @@ const elements = {
   providerForm: document.querySelector("#provider-form"),
   providerSelect: document.querySelector("#provider-select"),
   providerKey: document.querySelector("#provider-key"),
+  providerKeyLabel: document.querySelector("#provider-key-label"),
+  providerKeyRow: document.querySelector("#provider-key-row"),
   providerModel: document.querySelector("#provider-model"),
   providerHelp: document.querySelector("#provider-help"),
+  providerPrivacy: document.querySelector("#provider-privacy"),
   providerTitle: document.querySelector("#provider-title"),
   providerBadge: document.querySelector("#provider-badge"),
   disconnectProvider: document.querySelector("#disconnect-provider"),
@@ -22,6 +28,7 @@ const elements = {
   resumePolicy: document.querySelector("#resume-policy"),
   minimumFit: document.querySelector("#minimum-fit"),
   continueNext: document.querySelector("#continue-next"),
+  loginAssistance: document.querySelector("#login-assistance"),
   automationWarning: document.querySelector("#automation-warning"),
   startAutomation: document.querySelector("#start-automation"),
   stopAutomation: document.querySelector("#stop-automation"),
@@ -50,12 +57,17 @@ const elements = {
   jobCompany: document.querySelector("#job-company"),
   scanForm: document.querySelector("#scan-form"),
   fillForm: document.querySelector("#fill-form"),
+  includeOptionalQuestions: document.querySelector("#include-optional-questions"),
   formStatus: document.querySelector("#form-status"),
   formResult: document.querySelector("#form-result"),
   unknownAnswerForm: document.querySelector("#unknown-answer-form"),
+  unknownProgress: document.querySelector("#unknown-progress"),
   unknownQuestion: document.querySelector("#unknown-question"),
   unknownAnswer: document.querySelector("#unknown-answer"),
+  unknownChoice: document.querySelector("#unknown-choice"),
   draftUnknown: document.querySelector("#draft-unknown"),
+  skipUnknown: document.querySelector("#skip-unknown"),
+  saveUnknown: document.querySelector("#save-unknown"),
   approveSubmit: document.querySelector("#approve-submit"),
   chatForm: document.querySelector("#chat-form"),
   chatInput: document.querySelector("#chat-input"),
@@ -93,6 +105,10 @@ const state = {
   applicationsSubmitted: 0,
   minimumFit: 60,
   siteAccessGranted: false,
+  loginAssistance: false,
+  questionnaireActive: false,
+  questionnaireTotal: 0,
+  skippedFieldIds: new Set(),
 };
 
 const SITE_ORIGINS = ["https://*/*", "http://*/*"];
@@ -135,19 +151,28 @@ const PROFILE_FIELDS = [
 ];
 
 const PROVIDERS = {
+  ollama: {
+    label: "Ollama",
+    model: "qwen3:8b",
+    keyRequired: false,
+    help: "Runs privately with no API key or usage limits. Qwen3 handles text; image attachments automatically use local gemma3:4b.",
+  },
   gemini: {
     label: "Google Gemini",
     model: "gemini-2.5-flash",
+    keyRequired: true,
     help: "Create a key in Google AI Studio. Gemini offers a limited free tier.",
   },
   openai: {
     label: "OpenAI",
     model: "gpt-5-mini",
+    keyRequired: true,
     help: "Use an OpenAI Platform API key. ChatGPT subscriptions do not include API usage.",
   },
   anthropic: {
     label: "Anthropic Claude",
     model: "claude-sonnet-4-20250514",
+    keyRequired: true,
     help: "Use a key from the Anthropic Console. Claude API usage is billed separately.",
   },
 };
@@ -169,7 +194,38 @@ async function transitionApplication(status, message, metadata = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status, message, metadata }),
   });
+  await persistJobContext();
   return state.application;
+}
+
+async function persistJobContext() {
+  if (!state.job) return;
+  await chrome.runtime.sendMessage({
+    action: "saveJobContext",
+    context: {
+      job: state.job,
+      route: state.route,
+      application: state.application,
+      sourceTabId: state.sourceTabId,
+      jobQueue: state.jobQueue,
+    },
+  });
+}
+
+async function restoreJobContext() {
+  const context = await chrome.runtime.sendMessage({ action: "loadJobContext" });
+  if (context.error || !context.job) return;
+  state.job = context.job;
+  state.route = context.route || null;
+  state.application = context.application || null;
+  state.sourceTabId = context.sourceTabId || null;
+  state.jobQueue = context.jobQueue || [];
+  elements.jobTitle.textContent = state.job.title || "Captured job";
+  elements.jobCompany.textContent = [state.job.company, state.job.location].filter(Boolean).join(" · ");
+  elements.chatContext.textContent = state.job.title || "Active job";
+  elements.openApplication.disabled = !state.route?.target_url;
+  elements.tailorResume.disabled = !(state.localMode && state.provider?.configured);
+  elements.analyzeFit.disabled = !(state.localMode && state.provider?.configured);
 }
 
 async function loadState() {
@@ -183,6 +239,8 @@ async function loadState() {
     state.apiBase = stored.apiBase.replace(/\/$/, "");
     const health = await api("/health");
     state.localMode = health.mode === "local";
+    document.body.classList.remove("agent-offline");
+    elements.offlineCard.classList.add("hidden");
     elements.connection.textContent = `${health.mode === "local" ? "Local" : "Demo"} agent connected`;
     elements.connection.classList.add("connected");
 
@@ -203,8 +261,11 @@ async function loadState() {
     renderOnboarding();
     renderProfileEditor();
     await refreshResumeStatus();
+    await restoreJobContext();
   } catch (error) {
     elements.connection.textContent = "Agent is offline";
+    document.body.classList.add("agent-offline");
+    elements.offlineCard.classList.remove("hidden");
     elements.question.textContent = "Start the ApplyPilot service, then refresh.";
     elements.progress.textContent = error.message;
     elements.answerForm.classList.add("hidden");
@@ -219,6 +280,7 @@ async function loadAutomationSettings() {
     resumePolicy: "ask_each",
     minimumFit: 60,
     continueNext: true,
+    loginAssistance: false,
   });
   state.automationPolicy = saved.automationPolicy;
   state.resumePolicy = saved.resumePolicy;
@@ -227,13 +289,15 @@ async function loadAutomationSettings() {
   elements.resumePolicy.value = saved.resumePolicy;
   elements.minimumFit.value = String(saved.minimumFit);
   elements.continueNext.checked = saved.continueNext;
+  state.loginAssistance = saved.loginAssistance;
+  elements.loginAssistance.checked = saved.loginAssistance;
   renderAutomationPolicy();
 }
 
 function renderAutomationPolicy() {
   const automatic = state.automationPolicy === "always_allow";
   elements.automationWarning.classList.toggle("hidden", !automatic);
-  elements.startAutomation.textContent = automatic ? "Start automatic run" : "Run current job";
+  elements.startAutomation.textContent = automatic ? "Start automatic run" : "Start applying";
 }
 
 async function refreshSiteAccess() {
@@ -278,6 +342,20 @@ async function changeContinueNext() {
   await chrome.storage.local.set({ continueNext: elements.continueNext.checked });
 }
 
+async function changeLoginAssistance() {
+  if (elements.loginAssistance.checked) {
+    const confirmed = window.confirm(
+      "Allow ApplyPilot to click a unique Sign in button only after your browser password manager has filled the login fields? ApplyPilot checks only whether fields are filled, never captures or stores credentials, and still pauses for MFA or CAPTCHA.",
+    );
+    if (!confirmed) {
+      elements.loginAssistance.checked = false;
+      return;
+    }
+  }
+  state.loginAssistance = elements.loginAssistance.checked;
+  await chrome.storage.local.set({ loginAssistance: state.loginAssistance });
+}
+
 async function changeResumePolicy() {
   state.resumePolicy = elements.resumePolicy.value;
   await chrome.storage.local.set({ resumePolicy: state.resumePolicy });
@@ -309,21 +387,29 @@ function renderProvider() {
     configured: false,
     source: "none",
   };
+  const providerDefinition = PROVIDERS[provider.provider] || PROVIDERS.ollama;
   elements.providerSelect.value = provider.provider;
-  elements.providerModel.value = provider.model || PROVIDERS[provider.provider].model;
+  elements.providerModel.value = provider.model || providerDefinition.model;
+  elements.providerKeyLabel.classList.toggle("hidden", !providerDefinition.keyRequired);
+  elements.providerKeyRow.classList.toggle("hidden", !providerDefinition.keyRequired);
+  elements.providerPrivacy.textContent = providerDefinition.keyRequired
+    ? "Your key is encrypted by the local agent and never saved in the extension."
+    : "Runs on this computer with no API key or cloud quota.";
   elements.providerKey.value = "";
   elements.providerKey.placeholder = provider.configured
     ? "Saved key is active — paste only to replace it"
     : "Paste a newly generated key";
   elements.providerTitle.textContent = provider.configured
-    ? PROVIDERS[provider.provider].label
+    ? providerDefinition.label
     : "Connect a model";
   elements.providerBadge.textContent = provider.configured ? "Connected" : "Not configured";
   elements.providerBadge.classList.toggle("connected", provider.configured);
   elements.disconnectProvider.disabled = !provider.configured || provider.source === "environment";
   elements.providerHelp.textContent = provider.configured
-    ? `AI features are active with ${provider.model}. ${provider.source === "environment" ? "Loaded from the local environment." : "The saved key is encrypted in your local ApplyPilot database."}`
-    : PROVIDERS[provider.provider].help;
+    ? provider.provider === "ollama"
+      ? `AI features run locally with ${provider.model}. No API key or cloud quota is used.`
+      : `AI features are active with ${provider.model}. ${provider.source === "environment" ? "Loaded from the local environment." : "The saved key is encrypted in your local ApplyPilot database."}`
+    : providerDefinition.help;
 }
 
 async function saveProvider(event) {
@@ -335,11 +421,15 @@ async function saveProvider(event) {
     elements.providerHelp.textContent = "Start the local ApplyPilot service before saving a key.";
     return;
   }
-  if (!apiKey || !model) {
-    elements.providerHelp.textContent = "Enter both an API key and model name.";
+  if ((!apiKey && PROVIDERS[provider].keyRequired) || !model) {
+    elements.providerHelp.textContent = PROVIDERS[provider].keyRequired
+      ? "Enter both an API key and model name."
+      : "Enter the installed Ollama model name.";
     return;
   }
-  elements.providerHelp.textContent = "Encrypting and saving locally…";
+  elements.providerHelp.textContent = provider === "ollama"
+    ? "Connecting to the local Ollama model…"
+    : "Encrypting and saving locally…";
   try {
     state.provider = await api("/api/provider", {
       method: "PUT",
@@ -371,6 +461,11 @@ function changeProvider() {
   const provider = elements.providerSelect.value;
   elements.providerModel.value = PROVIDERS[provider].model;
   elements.providerHelp.textContent = PROVIDERS[provider].help;
+  elements.providerKeyLabel.classList.toggle("hidden", !PROVIDERS[provider].keyRequired);
+  elements.providerKeyRow.classList.toggle("hidden", !PROVIDERS[provider].keyRequired);
+  elements.providerPrivacy.textContent = PROVIDERS[provider].keyRequired
+    ? "Your key is encrypted by the local agent and never saved in the extension."
+    : "Runs on this computer with no API key or cloud quota.";
 }
 
 function showDemoMode() {
@@ -661,6 +756,7 @@ async function captureJob(options = {}) {
       });
       if (!queue.error) state.jobQueue = queue.urls;
     }
+    await persistJobContext();
     return captured;
   } catch (error) {
     elements.jobCompany.textContent = error.message;
@@ -820,37 +916,72 @@ async function replanForm() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(state.formScan),
   });
+  const reviewUnknown = unresolvedUnknowns();
   const requiredUnknown = unresolvedRequiredUnknowns();
+  const optionalUnknown = (state.formPlan.unknown_fields || []).filter((field) => !field.required);
   const requiredBlocked = state.formPlan.blocked_fields.filter((field) => field.required);
+  if (state.questionnaireActive && state.questionnaireTotal === 0) {
+    state.questionnaireTotal = reviewUnknown.length;
+  }
   elements.formStatus.textContent = `${state.formScan.fields.length} fields found · ${state.formPlan.actions.length} known`;
   elements.formResult.innerHTML = `
     <strong>${state.formPlan.actions.length} fields ready</strong>
-    <p>${requiredUnknown.length} required questions need your answer.</p>
+    <p>${requiredUnknown.length} required question${requiredUnknown.length === 1 ? "" : "s"} need review.</p>
+    <p>${optionalUnknown.length} optional blank field${optionalUnknown.length === 1 ? " is" : "s are"} ${elements.includeOptionalQuestions.checked ? "included for review" : "left untouched"}.</p>
     <p>${state.formPlan.blocked_fields.length} sensitive/authentication fields will be left alone.</p>
     <p>The final Submit button will not be clicked.</p>
   `;
   elements.fillForm.disabled = state.formPlan.actions.length === 0;
   updateAttachButton();
 
-  if (requiredUnknown.length) {
-    const [firstUnknown] = requiredUnknown;
+  if (reviewUnknown.length) {
+    const [firstUnknown] = reviewUnknown;
+    const scanned = state.formScan?.fields.find((field) => field.id === firstUnknown.field_id);
     elements.unknownAnswerForm.classList.remove("hidden");
     const unreadable = /^(field\s+\d+|unlabeled)/i.test(firstUnknown.label);
     elements.unknownQuestion.textContent = unreadable
-      ? "Highlighted required question on the page"
+      ? "Highlighted question on the page"
       : firstUnknown.label;
     elements.unknownAnswerForm.dataset.fieldId = firstUnknown.field_id;
     elements.unknownAnswerForm.dataset.unreadable = String(unreadable);
+    elements.unknownAnswerForm.dataset.question = firstUnknown.label;
+    elements.unknownAnswerForm.dataset.fieldType = scanned?.field_type || "text";
+    const answered = Math.max(0, state.questionnaireTotal - reviewUnknown.length);
+    elements.unknownProgress.textContent = `Question ${answered + 1} of ${Math.max(state.questionnaireTotal, reviewUnknown.length)}`;
     elements.unknownAnswer.value = "";
+    elements.unknownAnswer.inputMode = scanned?.field_type === "number" ? "numeric" : "text";
+    const options = uniqueQuestionOptions(scanned);
+    const useChoice = options.length > 0;
+    elements.unknownChoice.classList.toggle("hidden", !useChoice);
+    elements.unknownAnswer.classList.toggle("hidden", useChoice);
+    elements.unknownChoice.replaceChildren();
+    if (useChoice) {
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Select an answer";
+      elements.unknownChoice.append(placeholder);
+      options.forEach((option) => {
+        const item = document.createElement("option");
+        item.value = option.label;
+        item.textContent = option.label;
+        elements.unknownChoice.append(item);
+      });
+      elements.unknownChoice.value = "";
+    }
     elements.draftUnknown.classList.toggle("hidden", !isNarrativeUnknown(firstUnknown));
     elements.draftUnknown.disabled = !state.provider?.configured;
+    elements.saveUnknown.textContent = reviewUnknown.length === 1
+      ? "Save answer and fill page"
+      : "Save answer and continue";
     chrome.runtime.sendMessage({
       action: "highlightField",
       fieldId: firstUnknown.field_id,
     }).catch(() => {});
-    await transitionApplication("blocked", "A required question needs a verified answer.", {
-      question: firstUnknown.label,
-    });
+    if (firstUnknown.required) {
+      await transitionApplication("blocked", "A required question needs a verified answer.", {
+        question: firstUnknown.label,
+      });
+    }
   } else {
     elements.unknownAnswerForm.classList.add("hidden");
     if (requiredBlocked.length) {
@@ -861,6 +992,22 @@ async function replanForm() {
       await transitionApplication("filling", "All required questions now have verified answers.");
     }
   }
+}
+
+function uniqueQuestionOptions(scanned) {
+  let options = scanned?.options || [];
+  if (!options.length && ["checkbox", "radio"].includes(scanned?.field_type)) {
+    options = [{ value: "Yes", label: "Yes" }, { value: "No", label: "No" }];
+  }
+  const seen = new Set();
+  return options.filter((option) => {
+    const label = String(option.label || option.value || "").replace(/\s+/g, " ").trim();
+    const key = label.toLowerCase();
+    if (!label || /^(select|select\.\.\.|choose|please select)$/i.test(label) || seen.has(key)) return false;
+    seen.add(key);
+    option.label = label;
+    return true;
+  });
 }
 
 function isNarrativeUnknown(unknown) {
@@ -877,7 +1024,7 @@ async function requestApplicationAnswer(question) {
 }
 
 async function draftUnknownAnswer() {
-  const question = elements.unknownQuestion.textContent.trim();
+  const question = elements.unknownAnswerForm.dataset.question || elements.unknownQuestion.textContent.trim();
   elements.draftUnknown.disabled = true;
   elements.draftUnknown.textContent = "Drafting…";
   try {
@@ -918,6 +1065,20 @@ function unresolvedRequiredUnknowns() {
     if (!field.required) return false;
     const scanned = state.formScan?.fields.find((candidate) => candidate.id === field.field_id);
     return !(scanned?.field_type === "file" && state.artifact);
+  });
+}
+
+function unresolvedUnknowns() {
+  const seenRadioGroups = new Set();
+  return (state.formPlan?.unknown_fields || []).filter((field) => {
+    if (state.skippedFieldIds.has(field.field_id)) return false;
+    if (!field.required && !elements.includeOptionalQuestions.checked) return false;
+    const scanned = state.formScan?.fields.find((candidate) => candidate.id === field.field_id);
+    if (scanned?.field_type !== "radio") return true;
+    const group = scanned.name || normalizeQuestion(field.label);
+    if (seenRadioGroups.has(group)) return false;
+    seenRadioGroups.add(group);
+    return true;
   });
 }
 
@@ -968,8 +1129,10 @@ async function maybeAttachTailoredResume() {
 
 async function saveUnknownAnswer(event) {
   event.preventDefault();
-  const answer = elements.unknownAnswer.value.trim();
-  const question = elements.unknownQuestion.textContent.trim();
+  const answer = elements.unknownChoice.classList.contains("hidden")
+    ? elements.unknownAnswer.value.trim()
+    : elements.unknownChoice.value.trim();
+  const question = elements.unknownAnswerForm.dataset.question || elements.unknownQuestion.textContent.trim();
   if (!answer || !question) return;
   if (elements.unknownAnswerForm.dataset.unreadable === "true") {
     const result = await chrome.runtime.sendMessage({
@@ -985,16 +1148,59 @@ async function saveUnknownAnswer(event) {
     });
     if (result.error) throw new Error(result.error);
     await scanForm();
+    await continueQuestionnaire();
     return;
   }
-  const id = crypto.randomUUID();
+  const existing = state.answers.find(
+    (item) => normalizeQuestion(item.question) === normalizeQuestion(question),
+  );
+  const id = existing?.id || crypto.randomUUID();
+  const scannedType = elements.unknownAnswerForm.dataset.fieldType || "text";
+  const fieldType = scannedType === "number"
+    ? "number"
+    : ["select", "radio", "checkbox"].includes(scannedType) ? "choice" : "text";
   await api(`/api/answers/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, question, answer, field_type: "text", sensitive: false }),
+    body: JSON.stringify({ id, question, answer, field_type: fieldType, sensitive: false }),
   });
   state.answers = await api("/api/answers");
   await replanForm();
+  await continueQuestionnaire();
+}
+
+function normalizeQuestion(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+async function skipUnknownQuestion() {
+  const fieldId = elements.unknownAnswerForm.dataset.fieldId;
+  if (!fieldId) return;
+  state.skippedFieldIds.add(fieldId);
+  await replanForm();
+  await continueQuestionnaire();
+}
+
+async function continueQuestionnaire() {
+  if (unresolvedUnknowns().length) return;
+  state.questionnaireActive = false;
+  elements.unknownAnswerForm.classList.add("hidden");
+  elements.formStatus.textContent = "Answers collected. Filling the page…";
+  if (state.formPlan?.actions.length) await fillForm({ throwOnError: true });
+  if (state.automationRunning) await completeAutomationApplication();
+}
+
+async function startGuidedAnalysis() {
+  state.questionnaireActive = true;
+  state.questionnaireTotal = 0;
+  state.skippedFieldIds = new Set();
+  let plan = await scanForm();
+  if (plan?.actions.length) {
+    elements.formStatus.textContent = "Filling saved profile answers before asking questions…";
+    await fillForm({ throwOnError: true });
+    plan = await scanForm();
+  }
+  if (plan && !unresolvedUnknowns().length) await continueQuestionnaire();
 }
 
 async function fillForm(options = {}) {
@@ -1108,14 +1314,25 @@ function setAutomationRunning(running, message) {
 
 async function startAutomation() {
   if (state.automationRunning) return;
+  const activeTab = await chrome.runtime.sendMessage({ action: "getActiveTab" });
+  const resumeCapturedJob = Boolean(
+    state.job?.description && activeTab.url &&
+    normalizeJobUrl(activeTab.url) !== normalizeJobUrl(state.job.source_url),
+  );
   state.jobsProcessed = 0;
   state.applicationsSubmitted = 0;
   state.seenJobUrls = new Set();
-  state.jobQueue = [];
-  setAutomationRunning(true, "Starting from the active job page…");
+  if (!resumeCapturedJob) state.jobQueue = [];
+  setAutomationRunning(
+    true,
+    resumeCapturedJob
+      ? `Continuing ${state.job.title || "the captured job"} on this application page…`
+      : "Starting from the active job page…",
+  );
   try {
     await requireSiteAccess();
-    await runAutomationCycle();
+    if (resumeCapturedJob) await runCurrentApplicationPage();
+    else await runAutomationCycle();
   } catch (error) {
     setAutomationRunning(false, `Paused: ${error.message}`);
   }
@@ -1148,16 +1365,20 @@ async function runAutomationCycle() {
 
   if (state.provider?.configured) {
     elements.automationStatus.textContent = "Analyzing fit and preparing a job-specific résumé…";
-    await prepareJobMaterials();
-    if (
-      state.automationPolicy === "always_allow" &&
-      state.fitAnalysis &&
-      state.fitAnalysis.score < state.minimumFit
-    ) {
-      elements.automationStatus.textContent =
-        `Skipped ${state.job.title || "job"}: ${state.fitAnalysis.score}% is below your ${state.minimumFit}% minimum.`;
-      await advanceAutomationQueue({ submitted: false });
-      return;
+    try {
+      await prepareJobMaterials();
+      if (
+        state.automationPolicy === "always_allow" &&
+        state.fitAnalysis &&
+        state.fitAnalysis.score < state.minimumFit
+      ) {
+        elements.automationStatus.textContent =
+          `Skipped ${state.job.title || "job"}: ${state.fitAnalysis.score}% is below your ${state.minimumFit}% minimum.`;
+        await advanceAutomationQueue({ submitted: false });
+        return;
+      }
+    } catch (error) {
+      elements.automationStatus.textContent = `${error.message} Continuing with free deterministic autofill.`;
     }
   }
   if (!state.automationRunning) return;
@@ -1178,20 +1399,70 @@ async function runAutomationCycle() {
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
+  await runCurrentApplicationPage();
+}
+
+async function runCurrentApplicationPage() {
+  const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
+  if (entry.error && !entry.already_form) {
+    elements.automationStatus.textContent = `${entry.error} Checking the current page for a form…`;
+  } else if (entry.clicked) {
+    elements.automationStatus.textContent = "Opening the employer application form…";
+    await waitForTabReady(entry.tab_id);
+  }
+
+  const login = await chrome.runtime.sendMessage({
+    action: "assistLogin",
+    allowClick: state.loginAssistance,
+  });
+  if (login.login_page && !login.clicked) {
+    throw new Error(login.error || "Login requires your attention.");
+  }
+  if (login.clicked) {
+    elements.automationStatus.textContent = "Browser-assisted login submitted; waiting for the application…";
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
+
   elements.automationStatus.textContent = "Scanning and filling known fields from your profile…";
+  state.questionnaireActive = true;
+  state.questionnaireTotal = 0;
+  state.skippedFieldIds = new Set();
   let plan = await scanForm({ throwOnError: true });
-  await resolveNarrativeUnknowns();
+  if (plan.actions.length) {
+    await fillForm({ throwOnError: true });
+    plan = await scanForm({ throwOnError: true });
+  }
+  try {
+    await resolveNarrativeUnknowns();
+  } catch (error) {
+    elements.formStatus.textContent = `${error.message} You can answer the open questions manually.`;
+  }
   plan = state.formPlan;
-  const unknown = unresolvedRequiredUnknowns();
+  const unknown = unresolvedUnknowns();
   const blocked = plan.blocked_fields.filter((field) => field.required);
   if (unknown.length) {
-    throw new Error(`Answer required: ${unknown[0].label}`);
+    elements.automationStatus.textContent =
+      `Answer ${unknown.length} application question${unknown.length === 1 ? "" : "s"}; ApplyPilot will then continue automatically.`;
+    return;
   }
   if (blocked.length) {
     throw new Error(`User action required: ${blocked[0].label}`);
   }
   if (plan.actions.length) await fillForm({ throwOnError: true });
 
+  await completeAutomationApplication();
+}
+
+async function completeAutomationApplication() {
+  const requiredUnknown = unresolvedRequiredUnknowns();
+  const blocked = (state.formPlan?.blocked_fields || []).filter((field) => field.required);
+  if (requiredUnknown.length || blocked.length) {
+    setAutomationRunning(
+      false,
+      `Paused: ${requiredUnknown[0]?.label || blocked[0]?.label} requires your attention.`,
+    );
+    return;
+  }
   if (state.artifact && state.formScan.fields.some((field) => field.field_type === "file")) {
     elements.automationStatus.textContent = "Selecting the job-specific tailored résumé…";
     const attached = await maybeAttachTailoredResume();
@@ -1488,10 +1759,23 @@ elements.analyzeFit.addEventListener("click", analyzeJobFit);
 elements.downloadDocx.addEventListener("click", () => openArtifact("docx"));
 elements.downloadPdf.addEventListener("click", () => openArtifact("pdf"));
 elements.attachResume.addEventListener("click", attachTailoredResume);
-elements.scanForm.addEventListener("click", scanForm);
+elements.scanForm.addEventListener("click", startGuidedAnalysis);
 elements.fillForm.addEventListener("click", fillForm);
+elements.includeOptionalQuestions.addEventListener("change", async () => {
+  if (!state.formPlan) return;
+  state.questionnaireActive = true;
+  state.questionnaireTotal = 0;
+  state.skippedFieldIds = new Set();
+  try {
+    await replanForm();
+    if (!unresolvedUnknowns().length) await continueQuestionnaire();
+  } catch (error) {
+    elements.formStatus.textContent = error.message;
+  }
+});
 elements.unknownAnswerForm.addEventListener("submit", saveUnknownAnswer);
 elements.draftUnknown.addEventListener("click", draftUnknownAnswer);
+elements.skipUnknown.addEventListener("click", skipUnknownQuestion);
 elements.approveSubmit.addEventListener("click", approveAndSubmit);
 elements.chatForm.addEventListener("submit", sendChat);
 elements.chatImages.addEventListener("change", addChatImages);
@@ -1509,6 +1793,7 @@ elements.automationPolicy.addEventListener("change", changeAutomationPolicy);
 elements.resumePolicy.addEventListener("change", changeResumePolicy);
 elements.minimumFit.addEventListener("change", changeMinimumFit);
 elements.continueNext.addEventListener("change", changeContinueNext);
+elements.loginAssistance.addEventListener("change", changeLoginAssistance);
 elements.startAutomation.addEventListener("click", startAutomation);
 elements.stopAutomation.addEventListener("click", stopAutomation);
 elements.toggleKey.addEventListener("click", () => {
@@ -1517,8 +1802,10 @@ elements.toggleKey.addEventListener("click", () => {
   elements.toggleKey.textContent = showing ? "Show" : "Hide";
 });
 elements.refresh.addEventListener("click", loadState);
+elements.retryConnection.addEventListener("click", loadState);
 elements.settings.addEventListener("click", () => {
-  elements.providerCard.scrollIntoView({ behavior: "smooth", block: "start" });
+  elements.advancedSettings.open = true;
+  elements.advancedSettings.scrollIntoView({ behavior: "smooth", block: "start" });
   elements.providerSelect.focus();
 });
 loadState();

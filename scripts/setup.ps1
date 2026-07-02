@@ -13,7 +13,9 @@ if (-not (Test-Path -LiteralPath ".env")) {
     Copy-Item -LiteralPath ".env.example" -Destination ".env"
 }
 
+& ".\scripts\enable-autostart.ps1"
+
 Write-Host "ApplyPilot setup complete." -ForegroundColor Green
-Write-Host "1. Run: .\scripts\start.ps1"
-Write-Host "2. Load the extension folder as an unpacked Chrome/Edge extension."
-Write-Host "3. Connect Gemini, OpenAI, or Anthropic securely inside the side panel."
+Write-Host "1. Load the extension folder as an unpacked Chrome/Edge extension."
+Write-Host "2. Open a job page and click ApplyPilot. The companion starts automatically."
+Write-Host "3. Select local Ollama, or connect Gemini, OpenAI, or Anthropic inside Settings."

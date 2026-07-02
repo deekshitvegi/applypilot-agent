@@ -18,6 +18,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     openQueuedJob: () => openQueuedJob(message.tabId, message.url),
     openEasyApply: openLinkedInEasyApply,
     highlightField: () => highlightActiveField(message.fieldId),
+    saveJobContext: () => saveJobContext(message.context),
+    loadJobContext,
+    openApplicationForm: openActiveApplicationForm,
+    assistLogin: () => assistActiveLogin(message.allowClick === true),
   };
   const action = actions[message.action];
   if (!action) return false;
@@ -157,6 +161,30 @@ async function openLinkedInEasyApply() {
   return runInTab(tab.id, clickLinkedInEasyApply);
 }
 
+async function saveJobContext(context) {
+  await chrome.storage.session.set({ applypilotJobContext: context || null });
+  return { saved: true };
+}
+
+async function loadJobContext() {
+  const stored = await chrome.storage.session.get({ applypilotJobContext: null });
+  return stored.applypilotJobContext || {};
+}
+
+async function openActiveApplicationForm() {
+  const tab = await getActiveHttpTab();
+  const result = await runInTab(tab.id, clickApplicationEntry);
+  if (!result.clicked) return { ...result, tab_id: tab.id };
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return { ...result, tab_id: active?.id || tab.id, url: active?.url || tab.url };
+}
+
+async function assistActiveLogin(allowClick) {
+  const tab = await getActiveHttpTab();
+  return runInTab(tab.id, clickReadyLogin, [allowClick]);
+}
+
 async function highlightActiveField(fieldId) {
   const tab = await getActiveHttpTab();
   return runInTab(tab.id, highlightFormField, [fieldId]);
@@ -171,23 +199,42 @@ function detectAdapterFromUrl(url) {
   return "generic";
 }
 
-function extractFormFields() {
+async function extractFormFields() {
   const host = location.hostname.toLowerCase();
-  const root = host.includes("linkedin.com")
-    ? document.querySelector(".jobs-easy-apply-modal, [role='dialog']") || document
-    : host.includes("greenhouse.io")
-      ? document.querySelector("#application_form, main") || document
-      : host.includes("lever.co")
-        ? document.querySelector(".application-form, main") || document
-        : host.includes("myworkdayjobs.com")
-          ? document.querySelector("[data-automation-id='applicationPage'], main") || document
-          : document;
-  const controls = [...root.querySelectorAll("input, textarea, select, button[role='combobox'], button[aria-haspopup='listbox']")].filter((control) => {
+  let root;
+  if (host.includes("linkedin.com")) {
+    root = document.querySelector(".jobs-easy-apply-modal, [role='dialog']") || document;
+  } else if (host.includes("greenhouse.io")) {
+    root = document.querySelector("#application_form, main") || document;
+  } else if (host.includes("lever.co")) {
+    root = document.querySelector(".application-form, main") || document;
+  } else if (host.includes("myworkdayjobs.com")) {
+    root = document.querySelector("[data-automation-id='applicationPage'], main") || document;
+  } else {
+    const formCandidates = [...document.querySelectorAll("form")]
+      .map((form) => ({
+        form,
+        count: form.querySelectorAll("input, textarea, select, [role='combobox']").length,
+      }))
+      .sort((left, right) => right.count - left.count);
+    root = formCandidates[0]?.count >= 2
+      ? formCandidates[0].form
+      : document.querySelector("main, [role='main']") || document;
+  }
+  const controls = [...root.querySelectorAll(
+    "input, textarea, select, [role='combobox'], button[aria-haspopup='listbox'], input[aria-haspopup='listbox']",
+  )].filter((control) => {
     const type = (control.type || "").toLowerCase();
     const customCombobox = control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox";
     const style = getComputedStyle(control);
-    const visible = type === "file" || (style.display !== "none" && style.visibility !== "hidden");
-    return visible && !control.disabled && (customCombobox || !["hidden", "submit", "button", "reset", "image"].includes(type));
+    const rect = control.getBoundingClientRect();
+    const visible = type === "file" || (
+      style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
+    );
+    const popupChild = control.closest("[role='listbox'], [role='menu'], [data-radix-popper-content-wrapper]");
+    return visible && !popupChild && !control.disabled && (
+      customCombobox || !["hidden", "submit", "button", "reset", "image"].includes(type)
+    );
   });
 
   const cleanText = (value) => String(value || "").replace(/\s+/g, " ").replace(/\s*\*+\s*$/, "").trim();
@@ -221,7 +268,35 @@ function extractFormFields() {
     return /[a-z]{3}/i.test(value) ? value : "";
   };
 
-  return controls.map((control, index) => {
+  const collectCustomOptions = (control) => {
+    const custom = control.tagName !== "SELECT" && (
+      control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox"
+    );
+    if (!custom) return [];
+    const ownedIds = `${control.getAttribute("aria-controls") || ""} ${control.getAttribute("aria-owns") || ""}`
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    const popups = ownedIds.map((id) => document.getElementById(id)).filter(Boolean);
+    if (!popups.length) return [];
+    const candidates = popups.flatMap((popup) => [...popup.querySelectorAll(
+      "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item']",
+    )]);
+    const seen = new Set();
+    return candidates.flatMap((candidate) => {
+      const label = cleanText(candidate.textContent);
+      const value = cleanText(
+        candidate.getAttribute("data-value") || candidate.getAttribute("value") || label,
+      );
+      const key = `${value.toLowerCase()}::${label.toLowerCase()}`;
+      if (!label || label.length > 240 || seen.has(key)) return [];
+      seen.add(key);
+      return [{ value, label }];
+    });
+  };
+
+  const fields = [];
+  for (const [index, control] of controls.entries()) {
     const applypilotId = `ap-${index}`;
     control.dataset.applypilotId = applypilotId;
     const explicitLabel = control.id
@@ -230,45 +305,69 @@ function extractFormFields() {
     const nativeLabels = [...(control.labels || [])].map((label) => label.textContent).join(" ");
     const wrappingLabel = control.closest("label")?.textContent || "";
     const legend = control.closest("fieldset")?.querySelector("legend")?.textContent || "";
-    const label = [
+    const labelParts = [
       legend,
       labelledByText(control),
       explicitLabel,
       nativeLabels,
       wrappingLabel,
       nearbyLabel(control),
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    const fallbackLabel =
-      control.getAttribute("aria-label") ||
-      control.getAttribute("placeholder") ||
-      readableName(control);
+    ].map(cleanText).filter((part, partIndex, parts) => (
+      part && part.length <= 240 && parts.findIndex((value) => value.toLowerCase() === part.toLowerCase()) === partIndex
+    ));
     const tag = control.tagName.toLowerCase();
     let fieldType = tag === "textarea" ? "textarea" : tag === "select" || control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox" ? "select" : control.type || "text";
     if (!["text", "email", "tel", "url", "number", "textarea", "select", "checkbox", "radio", "file", "password"].includes(fieldType)) {
       fieldType = "other";
     }
-    const options = tag === "select"
+    const fallbackLabel =
+      control.getAttribute("aria-label") ||
+      control.getAttribute("placeholder") ||
+      readableName(control);
+    const label = cleanText(
+      (fieldType === "radio" && legend ? legend : "") ||
+      labelledByText(control) || explicitLabel || nativeLabels ||
+      control.getAttribute("aria-label") || wrappingLabel || nearbyLabel(control) || fallbackLabel,
+    );
+    let options = tag === "select"
       ? [...control.options]
           .filter((option) => option.value || option.textContent.trim())
           .map((option) => ({ value: option.value, label: option.textContent.trim() }))
       : [];
+    if (fieldType === "select" && tag !== "select") {
+      options = collectCustomOptions(control);
+    } else if (fieldType === "radio" && control.name) {
+      options = [...root.querySelectorAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`)]
+        .map((radio) => ({
+          value: radio.value || cleanText(radio.labels?.[0]?.textContent),
+          label: cleanText(radio.labels?.[0]?.textContent || radio.value),
+        }))
+        .filter((option) => option.value || option.label);
+    }
 
-    return {
+    const displayedValue = cleanText(
+      control.getAttribute("aria-valuetext") || control.getAttribute("data-value") ||
+      (fieldType === "select" && tag !== "select" ? control.textContent : ""),
+    );
+    const emptySelectValues = new Set(["select", "select...", "choose", "choose...", "please select"]);
+    const customValue = displayedValue.length <= 160 && !emptySelectValues.has(displayedValue.toLowerCase())
+      ? displayedValue
+      : "";
+    const requiredHint = labelParts.some((part) => /\*\s*$/.test(cleanText(part).replace(/\s+/g, " ")) || /\*/.test(part));
+
+    fields.push({
       id: applypilotId,
       label: cleanText(label || fallbackLabel || `Unlabeled ${fieldType} field`),
       name: control.name || "",
       field_type: fieldType,
-      required: control.required || control.getAttribute("aria-required") === "true",
+      required: control.required || control.getAttribute("aria-required") === "true" || requiredHint,
       value: fieldType === "checkbox" || fieldType === "radio"
         ? (control.checked ? control.value || "true" : "")
-        : control.value || "",
+        : control.value || customValue,
       options,
-    };
-  });
+    });
+  }
+  return fields;
 }
 
 async function applyFormFillPlan(actions) {
@@ -313,10 +412,25 @@ async function applyFormFillPlan(actions) {
         let option = null;
         for (let attempt = 0; attempt < 10 && !option; attempt += 1) {
           await new Promise((resolve) => setTimeout(resolve, 100));
-          const popup = document.getElementById(control.getAttribute("aria-controls") || "") || document;
-          const options = [...popup.querySelectorAll(
-            "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], li",
-          )].filter((candidate) => {
+          const ownedIds = `${control.getAttribute("aria-controls") || ""} ${control.getAttribute("aria-owns") || ""}`
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean);
+          let popupRoots = ownedIds.map((id) => document.getElementById(id)).filter(Boolean);
+          if (!popupRoots.length) {
+            popupRoots = [...document.querySelectorAll("[role='listbox']")].filter((candidate) => {
+              const style = getComputedStyle(candidate);
+              const rect = candidate.getBoundingClientRect();
+              return style.display !== "none" && style.visibility !== "hidden" && rect.height > 0;
+            });
+          }
+          const selector = popupRoots.length
+            ? "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], li"
+            : "[role='option']";
+          const options = (popupRoots.length
+            ? popupRoots.flatMap((popup) => [...popup.querySelectorAll(selector)])
+            : [...document.querySelectorAll(selector)]
+          ).filter((candidate) => {
             const style = getComputedStyle(candidate);
             const rect = candidate.getBoundingClientRect();
             return style.display !== "none" && style.visibility !== "hidden" && rect.height > 0;
@@ -327,6 +441,7 @@ async function applyFormFillPlan(actions) {
               .some((value) => {
                 const optionValue = normalize(value);
                 if (optionValue === target) return true;
+                if (/^\d{1,3}$/.test(target) && optionValue.split(" ").includes(target)) return true;
                 if (target.length < 3 || optionValue.length < 3) return false;
                 return optionValue.startsWith(`${target} `) || target.startsWith(`${optionValue} `);
               }),
@@ -451,6 +566,96 @@ function clickLinkedInEasyApply() {
   }
   buttons[0].click();
   return { opened: true };
+}
+
+function clickApplicationEntry() {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+  const formControls = [...document.querySelectorAll("input, textarea, select")].filter((control) => {
+    const type = (control.type || "").toLowerCase();
+    return visible(control) && !["hidden", "submit", "button"].includes(type);
+  });
+  const labels = ["apply now", "apply for this job", "apply for this position", "start application", "continue application"];
+  const candidates = [...document.querySelectorAll("a, button")].filter((element) => {
+    if (!visible(element) || element.disabled) return false;
+    const label = (element.textContent || element.getAttribute("aria-label") || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    return labels.includes(label);
+  });
+  if (candidates.length === 1) {
+    if (formControls.length >= 3 && candidates[0].closest("form")) {
+      return { clicked: false, already_form: true };
+    }
+    candidates[0].click();
+    return { clicked: true, label: (candidates[0].textContent || "Apply").trim() };
+  }
+  if (candidates.length > 1) {
+    return {
+      clicked: false,
+      error: "Multiple Apply buttons were found; choose the correct one.",
+    };
+  }
+  if (formControls.length >= 3) return { clicked: false, already_form: true };
+  return { clicked: false, error: "No unique Apply button was found on this page." };
+}
+
+function clickReadyLogin(allowClick) {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+  const challenge = [...document.querySelectorAll(
+    "iframe[src*='captcha'], iframe[src*='recaptcha'], iframe[src*='hcaptcha'], input[autocomplete='one-time-code']",
+  )].some(visible);
+  if (challenge) {
+    return {
+      clicked: false,
+      login_page: true,
+      error: "CAPTCHA, MFA, or a verification code requires you.",
+    };
+  }
+  const password = [...document.querySelectorAll("input[type='password']")].find(visible);
+  const username = [...document.querySelectorAll(
+    "input[type='email'], input[autocomplete='username'], input[name*='email' i], input[name*='user' i]",
+  )].find(visible);
+  const loginPage = Boolean(
+    password || (username && /login|log-in|sign-in|signin|auth/i.test(location.pathname)),
+  );
+  if (!loginPage) return { clicked: false, login_page: false };
+  if ((password && !password.value) || (username && !username.value)) {
+    return {
+      clicked: false,
+      login_page: true,
+      error: "Use your browser password manager to fill the login fields; ApplyPilot never captures or stores them.",
+    };
+  }
+  if (!allowClick) {
+    return {
+      clicked: false,
+      login_page: true,
+      error: "Login is ready. Enable browser-assisted login or sign in manually.",
+    };
+  }
+  const labels = ["sign in", "log in", "login", "continue", "next"];
+  const buttons = [...document.querySelectorAll("button, input[type='submit']")].filter((button) => {
+    if (!visible(button) || button.disabled) return false;
+    const label = (button.textContent || button.value || button.getAttribute("aria-label") || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    return labels.includes(label);
+  });
+  if (buttons.length !== 1) {
+    return { clicked: false, login_page: true, error: "A unique login button was not found." };
+  }
+  buttons[0].click();
+  return { clicked: true, login_page: true };
 }
 
 function highlightFormField(fieldId) {

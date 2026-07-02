@@ -26,7 +26,7 @@ class Settings:
     )
     demo_mode: bool = env_flag("APPLYPILOT_DEMO_MODE")
     ai_provider: str = os.getenv("APPLYPILOT_AI_PROVIDER", "gemini")
-    ai_model: str = os.getenv("APPLYPILOT_AI_MODEL", "gemini-2.5-flash")
+    ai_model: str = os.getenv("APPLYPILOT_AI_MODEL", "")
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")

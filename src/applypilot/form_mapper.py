@@ -68,12 +68,12 @@ def plan_form_fill(
                     confidence=confidence,
                 )
             )
-        elif field.required and not field.value:
+        elif not field.value and field.field_type != "file":
             unknown.append(
                 UnknownField(
                     field_id=field.id,
                     label=field.label,
-                    required=True,
+                    required=field.required,
                     reason="No verified reusable answer is available.",
                 )
             )
@@ -91,6 +91,12 @@ def map_profile_field(
     label: str, field: FormField, profile: CandidateProfile
 ) -> tuple[str, str, float] | None:
     first_name, last_name = split_name(profile.legal_name)
+    if any(
+        pattern_matches(label, pattern)
+        for pattern in ("phone country code", "mobile country code", "country calling code")
+    ):
+        country_code = phone_country_code(profile.phone, profile.country)
+        return (country_code, "profile.phone", 0.98) if country_code else None
     mappings: list[tuple[tuple[str, ...], str | bool | None, str]] = [
         (("first name", "given name"), first_name, "profile.legal_name"),
         (("last name", "family name", "surname"), last_name, "profile.legal_name"),
@@ -125,7 +131,7 @@ def map_profile_field(
     ]
 
     for patterns, raw_value, source in mappings:
-        if any(pattern in label for pattern in patterns) and raw_value not in (None, ""):
+        if any(pattern_matches(label, pattern) for pattern in patterns) and raw_value not in (None, ""):
             value = boolean_value(raw_value, field)
             return value, source, 0.98
     return None
@@ -161,6 +167,8 @@ def coerce_option(value: str, field: FormField) -> str:
             return option.value
     for option in field.options:
         option_text = normalize(f"{option.value} {option.label}")
+        if normalized_value.isdigit() and normalized_value in option_text.split():
+            return option.value
         if normalized_value in option_text or option_text in normalized_value:
             return option.value
     return value
@@ -210,5 +218,26 @@ def split_name(name: str) -> tuple[str, str]:
     return parts[0], " ".join(parts[1:])
 
 
+def phone_country_code(phone: str, country: str) -> str:
+    compact = re.sub(r"[^0-9+]", "", phone)
+    match = re.match(r"^\+(\d{1,3})", compact)
+    if match:
+        digits = match.group(1)
+        # NANP numbers use +1; taking three digits would consume the area code.
+        if digits.startswith("1"):
+            return "+1"
+        return f"+{digits}"
+    normalized_country = normalize(country)
+    if normalized_country in {"united states", "usa", "us", "canada"}:
+        return "+1"
+    return ""
+
+
 def normalize(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def pattern_matches(label: str, pattern: str) -> bool:
+    normalized_pattern = normalize(pattern)
+    expression = r"\b" + r"\s+".join(map(re.escape, normalized_pattern.split())) + r"\b"
+    return re.search(expression, label) is not None
