@@ -15,7 +15,10 @@ panel.
 The normal side-panel experience is intentionally conversational: start the
 current application, follow live progress in chat, and answer any genuinely new
 question directly in the chat composer. ApplyPilot stores that verified answer
-locally, fills it, and reuses it on matching future applications. Provider
+locally, fills it, and reuses it on matching future applications. Questions and
+help requests remain ordinary chat; `/answer ...` forces an ambiguous reply to
+be treated as an answer, and `change my last answer to ...` corrects a mistake.
+Provider
 choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.
 

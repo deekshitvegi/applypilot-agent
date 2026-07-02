@@ -130,6 +130,7 @@ const state = {
   questionnaireTotal: 0,
   skippedFieldIds: new Set(),
   lastActivity: "",
+  lastSavedAnswer: null,
 };
 
 const SITE_ORIGINS = ["https://*/*", "http://*/*"];
@@ -1088,7 +1089,7 @@ async function replanForm() {
     elements.unknownAnswerForm.dataset.fieldType = scanned?.field_type || "text";
     if (elements.unknownAnswerForm.dataset.announcedFieldId !== firstUnknown.field_id) {
       appendMessage(
-        `I need one answer before I can continue:\n**${firstUnknown.label}**`,
+        `I need one answer before I can continue:\n**${firstUnknown.label}**\n\nReply with the answer, or ask me a question if you need help.`,
         "agent-message",
       );
       elements.unknownAnswerForm.dataset.announcedFieldId = firstUnknown.field_id;
@@ -1413,8 +1414,12 @@ async function persistUnknownAnswer(answer, options = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, question, answer, field_type: fieldType, sensitive: false }),
   });
+  state.lastSavedAnswer = { id, question, answer, fieldType };
   if (appendUser) appendMessage(answer, "user-message");
-  appendMessage("Saved. I’ll reuse that answer when the same question appears again.", "agent-message");
+  appendMessage(
+    `Saved “${answer}” for “${question}”. I’ll reuse it next time. To correct it, say “change my last answer to …”.`,
+    "agent-message",
+  );
   state.answers = await api("/api/answers");
   await replanForm();
   await continueQuestionnaire();
@@ -1991,16 +1996,7 @@ async function sendChat(event) {
 
   try {
     if (await handlePageActionCommand(message)) return;
-    if (
-      message
-      && !images.length
-      && state.questionnaireActive
-      && !elements.unknownAnswerForm.classList.contains("hidden")
-      && elements.unknownAnswerForm.dataset.fieldId
-    ) {
-      await persistUnknownAnswer(message, { appendUser: false });
-      return;
-    }
+    if (message && !images.length && await handleAnswerConversation(message)) return;
     if (!state.provider?.configured) {
       appendMessage(
         "AI chat is off because no provider key is saved. Common-field scanning and filling still work without AI.",
@@ -2046,6 +2042,79 @@ async function sendChat(event) {
   } finally {
     updateChatAvailability();
   }
+}
+
+function pendingQuestionVisible() {
+  return Boolean(
+    state.questionnaireActive
+    && !elements.unknownAnswerForm.classList.contains("hidden")
+    && elements.unknownAnswerForm.dataset.fieldId,
+  );
+}
+
+function looksLikeChatQuestion(message) {
+  const normalized = message.trim().toLowerCase();
+  return normalized.endsWith("?")
+    || /^(what|why|how|where|when|who|which)\b/.test(normalized)
+    || /^(can|could|would|do|does|did|is|are|should|will|may)\b/.test(normalized)
+    || /^(explain|help me|tell me)\b/.test(normalized)
+    || /\b(i do not understand|i don't understand|i (?:want|need) to (?:know|ask|understand)|not sure what|what do you mean|does that mean)\b/.test(normalized);
+}
+
+function correctionValue(message) {
+  const match = message.trim().match(
+    /^(?:please\s+)?(?:change|correct|update|replace)\s+(?:my\s+)?(?:last\s+)?answer(?:\s+(?:to|as)|\s*:\s*)\s*(.+)$/i,
+  );
+  return match?.[1]?.trim() || "";
+}
+
+async function correctLastSavedAnswer(answer) {
+  const saved = state.lastSavedAnswer;
+  if (!saved) {
+    appendMessage(
+      "I don’t have a just-saved answer to correct in this session. Open Settings → Profile & résumé → Saved answers to edit an older answer.",
+      "agent-message",
+    );
+    return;
+  }
+  await api(`/api/answers/${saved.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: saved.id,
+      question: saved.question,
+      answer,
+      field_type: saved.fieldType,
+      sensitive: false,
+    }),
+  });
+  state.lastSavedAnswer = { ...saved, answer };
+  state.answers = await api("/api/answers");
+  appendMessage(
+    `Corrected. “${saved.question}” is now saved as “${answer}”.`,
+    "agent-message",
+  );
+  if (state.formScan) {
+    await replanForm();
+    if (state.formPlan?.actions.length) await fillForm({ throwOnError: true });
+  }
+}
+
+async function handleAnswerConversation(message) {
+  const correction = correctionValue(message);
+  if (correction) {
+    await correctLastSavedAnswer(correction);
+    return true;
+  }
+  if (!pendingQuestionVisible()) return false;
+  const explicit = message.trim().match(/^(?:\/answer|answer\s*:|my answer is)\s*(.+)$/i);
+  if (explicit?.[1]) {
+    await persistUnknownAnswer(explicit[1].trim(), { appendUser: false });
+    return true;
+  }
+  if (looksLikeChatQuestion(message)) return false;
+  await persistUnknownAnswer(message, { appendUser: false });
+  return true;
 }
 
 async function handlePageActionCommand(message) {
