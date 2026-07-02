@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.3 - 2026-07-01
+
+- Fixed LinkedIn's safety reminder when its **Continue applying** control is
+  rendered outside a standard dialog container.
+- Opened the continuation destination directly through the extension when the
+  reminder exposes a link, avoiding delayed-click popup blocking.
+- Kept a safe click-handler fallback for reminder controls without a link.
+
 ## 0.5.2 - 2026-07-01
 
 - Added deterministic handling for LinkedIn's job-search safety reminder so

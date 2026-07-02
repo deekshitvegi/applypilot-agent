@@ -177,20 +177,28 @@ async function openExternalApply() {
   const initialSurface = await runInTab(tab.id, detectApplicationSurface);
   const result = await runInTab(tab.id, clickExternalApplyControl);
   if (!result.clicked) return { opened: false, ...result };
+  let continuationTabId = null;
 
   for (let attempt = 0; attempt < 60; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 250));
     const tabs = await chrome.tabs.query({ currentWindow: true });
-    const created = tabs.find(
-      (candidate) => !before.has(candidate.id) && /^https?:/i.test(candidate.url || ""),
-    );
+    const created = tabs.find((candidate) => {
+      if (before.has(candidate.id) || !/^https?:/i.test(candidate.url || "")) return false;
+      if (!/(^|\.)linkedin\.com$/i.test(source.hostname)) return true;
+      return !/(^|\.)linkedin\.com$/i.test(new URL(candidate.url).hostname);
+    });
     const original = tabs.find((candidate) => candidate.id === tab.id);
     if (
       original
       && /(^|\.)linkedin\.com$/i.test(source.hostname)
       && /(^|\.)linkedin\.com$/i.test(new URL(original.url || tab.url).hostname)
     ) {
-      await runInTab(tab.id, clickLinkedInContinueApplying).catch(() => ({ clicked: false }));
+      const continuation = await runInTab(tab.id, resolveLinkedInContinueApplying)
+        .catch(() => ({ found: false }));
+      if (continuation.href && !continuationTabId) {
+        const continued = await chrome.tabs.create({ url: continuation.href, active: true });
+        continuationTabId = continued.id;
+      }
     }
     const originalMoved = original && /^https?:/i.test(original.url || "")
       && original.url.split("#")[0] !== tab.url.split("#")[0];
@@ -773,26 +781,39 @@ function detectApplicationSurface() {
   return { ready };
 }
 
-function clickLinkedInContinueApplying() {
+function resolveLinkedInContinueApplying() {
   const visible = (element) => {
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
-  const dialogs = [...document.querySelectorAll(".artdeco-modal, [role='dialog']")].filter(
-    (dialog) => visible(dialog) && /job search safety reminder/i.test(dialog.textContent || ""),
-  );
-  if (dialogs.length !== 1) return { clicked: false };
-  const buttons = [...dialogs[0].querySelectorAll("button, a, [role='button']")].filter((button) => {
+  if (!/job search safety reminder/i.test(document.body?.innerText || "")) {
+    return { found: false };
+  }
+  const buttons = [...document.querySelectorAll("button, a, [role='button']")].filter((button) => {
     const label = String(button.textContent || button.getAttribute("aria-label") || "")
       .replace(/\s+/g, " ")
       .trim()
       .toLowerCase();
-    return visible(button) && label === "continue applying";
+    return visible(button) && label.startsWith("continue applying");
   });
-  if (buttons.length !== 1) return { clicked: false };
-  buttons[0].click();
-  return { clicked: true };
+  if (buttons.length !== 1) return { found: false };
+  const control = buttons[0];
+  const anchor = control.matches("a[href]") ? control : control.closest("a[href]");
+  const rawUrl = anchor?.href
+    || control.getAttribute("data-redirect-url")
+    || control.getAttribute("data-url")
+    || "";
+  if (rawUrl) {
+    try {
+      const href = new URL(rawUrl, location.href);
+      if (href.protocol === "https:") return { found: true, href: href.href, clicked: false };
+    } catch {
+      // Fall back to the control's click handler.
+    }
+  }
+  control.click();
+  return { found: true, href: "", clicked: true };
 }
 
 function clickApplicationEntry() {
