@@ -1825,11 +1825,6 @@ async function runCurrentApplicationPage() {
   if (findResumeFileField() || findCoverLetterField()) {
     plan = await scanForm({ throwOnError: true });
   }
-  try {
-    await resolveNarrativeUnknowns();
-  } catch (error) {
-    elements.formStatus.textContent = `${error.message} You can answer the open questions manually.`;
-  }
   plan = state.formPlan;
   const unknown = unresolvedUnknowns();
   const blocked = plan.blocked_fields.filter((field) => field.required);
@@ -2198,6 +2193,19 @@ async function handlePageActionCommand(message) {
     );
     return true;
   }
+  if (/\b(?:ask|show|give)\s+me\b.*\b(?:remaining\s+)?questions?\b/i.test(message)) {
+    state.questionnaireActive = true;
+    state.questionnaireTotal = 0;
+    state.skippedFieldIds = new Set();
+    await startGuidedAnalysis();
+    appendMessage(
+      unresolvedUnknowns().length
+        ? "I’ll ask each unanswered application question here, one at a time."
+        : "I rescanned the page and found no unanswered application questions.",
+      "agent-message",
+    );
+    return true;
+  }
   const remembered = message.match(
     /^(?:remember|set|use)\s+(?:that\s+)?(.+?)(?:\s+is|\s+to|:)\s+(.+)$/i,
   );
@@ -2242,12 +2250,13 @@ async function handlePageActionCommand(message) {
     return true;
   }
   const explicitFillRequest = /(fill|complete|apply).*(everything|fields|form|page)/i.test(message)
-    || /^(?:then\s+)?(?:please\s+)?(?:fill|complete)\s+(?:the\s+)?(?:rest|remaining fields?)\b/i.test(message)
+    || /^(?:then\s+)?(?:please\s+)?(?:fill|complete)\s+(?:the\s+)?(?:rest|next|remaining fields?)\b/i.test(message)
     || /^(?:then\s+)?(?:please\s+)?(?:fill|complete|apply)\s+(?:it|that|this|those|that\s+part|this\s+part|the\s+field|the\s+fields)\b/i.test(message);
   if (!explicitFillRequest) return false;
+  state.questionnaireActive = true;
+  state.questionnaireTotal = 0;
+  state.skippedFieldIds = new Set();
   let plan = await scanForm({ throwOnError: true });
-  await resolveNarrativeUnknowns();
-  plan = state.formPlan;
   let result = { filled: 0, errors: [] };
   if (plan.actions.length) result = await fillForm({ throwOnError: true });
   const unknown = unresolvedRequiredUnknowns();

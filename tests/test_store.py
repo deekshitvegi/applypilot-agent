@@ -56,6 +56,17 @@ def test_answer_and_resume_round_trip(tmp_path: Path) -> None:
     assert store.list_answers() == []
 
 
+def test_saving_same_question_deduplicates_old_reusable_answers(tmp_path: Path) -> None:
+    store = ProfileStore(tmp_path / "profile.sqlite3")
+    first = ReusableAnswer(question="Linux experience?", answer="Intermediate")
+    corrected = ReusableAnswer(question="Linux experience?", answer="Experienced")
+
+    store.save_answer(first)
+    store.save_answer(corrected)
+
+    assert store.list_answers() == [corrected]
+
+
 def test_cover_letter_file_is_encrypted_and_round_trips(tmp_path: Path) -> None:
     store = ProfileStore(tmp_path / "profile.sqlite3")
     document = CoverLetterDocument(

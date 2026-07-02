@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -194,8 +195,21 @@ class ProfileStore:
 
     def save_answer(self, answer: ReusableAnswer) -> ReusableAnswer:
         self.initialize()
+        question_key = re.sub(r"[^a-z0-9]+", " ", answer.question.lower()).strip()
+        duplicate_ids = [
+            existing.id
+            for existing in self.list_answers()
+            if existing.id != answer.id
+            and re.sub(r"[^a-z0-9]+", " ", existing.question.lower()).strip()
+            == question_key
+        ]
         payload = self.cipher.encrypt(answer.model_dump_json())
         with self._connect() as connection:
+            if duplicate_ids:
+                connection.executemany(
+                    "DELETE FROM reusable_answers WHERE id = ?",
+                    [(answer_id,) for answer_id in duplicate_ids],
+                )
             connection.execute(
                 """
                 INSERT INTO reusable_answers (id, payload, updated_at)

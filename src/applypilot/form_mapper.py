@@ -189,6 +189,8 @@ def map_reusable_answer(
     best: tuple[float, ReusableAnswer] | None = None
     for answer in answers:
         candidate = normalize(answer.question)
+        if candidate in {"select", "choose", "field", "question", "answer"} or len(candidate) < 6:
+            continue
         score = SequenceMatcher(None, comparison_label, candidate).ratio()
         if candidate in comparison_label or comparison_label in candidate:
             score = max(score, 0.95)

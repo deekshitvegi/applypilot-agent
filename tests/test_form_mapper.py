@@ -55,6 +55,25 @@ def test_uses_similar_reusable_answer() -> None:
     assert plan.actions[0].source == f"answer.{answer.id}"
 
 
+def test_ignores_generic_saved_select_answer_for_specific_radio_question() -> None:
+    field = FormField(
+        id="linux",
+        label="Regarding Linux, select the option that best fits your experience",
+        field_type="radio",
+        required=True,
+        options=[
+            FormOption(value="new", label="I am new to Linux"),
+            FormOption(value="intermediate", label="Intermediate"),
+        ],
+    )
+    generic = ReusableAnswer(question="Select", answer="No")
+
+    plan = plan_form_fill("https://example.test", [field], CandidateProfile(), [generic])
+
+    assert not plan.actions
+    assert plan.unknown_fields[0].field_id == "linux"
+
+
 def test_maps_voluntary_demographics_without_an_ai_provider() -> None:
     profile = CandidateProfile(
         race_ethnicity="Prefer not to answer",
