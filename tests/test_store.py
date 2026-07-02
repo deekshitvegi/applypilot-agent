@@ -5,6 +5,7 @@ import sqlite3
 from applypilot.models import (
     ApplicationRecord,
     CandidateProfile,
+    CoverLetterDocument,
     JobContext,
     ProviderConfigRequest,
     ResumeDocument,
@@ -52,6 +53,28 @@ def test_answer_and_resume_round_trip(tmp_path: Path) -> None:
     assert store.list_resumes() == [resume]
     assert store.delete_answer(answer.id) is True
     assert store.list_answers() == []
+
+
+def test_cover_letter_file_is_encrypted_and_round_trips(tmp_path: Path) -> None:
+    store = ProfileStore(tmp_path / "profile.sqlite3")
+    document = CoverLetterDocument(
+        filename="cover-letter.txt",
+        media_type="text/plain",
+        sha256="cover123",
+        extracted_text="Dear hiring team",
+    )
+    raw = b"private cover letter content"
+
+    store.save_cover_letter(document)
+    store.save_cover_letter_file(document.sha256, raw)
+
+    assert store.get_active_cover_letter() == document
+    assert store.get_cover_letter_file(document.sha256) == raw
+    with sqlite3.connect(tmp_path / "profile.sqlite3") as connection:
+        payload = connection.execute(
+            "SELECT payload FROM cover_letter_files WHERE sha256 = ?", (document.sha256,)
+        ).fetchone()[0]
+    assert raw not in payload
 
 
 def test_application_round_trip(tmp_path: Path) -> None:

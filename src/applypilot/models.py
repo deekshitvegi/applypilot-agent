@@ -98,6 +98,16 @@ class ResumeDocument(BaseModel):
     active: bool = True
 
 
+class CoverLetterDocument(BaseModel):
+    id: str = Field(default_factory=new_id)
+    filename: str
+    media_type: str
+    sha256: str
+    extracted_text: str
+    uploaded_at: datetime = Field(default_factory=utc_now)
+    active: bool = True
+
+
 class EvidenceItem(BaseModel):
     id: str = Field(default_factory=new_id)
     category: Literal["summary", "skill", "experience", "education", "project", "other"]

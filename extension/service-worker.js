@@ -106,14 +106,20 @@ async function attachResumeFile(fieldId, url, filename, frameId) {
     throw new Error("Resume files can only be attached from the local ApplyPilot service.");
   }
   const response = await fetch(source.href);
-  if (!response.ok) throw new Error("Could not download the tailored resume from the local agent.");
+  if (!response.ok) throw new Error("Could not download the application file from the local agent.");
   const bytes = new Uint8Array(await response.arrayBuffer());
   let binary = "";
   for (let index = 0; index < bytes.length; index += 0x8000) {
     binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
   }
   const tab = await getActiveHttpTab();
-  return runInFrame(tab.id, frameId, applyFileToInput, [fieldId, btoa(binary), filename]);
+  const mediaType = response.headers.get("content-type") || "application/octet-stream";
+  return runInFrame(
+    tab.id,
+    frameId,
+    applyFileToInput,
+    [fieldId, btoa(binary), filename, mediaType],
+  );
 }
 
 async function runInTab(tabId, func, args = []) {
@@ -596,14 +602,7 @@ async function extractFormFields() {
   const fields = [];
   const seenRadioGroups = new Set();
   for (const [index, control] of controls.entries()) {
-    const nativeType = (control.type || "").toLowerCase();
-    const radioGroupKey = nativeType === "radio" && control.name
-      ? `${roots.indexOf(control.getRootNode())}:${control.name}`
-      : "";
-    if (radioGroupKey && seenRadioGroups.has(radioGroupKey)) continue;
-    if (radioGroupKey) seenRadioGroups.add(radioGroupKey);
     const applypilotId = `ap-${index}`;
-    control.dataset.applypilotId = applypilotId;
     const explicitLabel = control.id
       ? control.getRootNode()?.querySelector?.(`label[for="${CSS.escape(control.id)}"]`)?.textContent
         || document.querySelector(`label[for="${CSS.escape(control.id)}"]`)?.textContent
@@ -638,6 +637,30 @@ async function extractFormFields() {
     const optionLabel = cleanText(
       explicitLabel || nativeLabels || wrappingLabel || control.getAttribute("aria-label") || control.value,
     );
+    const normalizedGroupQuestion = cleanText(groupedQuestion).toLowerCase();
+    const radioGroupControls = fieldType === "radio"
+      ? queryAll('input[type="radio"]').filter((candidate) => {
+          if (candidate.getRootNode() !== control.getRootNode()) return false;
+          if (control.name) return candidate.name === control.name;
+          return normalizedGroupQuestion
+            && cleanText(groupQuestion(candidate).label).toLowerCase() === normalizedGroupQuestion;
+        })
+      : [];
+    const radioGroupKey = fieldType === "radio"
+      ? `${roots.indexOf(control.getRootNode())}:${control.name || normalizedGroupQuestion || applypilotId}`
+      : "";
+    if (radioGroupKey && seenRadioGroups.has(radioGroupKey)) continue;
+    if (radioGroupKey) seenRadioGroups.add(radioGroupKey);
+    control.dataset.applypilotId = applypilotId;
+    radioGroupControls.forEach((candidate) => {
+      candidate.dataset.applypilotId = applypilotId;
+      candidate.dataset.applypilotOptionLabel = cleanText(
+        [...(candidate.labels || [])].map((item) => item.textContent).join(" ")
+        || candidate.closest("label")?.textContent
+        || candidate.getAttribute("aria-label")
+        || candidate.value,
+      );
+    });
     const label = cleanText(fieldType === "radio"
       ? groupedQuestion || legend || nearbyLabel(control) || fallbackLabel
       : fieldType === "checkbox" && groupedQuestion
@@ -651,12 +674,11 @@ async function extractFormFields() {
       : [];
     if (fieldType === "select" && tag !== "select") {
       options = collectCustomOptions(control);
-    } else if (fieldType === "radio" && control.name) {
-      options = queryAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`)
-        .filter((radio) => radio.getRootNode() === control.getRootNode())
+    } else if (fieldType === "radio") {
+      options = radioGroupControls
         .map((radio) => ({
           value: radio.value || cleanText(radio.labels?.[0]?.textContent),
-          label: cleanText(radio.labels?.[0]?.textContent || radio.value),
+          label: radio.dataset.applypilotOptionLabel || cleanText(radio.value),
         }))
         .filter((option) => option.value || option.label);
     } else if (fieldType === "checkbox" && groupedQuestion) {
@@ -686,12 +708,10 @@ async function extractFormFields() {
       ? displayedValue
       : "";
     const requiredHint = grouped.required || rawLabelParts.some((part) => /\*/.test(String(part || "")));
-    const radioRequired = fieldType === "radio" && control.name
-      ? queryAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`).some(
-          (candidate) => candidate.getRootNode() === control.getRootNode() && (
-            candidate.required || candidate.getAttribute("aria-required") === "true"
-          ),
-        )
+    const radioRequired = fieldType === "radio"
+      ? radioGroupControls.some((candidate) => (
+          candidate.required || candidate.getAttribute("aria-required") === "true"
+        ))
       : false;
 
     fields.push({
@@ -829,13 +849,19 @@ async function applyFormFillPlan(actions) {
         filled += 1;
         continue;
       } else if (type === "radio") {
-        const group = control.name
-          ? queryAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`)
-              .filter((candidate) => candidate.getRootNode() === control.getRootNode())
-          : [control];
+        const taggedGroup = queryAll(
+          `[data-applypilot-id="${CSS.escape(action.field_id)}"]`,
+        ).filter((candidate) => (candidate.type || "").toLowerCase() === "radio");
+        const group = taggedGroup.length
+          ? taggedGroup
+          : control.name
+            ? queryAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`)
+                .filter((candidate) => candidate.getRootNode() === control.getRootNode())
+            : [control];
         const target = semanticChoice(action.value);
         const desired = group.find((candidate) => [
           candidate.value,
+          candidate.dataset.applypilotOptionLabel || "",
           candidate.labels?.[0]?.textContent || "",
           candidate.getAttribute("aria-label") || "",
         ].some((value) => {
@@ -1364,7 +1390,7 @@ function highlightFormField(fieldId) {
   return { highlighted: true };
 }
 
-function applyFileToInput(fieldId, base64, filename) {
+function applyFileToInput(fieldId, base64, filename, mediaType) {
   const roots = [document];
   for (let index = 0; index < roots.length; index += 1) {
     [...roots[index].querySelectorAll("*")].forEach((element) => {
@@ -1375,7 +1401,7 @@ function applyFileToInput(fieldId, base64, filename) {
     .map((root) => root.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`))
     .find(Boolean);
   if (!input || input.type !== "file") {
-    return { attached: false, error: "The resume upload field is no longer available." };
+    return { attached: false, error: "The file upload field is no longer available." };
   }
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -1385,7 +1411,7 @@ function applyFileToInput(fieldId, base64, filename) {
   const file = new File(
     [bytes],
     filename,
-    { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
+    { type: mediaType || "application/octet-stream" },
   );
   const transfer = new DataTransfer();
   transfer.items.add(file);

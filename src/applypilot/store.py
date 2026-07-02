@@ -7,6 +7,7 @@ from pathlib import Path
 from .models import (
     ApplicationRecord,
     CandidateProfile,
+    CoverLetterDocument,
     ResumeDocument,
     ReusableAnswer,
     TailoredArtifact,
@@ -76,6 +77,27 @@ class ProfileStore:
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS resume_files (
+                    sha256 TEXT PRIMARY KEY,
+                    payload BLOB NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cover_letters (
+                    id TEXT PRIMARY KEY,
+                    filename TEXT NOT NULL,
+                    sha256 TEXT NOT NULL UNIQUE,
+                    payload TEXT NOT NULL,
+                    active INTEGER NOT NULL DEFAULT 1,
+                    uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS cover_letter_files (
                     sha256 TEXT PRIMARY KEY,
                     payload BLOB NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -244,6 +266,60 @@ class ProfileStore:
                 "SELECT payload FROM resumes ORDER BY uploaded_at DESC"
             ).fetchall()
         return [ResumeDocument.model_validate_json(self.cipher.decrypt(row[0])) for row in rows]
+
+    def save_cover_letter(self, document: CoverLetterDocument) -> CoverLetterDocument:
+        self.initialize()
+        payload = self.cipher.encrypt(document.model_dump_json())
+        with self._connect() as connection:
+            connection.execute("UPDATE cover_letters SET active = 0")
+            connection.execute(
+                """
+                INSERT INTO cover_letters (id, filename, sha256, payload, active, uploaded_at)
+                VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                ON CONFLICT(sha256) DO UPDATE SET
+                    id = excluded.id,
+                    filename = excluded.filename,
+                    payload = excluded.payload,
+                    active = 1,
+                    uploaded_at = CURRENT_TIMESTAMP
+                """,
+                (document.id, "encrypted", document.sha256, payload),
+            )
+        return document
+
+    def save_cover_letter_file(self, sha256: str, content: bytes) -> None:
+        self.initialize()
+        payload = self.cipher.encrypt_bytes(content)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO cover_letter_files (sha256, payload, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(sha256) DO UPDATE SET
+                    payload = excluded.payload,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (sha256, payload),
+            )
+
+    def get_active_cover_letter(self) -> CoverLetterDocument | None:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM cover_letters WHERE active = 1 "
+                "ORDER BY uploaded_at DESC LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return CoverLetterDocument.model_validate_json(self.cipher.decrypt(row[0]))
+
+    def get_cover_letter_file(self, sha256: str) -> bytes | None:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM cover_letter_files WHERE sha256 = ?", (sha256,)
+            ).fetchone()
+        return self.cipher.decrypt_bytes(row[0]) if row else None
 
     def save_application(self, application: ApplicationRecord) -> ApplicationRecord:
         self.initialize()

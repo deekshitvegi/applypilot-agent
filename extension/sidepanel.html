@@ -111,6 +111,12 @@
           <option value="always_tailored">Always use the tailored résumé</option>
           <option value="always_original">Always use the original résumé</option>
         </select>
+        <label for="cover-letter-policy">Cover-letter attachment</label>
+        <select id="cover-letter-policy">
+          <option value="never">Do not attach a cover letter</option>
+          <option value="ask_each">Ask when a cover-letter field appears</option>
+          <option value="always_attach">Always attach my saved cover letter</option>
+        </select>
         <label for="minimum-fit">Minimum fit score for automatic applications</label>
         <input id="minimum-fit" type="number" min="0" max="100" step="5" value="60" />
         <label class="check-row" for="continue-next">
@@ -200,6 +206,9 @@
             <p class="muted">Stored only by your local agent.</p>
             <label class="file-button" for="resume-file">Choose résumé</label>
             <input id="resume-file" class="sr-only" type="file" accept=".docx,.pdf,.txt" />
+            <p id="cover-letter-status" class="muted">No cover letter saved</p>
+            <label class="file-button" for="cover-letter-file">Choose cover letter</label>
+            <input id="cover-letter-file" class="sr-only" type="file" accept=".docx,.pdf,.txt" />
           </div>
         </details>
 
