@@ -40,4 +40,9 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "looksLikeChatQuestion(message)" in script
     assert "correctLastSavedAnswer(correction)" in script
     assert "change my last answer to" in script
+    assert script.index('/api/questions/refine') < script.index('SIEM: 0 months')
+
+    worker = (root / "extension" / "service-worker.js").read_text(encoding="utf-8")
+    assert "nearbyInstructions" in worker
+    assert "fieldType === \"textarea\" ? nearbyInstructions(control)" in worker
 

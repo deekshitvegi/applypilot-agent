@@ -1462,6 +1462,18 @@ async function persistUnknownAnswer(answer, options = {}) {
 async function formatApplicationAnswer(question, answer, fieldType) {
   const normalizedQuestion = normalizeQuestion(question);
   const normalizedAnswer = normalizeQuestion(answer);
+  if (state.provider?.configured && fieldType === "textarea") {
+    try {
+      const refined = await api("/api/questions/refine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, user_answer: answer, job: state.job }),
+      });
+      if (refined.answer?.trim()) return refined.answer.trim();
+    } catch {
+      // Use the narrow deterministic formatter below when the model is unavailable.
+    }
+  }
   if (
     /security tool experience/.test(normalizedQuestion)
     && /0|zero/.test(normalizedAnswer)
@@ -1469,17 +1481,7 @@ async function formatApplicationAnswer(question, answer, fieldType) {
   ) {
     return "SIEM: 0 months; SOAR: 0 months; UEBA: 0 months; EDR: 0 months; OS logs: 0 months.";
   }
-  if (!state.provider?.configured || fieldType !== "textarea") return answer;
-  try {
-    const refined = await api("/api/questions/refine", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, user_answer: answer, job: state.job }),
-    });
-    return refined.answer?.trim() || answer;
-  } catch {
-    return answer;
-  }
+  return answer;
 }
 
 function normalizeQuestion(value) {

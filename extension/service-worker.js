@@ -535,6 +535,20 @@ async function extractFormFields() {
     }
     return "";
   };
+  const nearbyInstructions = (control) => {
+    let container = control.parentElement;
+    for (let depth = 0; container && depth < 4; depth += 1, container = container.parentElement) {
+      const candidates = [...container.querySelectorAll(
+        "p, small, [class*='description'], [class*='instruction'], [class*='help-text'], [data-testid*='description']",
+      )];
+      const text = candidates
+        .filter((candidate) => !candidate.contains(control))
+        .map((candidate) => cleanText(candidate.textContent))
+        .find((value) => value.length >= 12 && value.length <= 600);
+      if (text) return text;
+    }
+    return "";
+  };
   const readableName = (control) => {
     const raw = control.name || control.id || "";
     if (!raw || /^ap-\d+$/.test(raw) || /\[\d+\]/.test(raw)) return "";
@@ -673,12 +687,18 @@ async function extractFormFields() {
         || candidate.value,
       );
     });
-    const label = cleanText(fieldType === "radio"
+    const baseLabel = cleanText(fieldType === "radio"
       ? groupedQuestion || legend || nearbyLabel(control) || fallbackLabel
       : fieldType === "checkbox" && groupedQuestion
         ? `${groupedQuestion} ${optionLabel}`
         : labelledByText(control) || explicitLabel || nativeLabels ||
           control.getAttribute("aria-label") || wrappingLabel || nearbyLabel(control) || fallbackLabel);
+    const instructions = fieldType === "textarea" ? nearbyInstructions(control) : "";
+    const label = cleanText(
+      instructions && !baseLabel.toLowerCase().includes(instructions.toLowerCase())
+        ? `${baseLabel} ${instructions}`
+        : baseLabel,
+    );
     let options = tag === "select"
       ? [...control.options]
           .filter((option) => option.value || option.textContent.trim())

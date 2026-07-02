@@ -18,6 +18,9 @@ question directly in the chat composer. ApplyPilot stores that verified answer
 locally, fills it, and reuses it on matching future applications. Questions and
 help requests remain ordinary chat; `/answer ...` forces an ambiguous reply to
 be treated as an answer, and `change my last answer to ...` corrects a mistake.
+Free-text answers are first rewritten by the configured provider against the
+employer's visible instructions; a narrow deterministic formatter is used only
+when that provider is unavailable.
 Provider
 choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.
