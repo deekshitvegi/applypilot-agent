@@ -237,6 +237,26 @@ class ProviderConfigRequest(BaseModel):
         return self
 
 
+class PageControl(BaseModel):
+    id: str
+    label: str
+    kind: Literal["button", "link", "control"] = "control"
+    disabled: bool = False
+
+
+class PageActionRequest(BaseModel):
+    goal: str
+    page_title: str = ""
+    page_text: str = Field(default="", max_length=12000)
+    controls: list[PageControl] = Field(default_factory=list, max_length=80)
+
+
+class PageActionDecision(BaseModel):
+    action_id: str = ""
+    intent: Literal["click", "wait", "user_required"] = "user_required"
+    explanation: str
+
+
 class FormOption(BaseModel):
     value: str
     label: str

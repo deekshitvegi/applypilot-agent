@@ -88,10 +88,11 @@
           <option value="review_each">Ask me every time</option>
           <option value="always_allow">Always allow for this browser</option>
         </select>
-        <label for="resume-policy">Tailored résumé attachment</label>
+        <label for="resume-policy">Résumé attachment</label>
         <select id="resume-policy">
-          <option value="ask_each">Ask before attaching</option>
-          <option value="always_attach">Always attach the job-specific résumé</option>
+          <option value="ask_each">Ask: original or tailored</option>
+          <option value="always_tailored">Always use the tailored résumé</option>
+          <option value="always_original">Always use the original résumé</option>
         </select>
         <label for="minimum-fit">Minimum fit score for automatic applications</label>
         <input id="minimum-fit" type="number" min="0" max="100" step="5" value="60" />

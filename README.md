@@ -95,6 +95,10 @@ This repository currently contains:
   submission status;
 - live runner activity in chat plus remembered-answer commands for updating
   the current form and future applications;
+- a guarded AI page planner for unfamiliar application sequences, with final
+  submission always governed separately by the user's approval policy;
+- encrypted original-résumé storage with original, tailored, and ask-each-time
+  attachment preferences;
 - guided blocked-question recovery that captures page options, remembers each
   answer, replans, fills, and resumes the active application runner;
 - an explicit two-step final-submit approval that pauses for CAPTCHA/MFA and

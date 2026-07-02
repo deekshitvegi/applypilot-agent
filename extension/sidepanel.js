@@ -90,6 +90,7 @@ const state = {
   route: null,
   application: null,
   artifact: null,
+  resume: null,
   submitClicked: false,
   formScan: null,
   formPlan: null,
@@ -286,10 +287,10 @@ async function loadAutomationSettings() {
     loginAssistance: false,
   });
   state.automationPolicy = saved.automationPolicy;
-  state.resumePolicy = saved.resumePolicy;
+  state.resumePolicy = saved.resumePolicy === "always_attach" ? "always_tailored" : saved.resumePolicy;
   state.minimumFit = saved.minimumFit;
   elements.automationPolicy.value = saved.automationPolicy;
-  elements.resumePolicy.value = saved.resumePolicy;
+  elements.resumePolicy.value = state.resumePolicy;
   elements.minimumFit.value = String(saved.minimumFit);
   elements.continueNext.checked = saved.continueNext;
   state.loginAssistance = saved.loginAssistance;
@@ -673,6 +674,7 @@ async function saveOnboardingAnswer(event) {
 async function refreshResumeStatus() {
   try {
     const resume = await api("/api/resumes/active");
+    state.resume = resume;
     elements.resumeStatus.textContent = `${resume.filename} · ${resume.extracted_text.length.toLocaleString()} characters extracted`;
   } catch (error) {
     if (!error.message.includes("No resume")) throw error;
@@ -687,6 +689,7 @@ async function uploadResume() {
   body.append("file", file);
   try {
     const resume = await api("/api/resumes", { method: "POST", body });
+    state.resume = resume;
     elements.resumeStatus.textContent = `${resume.filename} uploaded and encrypted locally.`;
   } catch (error) {
     elements.resumeStatus.textContent = error.message;
@@ -1138,14 +1141,41 @@ async function attachTailoredResume(options = {}) {
   return true;
 }
 
-async function maybeAttachTailoredResume() {
+async function attachOriginalResume(options = {}) {
+  const throwOnError = options?.throwOnError === true;
   const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
-  if (!state.artifact || !fileField) return true;
-  const allowed = state.resumePolicy === "always_attach" || window.confirm(
-    "Attach the job-specific tailored résumé to this application? Your original résumé will not be changed.",
-  );
-  if (!allowed) return false;
-  return attachTailoredResume({ throwOnError: true });
+  if (!fileField || !state.resume) return false;
+  const result = await chrome.runtime.sendMessage({
+    action: "attachResume",
+    fieldId: fileField.id,
+    url: `${state.apiBase}/api/resumes/active/file`,
+    filename: state.resume.filename,
+  });
+  if (result.error || !result.attached) {
+    elements.formStatus.textContent = result.error || "The original résumé could not be attached.";
+    if (throwOnError) throw new Error(elements.formStatus.textContent);
+    return false;
+  }
+  elements.formStatus.textContent = `${result.filename} attached as the original résumé.`;
+  return true;
+}
+
+async function maybeAttachResume() {
+  const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
+  if (!fileField) return true;
+  let choice = state.resumePolicy;
+  if (choice === "ask_each") {
+    choice = window.confirm(
+      "Use the job-specific tailored résumé? Choose Cancel to use your original uploaded résumé.",
+    ) ? "always_tailored" : "always_original";
+  }
+  if (choice === "always_tailored") {
+    if (!state.artifact) {
+      throw new Error("A tailored résumé is unavailable. Change the résumé preference to original or retry AI preparation.");
+    }
+    return attachTailoredResume({ throwOnError: true });
+  }
+  return attachOriginalResume({ throwOnError: true });
 }
 
 async function saveUnknownAnswer(event) {
@@ -1467,6 +1497,13 @@ async function runCurrentApplicationPage() {
   const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
   if (entry.error && !entry.already_form) {
     reportActivity(`${entry.error} Checking the current page for a form…`);
+    const planned = await planAndClickPageAction(
+      "Open or start this job application. Do not submit the application.",
+    );
+    if (planned?.clicked) {
+      reportActivity(`AI page planner selected “${planned.label}”. Observing the changed page…`);
+      await new Promise((resolve) => setTimeout(resolve, 750));
+    }
   } else if (entry.clicked) {
     reportActivity("Opening the employer application form…");
     await waitForTabReady(entry.tab_id);
@@ -1548,9 +1585,9 @@ async function completeAutomationApplication() {
     );
     return;
   }
-  if (state.artifact && state.formScan?.fields?.some((field) => field.field_type === "file")) {
-    reportActivity("Selecting the job-specific tailored résumé…");
-    const attached = await maybeAttachTailoredResume();
+  if (state.formScan?.fields?.some((field) => field.field_type === "file")) {
+    reportActivity("Selecting the résumé configured for this application…");
+    const attached = await maybeAttachResume();
     if (!attached && state.automationPolicy === "always_allow") {
       throw new Error("Tailored résumé attachment was not approved.");
     }
@@ -1573,7 +1610,19 @@ async function completeAutomationApplication() {
     return;
   }
   if (!step.final_ready) {
-    throw new Error(step.error || "No Next, Review, or final Submit control was found.");
+    const planned = await planAndClickPageAction(
+      "Advance to the next safe step of this job application. Never submit the application.",
+    );
+    if (planned?.clicked) {
+      state.applicationSteps += 1;
+      reportActivity(`AI page planner selected “${planned.label}”. Observing the next step…`);
+      state.formPlan = null;
+      state.formScan = null;
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      await runCurrentApplicationPage();
+      return;
+    }
+    throw new Error(planned?.error || step.error || "No safe next action was found on this page.");
   }
 
   if (state.application?.status !== "review_required") {
@@ -1616,6 +1665,29 @@ async function advanceAutomationQueue({ submitted = false } = {}) {
   });
   if (opened.error) throw new Error(opened.error);
   await runAutomationCycle();
+}
+
+async function planAndClickPageAction(goal) {
+  if (!state.provider?.configured) return null;
+  try {
+    const snapshot = await chrome.runtime.sendMessage({ action: "inspectPageActions" });
+    if (snapshot.error || !snapshot.controls?.length) return null;
+    const decision = await api("/api/page-action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ goal, ...snapshot }),
+    });
+    if (decision.intent !== "click" || !decision.action_id) {
+      return { clicked: false, error: decision.explanation };
+    }
+    const result = await chrome.runtime.sendMessage({
+      action: "clickPageAction",
+      actionId: decision.action_id,
+    });
+    return { ...result, explanation: decision.explanation };
+  } catch (error) {
+    return { clicked: false, error: error.message };
+  }
 }
 
 async function waitForTabReady(tabId) {
@@ -1701,6 +1773,15 @@ async function sendChat(event) {
 }
 
 async function handlePageActionCommand(message) {
+  if (/\b(are you applying|what are you doing|what is happening|application status|current status)\b/i.test(message)) {
+    const status = elements.automationStatus.textContent.trim() || "No application run is active.";
+    const job = state.job?.title ? ` for ${state.job.title}` : "";
+    appendMessage(
+      `${state.automationRunning ? "Yes, I am working" : "The runner is currently paused"}${job}. ${status}`,
+      "agent-message",
+    );
+    return true;
+  }
   const remembered = message.match(
     /^(?:remember|set|use)\s+(?:that\s+)?(.+?)(?:\s+is|\s+to|:)\s+(.+)$/i,
   );

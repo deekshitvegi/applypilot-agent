@@ -75,6 +75,15 @@ class ProfileStore:
             )
             connection.execute(
                 """
+                CREATE TABLE IF NOT EXISTS resume_files (
+                    sha256 TEXT PRIMARY KEY,
+                    payload BLOB NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS provider_config (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
                     payload TEXT NOT NULL,
@@ -194,6 +203,29 @@ class ProfileStore:
                 (resume.id, "encrypted", resume.sha256, payload),
             )
         return resume
+
+    def save_resume_file(self, sha256: str, content: bytes) -> None:
+        self.initialize()
+        payload = self.cipher.encrypt_bytes(content)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO resume_files (sha256, payload, updated_at)
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(sha256) DO UPDATE SET
+                    payload = excluded.payload,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (sha256, payload),
+            )
+
+    def get_resume_file(self, sha256: str) -> bytes | None:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM resume_files WHERE sha256 = ?", (sha256,)
+            ).fetchone()
+        return self.cipher.decrypt_bytes(row[0]) if row else None
 
     def get_active_resume(self) -> ResumeDocument | None:
         self.initialize()

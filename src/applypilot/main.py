@@ -39,6 +39,8 @@ from .models import (
     OnboardingState,
     ProviderStatus,
     ProviderConfigRequest,
+    PageActionDecision,
+    PageActionRequest,
     ResumeDocument,
     ResumeEvidence,
     ReusableAnswer,
@@ -182,15 +184,18 @@ def delete_answer(answer_id: str) -> Response:
 @app.post("/api/resumes", response_model=ResumeDocument)
 async def upload_resume(file: UploadFile = File(...)) -> ResumeDocument:
     require_local_data_mode()
+    content = await file.read()
     try:
         resume = extract_resume(
             filename=file.filename or "resume",
-            content=await file.read(),
+            content=content,
             media_type=file.content_type or "",
         )
     except ResumeExtractionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return store.save_resume(resume)
+    saved = store.save_resume(resume)
+    store.save_resume_file(resume.sha256, content)
+    return saved
 
 
 @app.get("/api/resumes", response_model=list[ResumeDocument])
@@ -206,6 +211,26 @@ def active_resume() -> ResumeDocument:
     if resume is None:
         raise HTTPException(status_code=404, detail="No resume has been uploaded")
     return resume
+
+
+@app.get("/api/resumes/active/file")
+def active_resume_file() -> Response:
+    require_local_data_mode()
+    resume = store.get_active_resume()
+    if resume is None:
+        raise HTTPException(status_code=404, detail="No resume has been uploaded")
+    content = store.get_resume_file(resume.sha256)
+    if content is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Re-upload this resume once to enable original-file attachment",
+        )
+    safe_name = resume.filename.replace('"', "").replace("\r", "").replace("\n", "")
+    return Response(
+        content=content,
+        media_type=resume.media_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
 
 
 @app.post("/api/resumes/evidence", response_model=ResumeEvidence)
@@ -326,6 +351,19 @@ def chat(request: ChatRequest) -> ChatResponse:
         )
     except AIProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/page-action", response_model=PageActionDecision)
+def page_action(request: PageActionRequest) -> PageActionDecision:
+    require_local_data_mode()
+    try:
+        decision = ai_provider.plan_page_action(request)
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    allowed = {control.id for control in request.controls if not control.disabled}
+    if decision.intent == "click" and decision.action_id not in allowed:
+        raise HTTPException(status_code=422, detail="AI selected an unavailable page control")
+    return decision
 
 
 @app.post("/api/questions/draft", response_model=ApplicationAnswerDraft)

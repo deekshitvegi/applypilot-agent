@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0 - 2026-07-01
+
+- Added an AI page-planning fallback that observes visible controls and page
+  context when deterministic application steps are ambiguous.
+- Kept final Submit, destructive actions, credentials, CAPTCHA, and MFA outside
+  the AI planner's allowed actions.
+- Resolved duplicate and nested Apply controls on Ashby and similar job pages.
+- Added truthful local chat status answers such as “are you applying?” instead
+  of sending those questions to a generic model response.
+- Added encrypted original-résumé file storage and per-application preferences
+  for original, tailored, or ask-each-time attachment.
+- Kept authentication in the guarded browser-assisted login path: existing
+  password-manager values may be submitted when enabled, while CAPTCHA, MFA,
+  verification codes, empty credentials, and ambiguous login controls pause.
+
 ## 0.6.0 - 2026-07-01
 
 - Enforced a strict queue invariant: the runner advances only after explicit
