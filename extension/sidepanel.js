@@ -707,12 +707,17 @@ async function captureJob(options = {}) {
     state.sourceTabId = captured.tab_id;
     state.artifact = null;
     state.fitAnalysis = null;
+    state.formPlan = null;
+    state.formScan = null;
     elements.fitResult.classList.add("hidden");
     elements.artifactActions.classList.add("hidden");
     state.submitClicked = false;
     elements.approveSubmit.classList.add("hidden");
     elements.approveSubmit.disabled = false;
     elements.approveSubmit.textContent = "Approve and submit application";
+    elements.formStatus.textContent = "Open the employer application form first.";
+    elements.formResult.classList.add("hidden");
+    elements.unknownAnswerForm.classList.add("hidden");
     elements.jobTitle.textContent = captured.title || "Captured job";
     elements.jobCompany.textContent = [captured.company, captured.location].filter(Boolean).join(" · ");
     elements.chatContext.textContent = captured.title || "Active job";
@@ -725,6 +730,7 @@ async function captureJob(options = {}) {
         source_url: captured.source_url,
         company_application_url: captured.company_application_url,
         company_url_verified: captured.company_url_verified,
+        external_apply_available: captured.external_apply_available,
         easy_apply_available: captured.easy_apply_available,
       }),
     });
@@ -738,6 +744,9 @@ async function captureJob(options = {}) {
     });
     if (state.route.route === "company_site") {
       elements.openApplication.textContent = "Open company application";
+      elements.openApplication.disabled = false;
+    } else if (state.route.route === "company_button") {
+      elements.openApplication.textContent = "Open employer application";
       elements.openApplication.disabled = false;
     } else if (state.route.route === "manual_review") {
       elements.openApplication.textContent = "Review external application";
@@ -773,10 +782,12 @@ async function openApplication(options = {}) {
   if (!state.route?.target_url) return;
   elements.openApplication.disabled = true;
   try {
-    const result = await chrome.runtime.sendMessage({
-      action: "openApplication",
-      url: state.route.target_url,
-    });
+    const result = state.route.route === "company_button"
+      ? await chrome.runtime.sendMessage({ action: "openExternalApply" })
+      : await chrome.runtime.sendMessage({
+        action: "openApplication",
+        url: state.route.target_url,
+      });
     if (result.error) throw new Error(result.error);
     elements.openApplication.textContent = "Company application opened";
     await transitionApplication("filling", "Opened the company application route.");
@@ -900,6 +911,10 @@ async function scanForm(options = {}) {
     await replanForm();
     return state.formPlan;
   } catch (error) {
+    state.formPlan = null;
+    state.formScan = null;
+    elements.approveSubmit.classList.add("hidden");
+    elements.unknownAnswerForm.classList.add("hidden");
     elements.formStatus.textContent = error.message;
     elements.formResult.textContent = "Nothing was changed on the page.";
     if (throwOnError) throw error;
@@ -1384,7 +1399,11 @@ async function runAutomationCycle() {
   if (!state.automationRunning) return;
 
   const target = state.route?.target_url || "";
-  if (["company_site", "manual_review"].includes(state.route?.route) && target) {
+  if (state.route?.route === "company_button") {
+    elements.automationStatus.textContent = "Opening the employer application from LinkedIn...";
+    const opened = await openApplication({ throwOnError: true });
+    await waitForTabReady(opened.tab_id);
+  } else if (["company_site", "manual_review"].includes(state.route?.route) && target) {
     if (normalizeJobUrl(target) !== normalizeJobUrl(captured.source_url)) {
       elements.automationStatus.textContent = "Opening the company application…";
       const opened = await openApplication({ throwOnError: true });
@@ -1397,6 +1416,8 @@ async function runAutomationCycle() {
       throw new Error(easyApply.error || "Easy Apply could not be opened.");
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
+  } else {
+    throw new Error("No employer application route was found for this job.");
   }
 
   await runCurrentApplicationPage();

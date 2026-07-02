@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.1 - 2026-07-01
+
+- Fixed LinkedIn external Apply buttons implemented with JavaScript so the
+  runner opens the employer application before scanning or filling fields.
+- Prevented ordinary LinkedIn job pages and unrelated dialogs from being
+  mistaken for application forms or exposing a final-submit action.
+- Cleared stale form state whenever a new job is captured or no application
+  form is detected.
+
 ## 0.5.0 - 2026-06-30
 
 - Added a fully local Ollama provider with no API key or cloud quota, using
