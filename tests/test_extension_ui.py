@@ -32,6 +32,7 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
         "cover-letter-policy",
         "cover-letter-file",
         "cover-letter-status",
+        "preview-generated-cover-letter",
     }.issubset(parser.ids)
 
     script = (root / "extension" / "sidepanel.js").read_text(encoding="utf-8")
@@ -45,6 +46,9 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "The application frame changed; rescanning" in script
     assert "frameRetry: true" in script
     assert "I couldn't continue the form scan" in script
+    assert "executeExplicitPageAnswers(message)" in script
+    assert "Applied and remembered" in script
+    assert "Preview generated cover letter" in script
     assert script.index('/api/questions/refine') < script.index('SIEM: 0 months')
 
     worker = (root / "extension" / "service-worker.js").read_text(encoding="utf-8")
@@ -53,4 +57,6 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "[role='checkbox']" in worker
     assert "customCombobox || customChoice" in worker
     assert "control.hasAttribute(\"aria-checked\")" in worker
+    assert "isPlainChoiceButton" in worker
+    assert "applypilotChoiceKind" in worker
 

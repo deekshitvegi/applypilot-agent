@@ -35,6 +35,7 @@ const elements = {
   automationPolicy: document.querySelector("#automation-policy"),
   resumePolicy: document.querySelector("#resume-policy"),
   coverLetterPolicy: document.querySelector("#cover-letter-policy"),
+  previewGeneratedCoverLetter: document.querySelector("#preview-generated-cover-letter"),
   minimumFit: document.querySelector("#minimum-fit"),
   continueNext: document.querySelector("#continue-next"),
   loginAssistance: document.querySelector("#login-assistance"),
@@ -1374,6 +1375,7 @@ async function maybeAttachCoverLetter() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job: state.job }),
     });
+    elements.previewGeneratedCoverLetter.classList.remove("hidden");
   }
   const generated = mode === "always_generate";
   const result = await chrome.runtime.sendMessage({
@@ -1391,6 +1393,9 @@ async function maybeAttachCoverLetter() {
     throw new Error(result.error || "The saved cover letter could not be attached.");
   }
   reportActivity(`${result.filename} attached as the ${generated ? "generated job-specific" : "saved"} cover letter.`);
+  if (generated) {
+    reportActivity("You can read it from Settings → Preview generated cover letter.");
+  }
   return true;
 }
 
@@ -2197,6 +2202,105 @@ async function handleAnswerConversation(message) {
   return true;
 }
 
+function escapeRegularExpression(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function savePageAnswer(question, answer, fieldType = "choice") {
+  const existing = state.answers.find(
+    (item) => normalizeQuestion(item.question) === normalizeQuestion(question),
+  );
+  const id = existing?.id || crypto.randomUUID();
+  await api(`/api/answers/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, question, answer, field_type: fieldType, sensitive: false }),
+  });
+}
+
+async function executeExplicitPageAnswers(message) {
+  const actionable = /\b(add|select|check|choose|include|set|authorized|authorization|sponsor|sponsorship|relocate|relocation|for this one)\b/i.test(message);
+  if (!actionable || !state.localMode) return false;
+  await scanForm({ throwOnError: true });
+  const fields = state.formScan?.fields || [];
+  const updates = new Map();
+  const selectedCheckboxes = new Map();
+  for (const field of fields.filter((candidate) => candidate.field_type === "checkbox")) {
+    const group = field.group_label || field.label.replace(field.option_label || "", "").trim();
+    if (field.value) {
+      const current = selectedCheckboxes.get(group) || new Set();
+      current.add(field.option_label || field.label);
+      selectedCheckboxes.set(group, current);
+    }
+    const option = field.option_label || field.label;
+    const requested = new RegExp(
+      `\\b(?:add|select|check|choose|include)\\b[^.;\\n]{0,45}\\b${escapeRegularExpression(option)}\\b`,
+      "i",
+    ).test(message);
+    if (requested) {
+      const current = selectedCheckboxes.get(group) || new Set();
+      current.add(option);
+      selectedCheckboxes.set(group, current);
+      updates.set(field.id, { field, value: "true", question: group });
+    }
+  }
+
+  const sourceField = fields.find((field) => /how did you (?:find|hear)|source of application/i.test(field.label));
+  if (sourceField && /(?:for this one|source)[^.!?\n]{0,60}(?:it'?s|is)\s+linkedin/i.test(message)) {
+    updates.set(sourceField.id, { field: sourceField, value: "LinkedIn", question: sourceField.label });
+  }
+  const authorization = fields.find((field) => /authorized to work|work authorization/i.test(field.label));
+  if (authorization && /(?:yes\s+for\s+(?:authorized|authorization)|authorized[^.!?\n]{0,50}\byes\b)/i.test(message)) {
+    updates.set(authorization.id, { field: authorization, value: "Yes", question: authorization.label });
+  }
+  const sponsorship = fields.find((field) => /sponsor|sponsorship/i.test(field.label));
+  if (sponsorship && /(?:no\s+for\s+(?:future\s+)?sponsor|sponsor(?:ship)?[^.!?\n]{0,50}\bno\b)/i.test(message)) {
+    updates.set(sponsorship.id, { field: sponsorship, value: "No", question: sponsorship.label });
+  }
+
+  if (/\b(?:can|willing to)\s+relocate\s+(?:anywhere|anywhere in (?:the )?u\.?s\.?)\b/i.test(message)) {
+    const relocationFields = fields.filter((field) => (
+      field.field_type === "checkbox" && /relocat|assisted relocation package/i.test(field.group_label || field.label)
+    ));
+    for (const field of relocationFields) {
+      const unable = /unable|cannot|only work remotely/i.test(field.option_label || field.label);
+      updates.set(field.id, {
+        field,
+        value: unable ? "false" : "true",
+        question: field.group_label || field.label,
+      });
+      if (!unable) {
+        const group = field.group_label || field.label;
+        const current = selectedCheckboxes.get(group) || new Set();
+        current.add(field.option_label || field.label);
+        selectedCheckboxes.set(group, current);
+      }
+    }
+  }
+
+  if (!updates.size) return false;
+  const savedGroups = new Set();
+  for (const update of updates.values()) {
+    const { field, value, question } = update;
+    if (field.field_type === "checkbox") {
+      if (savedGroups.has(question)) continue;
+      savedGroups.add(question);
+      const choices = [...(selectedCheckboxes.get(question) || [])];
+      await savePageAnswer(question, choices.join(", "));
+    } else {
+      await savePageAnswer(question, value);
+    }
+  }
+  state.answers = await api("/api/answers");
+  await replanForm();
+  const result = await fillForm({ throwOnError: true });
+  appendMessage(
+    `Applied and remembered ${updates.size} explicit page answer${updates.size === 1 ? "" : "s"}. ${result?.filled || 0} mapped fields were refreshed.`,
+    "agent-message",
+  );
+  return true;
+}
+
 async function handlePageActionCommand(message) {
   if (/\b(are you applying|what are you doing|what is happening|application status|current status)\b/i.test(message)) {
     const status = elements.automationStatus.textContent.trim() || "No application run is active.";
@@ -2207,6 +2311,7 @@ async function handlePageActionCommand(message) {
     );
     return true;
   }
+  if (await executeExplicitPageAnswers(message)) return true;
   if (/\b(?:ask|show|give)\s+me\b.*\b(?:remaining\s+)?questions?\b/i.test(message)) {
     state.questionnaireActive = true;
     state.questionnaireTotal = 0;
@@ -2477,6 +2582,14 @@ elements.enableSiteAccess.addEventListener("click", async () => {
 elements.automationPolicy.addEventListener("change", changeAutomationPolicy);
 elements.resumePolicy.addEventListener("change", changeResumePolicy);
 elements.coverLetterPolicy.addEventListener("change", changeCoverLetterPolicy);
+elements.previewGeneratedCoverLetter.addEventListener("click", () => {
+  if (!state.generatedCoverLetter?.body) return;
+  closeSettings();
+  appendMessage(
+    `Generated cover letter preview:\n\n${state.generatedCoverLetter.body}`,
+    "agent-message",
+  );
+});
 elements.minimumFit.addEventListener("change", changeMinimumFit);
 elements.continueNext.addEventListener("change", changeContinueNext);
 elements.loginAssistance.addEventListener("change", changeLoginAssistance);

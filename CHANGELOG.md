@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.0 - 2026-07-02
+
+- Turned explicit chat corrections into immediate page actions: one message can
+  select multiple technologies, clouds, referral sources, relocation choices,
+  work authorization, and sponsorship answers, then remember and refill them.
+- Added support for ATS Yes/No segmented controls implemented as ordinary
+  buttons without native radio roles or ARIA state.
+- Added an in-extension preview for the generated job-specific cover letter and
+  a clear activity message showing where to open it after attachment.
+
 ## 0.9.4 - 2026-07-02
 
 - Added plain-text Ollama cover-letter generation when the local server rejects
