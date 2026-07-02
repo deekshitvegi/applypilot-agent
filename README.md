@@ -24,6 +24,11 @@ when that provider is unavailable.
 Commands such as `fill the rest`, `fill the next`, and `ask me the remaining
 questions` operate on the current form and start the one-at-a-time question
 flow instead of producing advisory chat.
+Explicit corrections are executable too. For example, a single message can say
+`add GitHub CI, add GCP, source is LinkedIn, authorized yes, sponsorship no`;
+ApplyPilot applies every matching choice on the current page, stores the
+verified answers locally, and reuses them later. It never converts an unrelated
+question or ordinary chat message into a saved application answer.
 Provider
 choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.
@@ -114,12 +119,16 @@ This repository currently contains:
   job-source mapping and evidence-only résumé matching for technology choices;
 - custom ARIA radio and pressed-button support for ATS sites that render Yes/No
   and referral-source choices without native radio inputs;
+- plain segmented Yes/No button support for ATS controls that expose neither
+  native radio inputs nor useful ARIA state;
 - custom ARIA checkbox support for technology and location groups, including
   ATS controls rendered as accessible buttons rather than native inputs;
 - separate résumé and cover-letter field detection so the selected résumé is
   attached early and a cover letter is included only under the user's policy;
 - non-blocking document generation: an Ollama/cover-letter failure is reported
   without aborting deterministic form filling;
+- generated cover-letter preview inside the side-panel Settings screen after
+  the document has been prepared, without exposing it outside the local agent;
 - automatic ATS-readable reconstruction from saved résumé text when a legacy
   upload no longer has attachable original bytes;
 - optional browser-assisted login that clicks a unique login/continue control

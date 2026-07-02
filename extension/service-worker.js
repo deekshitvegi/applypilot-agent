@@ -491,6 +491,19 @@ async function extractFormFields() {
     });
   }
   const queryAll = (selector) => roots.flatMap((candidate) => [...candidate.querySelectorAll(selector)]);
+  const isPlainChoiceButton = (control) => {
+    if (control.tagName !== "BUTTON") return false;
+    const label = String(control.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!new Set(["yes", "no"]).has(label)) return false;
+    let container = control.parentElement;
+    for (let depth = 0; container && depth < 4; depth += 1, container = container.parentElement) {
+      const choiceCount = [...container.querySelectorAll("button")].filter((candidate) => (
+        ["yes", "no"].includes(String(candidate.textContent || "").trim().toLowerCase())
+      )).length;
+      if (choiceCount >= 2) return true;
+    }
+    return false;
+  };
   const elementVisible = (element) => {
     if (!element) return false;
     const style = getComputedStyle(element);
@@ -498,13 +511,14 @@ async function extractFormFields() {
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
   const controls = queryAll(
-    "input, textarea, select, [role='combobox'], [role='radio'], [role='checkbox'], button[aria-pressed], button[aria-checked], button[aria-haspopup='listbox'], input[aria-haspopup='listbox']",
+    "input, textarea, select, button, [role='combobox'], [role='radio'], [role='checkbox'], input[aria-haspopup='listbox']",
   ).filter((control) => {
     const type = (control.type || "").toLowerCase();
     const customCombobox = control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox";
     const customChoice = ["radio", "checkbox"].includes(control.getAttribute("role"))
       || control.hasAttribute("aria-pressed")
-      || control.hasAttribute("aria-checked");
+      || control.hasAttribute("aria-checked")
+      || isPlainChoiceButton(control);
     const labelledControlVisible = ["checkbox", "radio"].includes(type)
       && [...(control.labels || [])].some(elementVisible);
     const visible = type === "file" || elementVisible(control) || labelledControlVisible;
@@ -566,13 +580,13 @@ async function extractFormFields() {
     }
     let container = control.parentElement;
     const nativeType = (control.type || "").toLowerCase();
-    const choiceType = control.getAttribute("role") === "radio" || control.hasAttribute("aria-pressed")
+    const choiceType = control.getAttribute("role") === "radio" || control.hasAttribute("aria-pressed") || isPlainChoiceButton(control)
       ? "radio"
       : control.getAttribute("role") === "checkbox" || control.hasAttribute("aria-checked")
         ? "checkbox"
         : nativeType;
     const groupSelector = choiceType === "radio"
-      ? 'input[type="radio"], [role="radio"], button[aria-pressed]'
+      ? 'input[type="radio"], [role="radio"], button[aria-pressed], button'
       : choiceType === "checkbox"
         ? 'input[type="checkbox"], [role="checkbox"], button[aria-checked]'
         : `input[type="${CSS.escape(nativeType)}"]`;
@@ -658,7 +672,9 @@ async function extractFormFields() {
       part && part.length <= 240 && parts.findIndex((value) => value.toLowerCase() === part.toLowerCase()) === partIndex
     ));
     const tag = control.tagName.toLowerCase();
-    const customRadio = control.getAttribute("role") === "radio" || control.hasAttribute("aria-pressed");
+    const customRadio = control.getAttribute("role") === "radio"
+      || control.hasAttribute("aria-pressed")
+      || isPlainChoiceButton(control);
     const customCheckbox = control.getAttribute("role") === "checkbox"
       || (control.hasAttribute("aria-checked") && !customRadio);
     let fieldType = customRadio
@@ -682,8 +698,9 @@ async function extractFormFields() {
     );
     const normalizedGroupQuestion = cleanText(groupedQuestion).toLowerCase();
     const radioGroupControls = fieldType === "radio"
-      ? queryAll('input[type="radio"], [role="radio"], button[aria-pressed]').filter((candidate) => {
+      ? queryAll('input[type="radio"], [role="radio"], button[aria-pressed], button').filter((candidate) => {
           if (candidate.getRootNode() !== control.getRootNode()) return false;
+          if (candidate.tagName === "BUTTON" && !candidate.hasAttribute("aria-pressed") && !isPlainChoiceButton(candidate)) return false;
           if (control.name) return candidate.name === control.name;
           return normalizedGroupQuestion
             && cleanText(groupQuestion(candidate).label).toLowerCase() === normalizedGroupQuestion;
@@ -697,6 +714,7 @@ async function extractFormFields() {
     control.dataset.applypilotId = applypilotId;
     radioGroupControls.forEach((candidate) => {
       candidate.dataset.applypilotId = applypilotId;
+      candidate.dataset.applypilotChoiceKind = "radio";
       candidate.dataset.applypilotOptionLabel = cleanText(
         [...(candidate.labels || [])].map((item) => item.textContent).join(" ")
         || candidate.closest("label")?.textContent
@@ -825,6 +843,8 @@ async function applyFormFillPlan(actions) {
     try {
       const type = control.getAttribute("role") === "radio" || control.hasAttribute("aria-pressed")
         ? "radio"
+        : control.dataset.applypilotChoiceKind === "radio"
+          ? "radio"
         : control.getAttribute("role") === "checkbox" || control.hasAttribute("aria-checked")
           ? "checkbox"
         : (control.type || control.tagName).toLowerCase();
@@ -915,6 +935,7 @@ async function applyFormFillPlan(actions) {
           (candidate.type || "").toLowerCase() === "radio"
           || candidate.getAttribute("role") === "radio"
           || candidate.hasAttribute("aria-pressed")
+          || candidate.dataset.applypilotChoiceKind === "radio"
         ));
         const group = taggedGroup.length
           ? taggedGroup
