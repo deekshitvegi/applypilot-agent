@@ -16,6 +16,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     getActiveTab: getActiveTabInfo,
     getTab: () => getTabInfo(message.tabId),
     readPageContext: readActivePageContext,
+    inspectPageActions: inspectActivePageActions,
+    clickPageAction: () => clickActivePageAction(message.actionId),
     collectJobQueue: () => collectLinkedInJobQueue(message.tabId),
     openQueuedJob: () => openQueuedJob(message.tabId, message.url),
     openEasyApply: openLinkedInEasyApply,
@@ -118,6 +120,16 @@ async function readActivePageContext() {
   const tab = await getActiveHttpTab();
   const context = await runInTab(tab.id, extractVisiblePageContext);
   return { ...context, tab_id: tab.id, url: tab.url };
+}
+
+async function inspectActivePageActions() {
+  const tab = await getActiveHttpTab();
+  return runInTab(tab.id, extractPageActionControls);
+}
+
+async function clickActivePageAction(actionId) {
+  const tab = await getActiveHttpTab();
+  return runInTab(tab.id, clickPlannedPageAction, [actionId]);
 }
 
 async function collectLinkedInJobQueue(tabId) {
@@ -262,6 +274,49 @@ function detectAdapterFromUrl(url) {
   if (host === "lever.co" || host.endsWith(".lever.co")) return "lever";
   if (host === "myworkdayjobs.com" || host.endsWith(".myworkdayjobs.com")) return "workday";
   return "generic";
+}
+
+function extractPageActionControls() {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden"
+      && rect.width > 0 && rect.height > 0 && style.opacity !== "0";
+  };
+  const controls = [];
+  [...document.querySelectorAll("button, a[href], [role='button']")].forEach((element, index) => {
+    if (!visible(element)) return;
+    const label = String(
+      element.textContent || element.getAttribute("aria-label") || element.getAttribute("title") || "",
+    ).replace(/\s+/g, " ").trim().slice(0, 240);
+    if (!label) return;
+    const id = `action-${index}`;
+    element.dataset.applypilotActionId = id;
+    controls.push({
+      id,
+      label,
+      kind: element.matches("a[href]") ? "link" : element.matches("button") ? "button" : "control",
+      disabled: Boolean(element.disabled || element.getAttribute("aria-disabled") === "true"),
+    });
+  });
+  return {
+    page_title: document.title,
+    page_text: String(document.querySelector("main")?.innerText || document.body?.innerText || "")
+      .replace(/\s+/g, " ").slice(0, 12000),
+    controls: controls.slice(0, 80),
+  };
+}
+
+function clickPlannedPageAction(actionId) {
+  const control = document.querySelector(`[data-applypilot-action-id="${CSS.escape(actionId || "")}"]`);
+  if (!control) return { clicked: false, error: "The planned control is no longer available." };
+  const label = String(control.textContent || control.getAttribute("aria-label") || "")
+    .replace(/\s+/g, " ").trim().toLowerCase();
+  if (/submit|send application|finish application|sign in|log in|login|withdraw|delete|purchase|pay/.test(label)) {
+    return { clicked: false, error: "The AI planner cannot click final or destructive controls." };
+  }
+  control.click();
+  return { clicked: true, label };
 }
 
 async function extractFormFields() {
@@ -845,7 +900,7 @@ function clickApplicationEntry() {
     return visible(control) && !["hidden", "submit", "button"].includes(type);
   });
   const labels = ["apply now", "apply for this job", "apply for this position", "start application", "continue application"];
-  const candidates = [...document.querySelectorAll("a, button, [role='button']")].filter((element) => {
+  const rawCandidates = [...document.querySelectorAll("a, button, [role='button']")].filter((element) => {
     if (!visible(element) || element.disabled || element.getAttribute("aria-disabled") === "true") return false;
     const label = (element.textContent || element.getAttribute("aria-label") || "")
       .replace(/\s+/g, " ")
@@ -853,6 +908,31 @@ function clickApplicationEntry() {
       .toLowerCase();
     return labels.includes(label);
   });
+  let candidates = rawCandidates.filter(
+    (candidate) => !rawCandidates.some(
+      (other) => other !== candidate && other.contains(candidate),
+    ),
+  );
+  if (candidates.length > 1) {
+    const onScreen = candidates.filter((candidate) => {
+      const rect = candidate.getBoundingClientRect();
+      return rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
+    });
+    if (onScreen.length) candidates = onScreen;
+  }
+  if (candidates.length > 1) {
+    const normalized = candidates.map((candidate) => (
+      candidate.textContent || candidate.getAttribute("aria-label") || ""
+    ).replace(/\s+/g, " ").trim().toLowerCase());
+    if (new Set(normalized).size === 1) {
+      candidates.sort((left, right) => {
+        const leftRect = left.getBoundingClientRect();
+        const rightRect = right.getBoundingClientRect();
+        return rightRect.width * rightRect.height - leftRect.width * leftRect.height;
+      });
+      candidates = [candidates[0]];
+    }
+  }
   if (candidates.length === 1) {
     if (formControls.length >= 3 && candidates[0].closest("form")) {
       return { clicked: false, already_form: true };

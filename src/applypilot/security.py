@@ -26,6 +26,15 @@ class LocalCipher:
                 return value
             raise ValueError("Candidate data could not be decrypted with the local key") from None
 
+    def encrypt_bytes(self, value: bytes) -> bytes:
+        return self._get_fernet().encrypt(value)
+
+    def decrypt_bytes(self, value: bytes) -> bytes:
+        try:
+            return self._get_fernet().decrypt(value)
+        except (InvalidToken, ValueError):
+            raise ValueError("Résumé file could not be decrypted with the local key") from None
+
     def _get_fernet(self) -> Fernet:
         if self._fernet is not None:
             return self._fernet

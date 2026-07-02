@@ -83,9 +83,12 @@ def test_local_resume_upload_and_provider_status(monkeypatch, tmp_path: Path) ->
         files={"file": ("resume.txt", resume_text, "text/plain")},
     )
     provider = client.get("/api/provider")
+    original = client.get("/api/resumes/active/file")
 
     assert upload.status_code == 200
     assert upload.json()["filename"] == "resume.txt"
+    assert original.status_code == 200
+    assert original.content == resume_text.encode()
     assert provider.status_code == 200
     assert provider.json()["provider"] == "gemini"
 
