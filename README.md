@@ -67,6 +67,8 @@ login step, a review step, or a confirmed result. Once a form is detected, its
 fields take precedence over any remaining **Apply** links on the page. ApplyPilot
 will not advance while visible required fields are empty, and it stops if a
 control leaves the page unchanged instead of repeating the same action.
+If an ATS replaces its embedded application iframe during the run, ApplyPilot
+rescans the replacement frame and retries the pending fill once.
 
 LinkedIn's job-search safety reminder is handled as part of the employer-site
 handoff: ApplyPilot resolves **Continue applying** and opens the disclosed

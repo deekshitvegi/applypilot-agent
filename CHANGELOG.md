@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.3 - 2026-07-02
+
+- Detected employer iframe replacement between scanning and filling, then
+  rescanned and retried once against the new frame instead of failing.
+- Added guarded scan/fill UI handlers so a disappearing application frame is
+  reported in chat rather than becoming an uncaught extension promise error.
+
 ## 0.9.2 - 2026-07-02
 
 - Ignored generic reusable labels such as “Select,” preventing an old “No” from

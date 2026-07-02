@@ -1520,6 +1520,7 @@ async function startGuidedAnalysis() {
 
 async function fillForm(options = {}) {
   const throwOnError = options?.throwOnError === true;
+  const frameRetry = options?.frameRetry === true;
   if (!state.formPlan) return;
   elements.fillForm.disabled = true;
   elements.fillForm.textContent = "Filling…";
@@ -1550,6 +1551,15 @@ async function fillForm(options = {}) {
     }
     return result;
   } catch (error) {
+    if (!frameRetry && /no frame with id|frame was removed|cannot find frame/i.test(error.message)) {
+      reportActivity("The application frame changed; rescanning the current form before continuing…");
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const refreshed = await scanForm({ throwOnError: true });
+      if (refreshed?.actions?.length) {
+        return fillForm({ throwOnError, frameRetry: true });
+      }
+      return { filled: 0, errors: [] };
+    }
     elements.formStatus.textContent = error.message;
     if (throwOnError) throw error;
     return null;
@@ -2420,8 +2430,18 @@ elements.downloadDocx.addEventListener("click", () => openArtifact("docx"));
 elements.downloadPdf.addEventListener("click", () => openArtifact("pdf"));
 elements.attachResume.addEventListener("click", attachTailoredResume);
 elements.downloadHistory.addEventListener("click", downloadApplicationHistory);
-elements.scanForm.addEventListener("click", startGuidedAnalysis);
-elements.fillForm.addEventListener("click", fillForm);
+elements.scanForm.addEventListener("click", () => {
+  startGuidedAnalysis().catch((error) => {
+    elements.formStatus.textContent = error.message;
+    appendMessage(`I couldn't continue the form scan: ${error.message}`, "agent-message");
+  });
+});
+elements.fillForm.addEventListener("click", () => {
+  fillForm().catch((error) => {
+    elements.formStatus.textContent = error.message;
+    appendMessage(`I couldn't fill the current form: ${error.message}`, "agent-message");
+  });
+});
 elements.includeOptionalQuestions.addEventListener("change", async () => {
   if (!state.formPlan) return;
   state.questionnaireActive = true;
