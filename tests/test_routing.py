@@ -40,6 +40,18 @@ def test_linkedin_external_apply_button_wins_over_easy_apply_fallback() -> None:
     assert decision.target_url == "https://www.linkedin.com/jobs/view/example"
 
 
+def test_generic_portal_apply_button_routes_to_employer_application() -> None:
+    decision = choose_application_route(
+        JobApplicationOptions(
+            source_url="https://www.dice.com/job-detail/example",
+            external_apply_available=True,
+        )
+    )
+
+    assert decision.route == "company_button"
+    assert decision.target_url == "https://www.dice.com/job-detail/example"
+
+
 def test_unverified_external_url_requires_review() -> None:
     decision = choose_application_route(
         JobApplicationOptions(

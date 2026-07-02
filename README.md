@@ -40,6 +40,12 @@ external **Apply** button, even when its destination is not present as a normal
 page link. LinkedIn Easy Apply is a fallback when no company application route
 is available.
 
+The same page-understanding loop also works from other job portals such as
+Indeed and Dice and from employer-hosted job pages. On multi-step applications,
+ApplyPilot rescans each step, fills reusable answers, asks only for missing
+information, and advances through **Next** and **Review**. The configured
+ask/always-allow policy still controls the final submission.
+
 ## Product boundaries
 
 - The user chooses whether ApplyPilot asks before every final submission or

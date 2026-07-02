@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.2 - 2026-07-01
+
+- Added deterministic handling for LinkedIn's job-search safety reminder so
+  **Continue applying** completes the employer-site handoff.
+- Generalized primary Apply-button detection for LinkedIn, Indeed, Dice,
+  employer job pages, and other portals that use buttons or same-page routing.
+- Added a multi-step application loop that rescans every page, fills known
+  answers, asks for unknowns, and advances through Next and Review while
+  preserving the configured final-submit approval boundary.
+- Added delayed-render retries for JavaScript job pages and employer forms.
+- Opened the employer page and its application form before slower local-AI
+  résumé preparation, and kept Ollama models warm for 30 minutes.
+
 ## 0.5.1 - 2026-07-01
 
 - Fixed LinkedIn external Apply buttons implemented with JavaScript so the
