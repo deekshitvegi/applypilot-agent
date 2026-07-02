@@ -334,15 +334,7 @@ async function extractFormFields() {
   } else if (host.includes("myworkdayjobs.com")) {
     root = document.querySelector("[data-automation-id='applicationPage'], main") || document;
   } else {
-    const formCandidates = [...document.querySelectorAll("form")]
-      .map((form) => ({
-        form,
-        count: form.querySelectorAll("input, textarea, select, [role='combobox']").length,
-      }))
-      .sort((left, right) => right.count - left.count);
-    root = formCandidates[0]?.count >= 2
-      ? formCandidates[0].form
-      : document.querySelector("main, [role='main']") || document;
+    root = document.querySelector("main, [role='main']") || document;
   }
   const controls = [...root.querySelectorAll(
     "input, textarea, select, [role='combobox'], button[aria-haspopup='listbox'], input[aria-haspopup='listbox']",
@@ -736,6 +728,27 @@ function clickIntermediateApplicationStep() {
     };
   }
   const control = intermediate[0];
+  const requiredFields = [...root.querySelectorAll(
+    "input[required], textarea[required], select[required], [aria-required='true']",
+  )].filter((field) => visible(field) && (field.type || "").toLowerCase() !== "hidden");
+  const emptyRequired = requiredFields.filter((field) => {
+    const type = (field.type || "").toLowerCase();
+    if (["checkbox", "radio"].includes(type)) {
+      const name = field.name;
+      if (!name) return !field.checked;
+      return ![...root.querySelectorAll(`[name="${CSS.escape(name)}"]`)].some((item) => item.checked);
+    }
+    if (type === "file") return !field.files?.length;
+    return !String(field.value || "").trim();
+  });
+  if (emptyRequired.length) {
+    return {
+      clicked: false,
+      final_ready: false,
+      intermediate: true,
+      error: `${emptyRequired.length} required field${emptyRequired.length === 1 ? " is" : "s are"} still empty on this step.`,
+    };
+  }
   if (control.disabled || control.getAttribute("aria-disabled") === "true") {
     return {
       clicked: false,
@@ -745,7 +758,8 @@ function clickIntermediateApplicationStep() {
     };
   }
   control.click();
-  return { clicked: true, final_ready: false, label: labelOf(control) };
+  const fingerprint = `${location.href}|${controls.map(labelOf).join("|")}|${requiredFields.length}`;
+  return { clicked: true, final_ready: false, label: labelOf(control), fingerprint };
 }
 
 function detectSubmissionConfirmation() {

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.2 - 2026-07-02
+
+- Added explicit application-stage state so the runner stops searching for an
+  Apply button after an employer form has opened.
+- Fixed generic portal scanning to inspect the main application region instead
+  of accidentally selecting an unrelated form container.
+- Prevented repeated Apply-button errors between multi-step form pages, blocked
+  premature **Next** actions while required fields are empty, and stopped safe
+  navigation when the page does not change.
+
 ## 0.7.1 - 2026-07-02
 
 - Added explicit consent wording for hands-off normal login using credentials
