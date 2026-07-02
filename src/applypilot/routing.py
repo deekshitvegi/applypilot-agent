@@ -23,6 +23,13 @@ def choose_application_route(options: JobApplicationOptions) -> ApplicationRoute
             reason="The external application URL must be verified before it is opened.",
         )
 
+    if options.external_apply_available:
+        return ApplicationRouteDecision(
+            route="company_button",
+            target_url=options.source_url,
+            reason="The listing provides an external employer Apply button.",
+        )
+
     if options.easy_apply_available:
         return ApplicationRouteDecision(
             route="easy_apply",

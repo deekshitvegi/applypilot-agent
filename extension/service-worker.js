@@ -8,6 +8,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     scanForm: scanActiveForm,
     fillForm: () => fillActiveForm(message.actions || []),
     openApplication: () => openApplicationRoute(message.url),
+    openExternalApply: openLinkedInExternalApply,
     submitApplication: submitActiveApplication,
     verifySubmission: verifyActiveSubmission,
     attachResume: () => attachResumeFile(message.fieldId, message.url, message.filename),
@@ -161,6 +162,38 @@ async function openLinkedInEasyApply() {
   return runInTab(tab.id, clickLinkedInEasyApply);
 }
 
+async function openLinkedInExternalApply() {
+  const tab = await getActiveHttpTab();
+  if (!/(^|\.)linkedin\.com$/i.test(new URL(tab.url).hostname)) {
+    throw new Error("Open the captured LinkedIn job before opening its employer application.");
+  }
+  const before = new Set(
+    (await chrome.tabs.query({ currentWindow: true })).map((candidate) => candidate.id),
+  );
+  const result = await runInTab(tab.id, clickLinkedInExternalApply);
+  if (!result.clicked) return { opened: false, ...result };
+
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const created = tabs.find((candidate) => {
+      if (before.has(candidate.id) || !/^https?:/i.test(candidate.url || "")) return false;
+      return !/(^|\.)linkedin\.com$/i.test(new URL(candidate.url).hostname);
+    });
+    const original = tabs.find((candidate) => candidate.id === tab.id);
+    const originalMoved = original && /^https?:/i.test(original.url || "")
+      && !/(^|\.)linkedin\.com$/i.test(new URL(original.url).hostname);
+    const target = created || (originalMoved ? original : null);
+    if (!target) continue;
+    await chrome.tabs.update(target.id, { active: true });
+    return { opened: true, tab_id: target.id, url: target.url || "" };
+  }
+  return {
+    opened: false,
+    error: "LinkedIn's Apply button did not open an employer page. Click it once manually, then resume ApplyPilot.",
+  };
+}
+
 async function saveJobContext(context) {
   await chrome.storage.session.set({ applypilotJobContext: context || null });
   return { saved: true };
@@ -203,7 +236,10 @@ async function extractFormFields() {
   const host = location.hostname.toLowerCase();
   let root;
   if (host.includes("linkedin.com")) {
-    root = document.querySelector(".jobs-easy-apply-modal, [role='dialog']") || document;
+    root = document.querySelector(
+      ".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal']",
+    );
+    if (!root) return [];
   } else if (host.includes("greenhouse.io")) {
     root = document.querySelector("#application_form, main") || document;
   } else if (host.includes("lever.co")) {
@@ -498,6 +534,15 @@ function clickFinalSubmit() {
     const rect = element.getBoundingClientRect();
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
+  if (
+    location.hostname.toLowerCase().includes("linkedin.com")
+    && !document.querySelector(".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal']")
+  ) {
+    return {
+      clicked: false,
+      error: "This is a LinkedIn listing, not an application form. Open the employer application first.",
+    };
+  }
   const challenge = [
     "iframe[src*='captcha']",
     "iframe[src*='recaptcha']",
@@ -568,12 +613,54 @@ function clickLinkedInEasyApply() {
   return { opened: true };
 }
 
+function clickLinkedInExternalApply() {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+  const labelOf = (element) => String(
+    element.textContent || element.getAttribute("aria-label") || element.getAttribute("title") || "",
+  ).replace(/\s+/g, " ").trim().toLowerCase();
+  const preferred = [...document.querySelectorAll(".jobs-apply-button")].filter((element) => {
+    const label = labelOf(element);
+    return visible(element) && !element.disabled && label.includes("apply") && !label.includes("easy apply");
+  });
+  const fallback = [...document.querySelectorAll("button, a[href]")].filter((element) => {
+    const label = labelOf(element);
+    return visible(element) && !element.disabled && !label.includes("easy apply") && (
+      label === "apply" || /^apply to .+/.test(label) || label.includes("company website")
+    );
+  });
+  const candidates = preferred.length ? preferred : fallback;
+  if (candidates.length !== 1) {
+    return {
+      clicked: false,
+      error: candidates.length
+        ? "Multiple employer Apply buttons were found; choose the correct one."
+        : "The employer Apply button was not found on this LinkedIn job.",
+    };
+  }
+  candidates[0].click();
+  return { clicked: true, label: labelOf(candidates[0]) || "Apply" };
+}
+
 function clickApplicationEntry() {
   const visible = (element) => {
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
+  if (
+    location.hostname.toLowerCase().includes("linkedin.com")
+    && !document.querySelector(".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal']")
+  ) {
+    return {
+      clicked: false,
+      listing_page: true,
+      error: "Open the employer Apply button before scanning application fields.",
+    };
+  }
   const formControls = [...document.querySelectorAll("input, textarea, select")].filter((control) => {
     const type = (control.type || "").toLowerCase();
     return visible(control) && !["hidden", "submit", "button"].includes(type);
@@ -809,6 +896,19 @@ function extractJobFromPage() {
       return false;
     }
   });
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+  const externalApplyAvailable = adapter === "linkedin" && [...document.querySelectorAll(
+    ".jobs-apply-button, button, a[href]",
+  )].some((element) => {
+    const label = clean(element.textContent || element.getAttribute("aria-label") || "").toLowerCase();
+    return visible(element) && label.includes("apply") && !label.includes("easy apply") && (
+      element.matches(".jobs-apply-button") || label === "apply" || label.includes("company website")
+    );
+  });
   const onAtsPage = ["greenhouse", "lever", "workday"].includes(adapter);
   const companyApplicationUrl = onAtsPage
     ? location.href
@@ -825,6 +925,7 @@ function extractJobFromPage() {
     description: htmlToText(structured.description) || firstText(selectors.description),
     company_application_url: companyApplicationUrl,
     company_url_verified: onAtsPage || isRecognizedAts(companyApplicationUrl),
+    external_apply_available: externalApplyAvailable,
     easy_apply_available: easyApplyAvailable,
     adapter,
   };

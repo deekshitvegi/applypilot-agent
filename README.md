@@ -35,8 +35,10 @@ ApplyPilot prefers the employer's official careers page or applicant tracking
 system (ATS), including when a LinkedIn listing also offers Easy Apply. It
 verifies that the destination belongs to the employer or a recognized ATS,
 opens the external application in the user's existing browser session, and
-continues the assisted flow there. LinkedIn Easy Apply is a fallback when no
-verified company application route is available.
+continues the assisted flow there. This includes LinkedIn's JavaScript-based
+external **Apply** button, even when its destination is not present as a normal
+page link. LinkedIn Easy Apply is a fallback when no company application route
+is available.
 
 ## Product boundaries
 

@@ -59,11 +59,14 @@ class JobApplicationOptions(BaseModel):
     source_url: str
     company_application_url: str = ""
     company_url_verified: bool = False
+    external_apply_available: bool = False
     easy_apply_available: bool = False
 
 
 class ApplicationRouteDecision(BaseModel):
-    route: Literal["company_site", "easy_apply", "manual_review", "unavailable"]
+    route: Literal[
+        "company_site", "company_button", "easy_apply", "manual_review", "unavailable"
+    ]
     target_url: str = ""
     reason: str
 
@@ -115,6 +118,7 @@ class JobContext(BaseModel):
     description: str
     company_application_url: str = ""
     company_url_verified: bool = False
+    external_apply_available: bool = False
     easy_apply_available: bool = False
     adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = "generic"
 
