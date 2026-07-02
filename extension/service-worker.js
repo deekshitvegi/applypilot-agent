@@ -476,16 +476,20 @@ async function extractFormFields() {
     });
   }
   const queryAll = (selector) => roots.flatMap((candidate) => [...candidate.querySelectorAll(selector)]);
+  const elementVisible = (element) => {
+    if (!element) return false;
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
   const controls = queryAll(
     "input, textarea, select, [role='combobox'], button[aria-haspopup='listbox'], input[aria-haspopup='listbox']",
   ).filter((control) => {
     const type = (control.type || "").toLowerCase();
     const customCombobox = control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox";
-    const style = getComputedStyle(control);
-    const rect = control.getBoundingClientRect();
-    const visible = type === "file" || (
-      style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
-    );
+    const labelledControlVisible = ["checkbox", "radio"].includes(type)
+      && [...(control.labels || [])].some(elementVisible);
+    const visible = type === "file" || elementVisible(control) || labelledControlVisible;
     const popupChild = control.closest("[role='listbox'], [role='menu'], [data-radix-popper-content-wrapper]");
     return visible && !popupChild && !control.disabled && (
       customCombobox || !["hidden", "submit", "button", "reset", "image"].includes(type)
@@ -523,6 +527,45 @@ async function extractFormFields() {
     return /[a-z]{3}/i.test(value) ? value : "";
   };
 
+  const groupQuestion = (control) => {
+    const fieldsetLegend = control.closest("fieldset")?.querySelector("legend")?.textContent || "";
+    if (cleanText(fieldsetLegend)) {
+      return { label: cleanText(fieldsetLegend), required: /\*/.test(fieldsetLegend) };
+    }
+    let container = control.parentElement;
+    const type = (control.type || "").toLowerCase();
+    for (let depth = 0; container && depth < 7; depth += 1, container = container.parentElement) {
+      const grouped = [...container.querySelectorAll(`input[type="${CSS.escape(type)}"]`)]
+        .filter((candidate) => candidate.getRootNode() === control.getRootNode());
+      if (grouped.length < 2) continue;
+      const candidates = [
+        ...container.querySelectorAll(
+          "legend, h1, h2, h3, h4, h5, h6, p, strong, label, [class*='question'], [data-testid*='question'], [aria-level]",
+        ),
+      ];
+      const question = candidates.find((candidate) => {
+        if (candidate.contains(control) || candidate.querySelector("input, textarea, select")) return false;
+        const text = cleanText(candidate.textContent);
+        return text.length >= 4 && text.length <= 500;
+      });
+      if (question) {
+        return {
+          label: cleanText(question.textContent),
+          required: /\*/.test(question.textContent || ""),
+        };
+      }
+      let previous = container.previousElementSibling;
+      while (previous) {
+        const text = cleanText(previous.textContent);
+        if (text.length >= 4 && text.length <= 500) {
+          return { label: text, required: /\*/.test(previous.textContent || "") };
+        }
+        previous = previous.previousElementSibling;
+      }
+    }
+    return { label: "", required: false };
+  };
+
   const collectCustomOptions = (control) => {
     const custom = control.tagName !== "SELECT" && (
       control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox"
@@ -551,7 +594,14 @@ async function extractFormFields() {
   };
 
   const fields = [];
+  const seenRadioGroups = new Set();
   for (const [index, control] of controls.entries()) {
+    const nativeType = (control.type || "").toLowerCase();
+    const radioGroupKey = nativeType === "radio" && control.name
+      ? `${roots.indexOf(control.getRootNode())}:${control.name}`
+      : "";
+    if (radioGroupKey && seenRadioGroups.has(radioGroupKey)) continue;
+    if (radioGroupKey) seenRadioGroups.add(radioGroupKey);
     const applypilotId = `ap-${index}`;
     control.dataset.applypilotId = applypilotId;
     const explicitLabel = control.id
@@ -561,14 +611,15 @@ async function extractFormFields() {
     const nativeLabels = [...(control.labels || [])].map((label) => label.textContent).join(" ");
     const wrappingLabel = control.closest("label")?.textContent || "";
     const legend = control.closest("fieldset")?.querySelector("legend")?.textContent || "";
-    const labelParts = [
+    const rawLabelParts = [
       legend,
       labelledByText(control),
       explicitLabel,
       nativeLabels,
       wrappingLabel,
       nearbyLabel(control),
-    ].map(cleanText).filter((part, partIndex, parts) => (
+    ];
+    const labelParts = rawLabelParts.map(cleanText).filter((part, partIndex, parts) => (
       part && part.length <= 240 && parts.findIndex((value) => value.toLowerCase() === part.toLowerCase()) === partIndex
     ));
     const tag = control.tagName.toLowerCase();
@@ -580,11 +631,19 @@ async function extractFormFields() {
       control.getAttribute("aria-label") ||
       control.getAttribute("placeholder") ||
       readableName(control);
-    const label = cleanText(
-      (fieldType === "radio" && legend ? legend : "") ||
-      labelledByText(control) || explicitLabel || nativeLabels ||
-      control.getAttribute("aria-label") || wrappingLabel || nearbyLabel(control) || fallbackLabel,
+    const grouped = ["radio", "checkbox"].includes(fieldType)
+      ? groupQuestion(control)
+      : { label: "", required: false };
+    const groupedQuestion = grouped.label;
+    const optionLabel = cleanText(
+      explicitLabel || nativeLabels || wrappingLabel || control.getAttribute("aria-label") || control.value,
     );
+    const label = cleanText(fieldType === "radio"
+      ? groupedQuestion || legend || nearbyLabel(control) || fallbackLabel
+      : fieldType === "checkbox" && groupedQuestion
+        ? `${groupedQuestion} ${optionLabel}`
+        : labelledByText(control) || explicitLabel || nativeLabels ||
+          control.getAttribute("aria-label") || wrappingLabel || nearbyLabel(control) || fallbackLabel);
     let options = tag === "select"
       ? [...control.options]
           .filter((option) => option.value || option.textContent.trim())
@@ -594,10 +653,27 @@ async function extractFormFields() {
       options = collectCustomOptions(control);
     } else if (fieldType === "radio" && control.name) {
       options = queryAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`)
+        .filter((radio) => radio.getRootNode() === control.getRootNode())
         .map((radio) => ({
           value: radio.value || cleanText(radio.labels?.[0]?.textContent),
           label: cleanText(radio.labels?.[0]?.textContent || radio.value),
         }))
+        .filter((option) => option.value || option.label);
+    } else if (fieldType === "checkbox" && groupedQuestion) {
+      options = queryAll('input[type="checkbox"]')
+        .filter((candidate) => (
+          candidate.getRootNode() === control.getRootNode()
+          && groupQuestion(candidate).label === groupedQuestion
+        ))
+        .map((candidate) => {
+          const candidateLabel = cleanText(
+            [...(candidate.labels || [])].map((item) => item.textContent).join(" ")
+            || candidate.closest("label")?.textContent
+            || candidate.getAttribute("aria-label")
+            || candidate.value,
+          );
+          return { value: candidate.value || candidateLabel, label: candidateLabel };
+        })
         .filter((option) => option.value || option.label);
     }
 
@@ -609,14 +685,23 @@ async function extractFormFields() {
     const customValue = displayedValue.length <= 160 && !emptySelectValues.has(displayedValue.toLowerCase())
       ? displayedValue
       : "";
-    const requiredHint = labelParts.some((part) => /\*\s*$/.test(cleanText(part).replace(/\s+/g, " ")) || /\*/.test(part));
+    const requiredHint = grouped.required || rawLabelParts.some((part) => /\*/.test(String(part || "")));
+    const radioRequired = fieldType === "radio" && control.name
+      ? queryAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`).some(
+          (candidate) => candidate.getRootNode() === control.getRootNode() && (
+            candidate.required || candidate.getAttribute("aria-required") === "true"
+          ),
+        )
+      : false;
 
     fields.push({
       id: applypilotId,
       label: cleanText(label || fallbackLabel || `Unlabeled ${fieldType} field`),
+      group_label: groupedQuestion,
+      option_label: fieldType === "checkbox" ? optionLabel : "",
       name: control.name || "",
       field_type: fieldType,
-      required: control.required || control.getAttribute("aria-required") === "true" || requiredHint,
+      required: control.required || control.getAttribute("aria-required") === "true" || radioRequired || requiredHint,
       value: fieldType === "checkbox" || fieldType === "radio"
         ? (control.checked ? control.value || "true" : "")
         : control.value || customValue,
@@ -644,6 +729,20 @@ async function applyFormFillPlan(actions) {
   const findControl = (fieldId) => roots
     .map((root) => root.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`))
     .find(Boolean);
+  const queryAll = (selector) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
+  const normalizeChoice = (value) => String(value || "")
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  const semanticChoice = (value) => {
+    const normalized = normalizeChoice(value);
+    const tokens = new Set(normalized.split(" "));
+    if (normalized === "true" || normalized === "1" || tokens.has("yes")) return "yes";
+    if (normalized === "false" || normalized === "0" || tokens.has("no") || normalized.includes("do not")) return "no";
+    return normalized;
+  };
 
   for (const action of actions) {
     const control = findControl(action.field_id);
@@ -719,11 +818,40 @@ async function applyFormFillPlan(actions) {
         continue;
       }
       if (type === "checkbox") {
-        control.checked = ["true", "yes", "1", "on"].includes(String(action.value).toLowerCase());
+        const desired = ["true", "yes", "1", "on"].includes(String(action.value).toLowerCase());
+        if (control.checked !== desired) control.click();
+        if (control.checked !== desired) {
+          const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
+          if (descriptor?.set) descriptor.set.call(control, desired);
+          else control.checked = desired;
+          dispatch(control);
+        }
+        filled += 1;
+        continue;
       } else if (type === "radio") {
-        const target = String(action.value).trim().toLowerCase();
-        control.checked = [control.value, control.labels?.[0]?.textContent || ""]
-          .some((value) => String(value).trim().toLowerCase() === target);
+        const group = control.name
+          ? queryAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`)
+              .filter((candidate) => candidate.getRootNode() === control.getRootNode())
+          : [control];
+        const target = semanticChoice(action.value);
+        const desired = group.find((candidate) => [
+          candidate.value,
+          candidate.labels?.[0]?.textContent || "",
+          candidate.getAttribute("aria-label") || "",
+        ].some((value) => {
+          const normalized = normalizeChoice(value);
+          return normalized === normalizeChoice(action.value) || semanticChoice(value) === target;
+        }));
+        if (!desired) throw new Error(`No radio option matched "${action.value}".`);
+        if (!desired.checked) desired.click();
+        if (!desired.checked) {
+          const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
+          if (descriptor?.set) descriptor.set.call(desired, true);
+          else desired.checked = true;
+          dispatch(desired);
+        }
+        filled += 1;
+        continue;
       } else if (control.tagName === "SELECT") {
         const normalizeOption = (value) => String(value || "")
           .normalize("NFKD")

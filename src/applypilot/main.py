@@ -388,11 +388,14 @@ def application_route(options: JobApplicationOptions) -> ApplicationRouteDecisio
 @app.post("/api/forms/plan", response_model=FormFillPlan)
 def form_plan(request: FormPlanRequest) -> FormFillPlan:
     require_local_data_mode()
+    resume = store.get_active_resume()
     return plan_form_fill(
         page_url=request.page_url,
+        source_url=request.source_url,
         fields=request.fields,
         profile=store.load(),
         answers=store.list_answers(),
+        resume_text=resume.extracted_text if resume else "",
         adapter=request.adapter,
     )
 

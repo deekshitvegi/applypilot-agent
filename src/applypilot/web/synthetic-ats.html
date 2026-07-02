@@ -42,6 +42,12 @@
       .radio-row { display: flex; gap: 20px; }
       .radio-row label { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
       .radio-row input { width: auto; accent-color: #756cff; }
+      .styled-options { display: grid; gap: 10px; }
+      .styled-option { display: flex; grid-template-columns: auto 1fr; align-items: center; gap: 10px; cursor: pointer; }
+      .styled-option input { position: absolute; width: 0; height: 0; opacity: 0; }
+      .choice-marker { width: 22px; height: 22px; border: 2px solid #65718e; border-radius: 6px; background: #090f20; }
+      .styled-option input[type="radio"] + .choice-marker { border-radius: 50%; }
+      .styled-option input:checked + .choice-marker { border-color: #9b94ff; background: #756cff; box-shadow: inset 0 0 0 4px #090f20; }
       button { grid-column: 1 / -1; border-color: #756cff; background: #5b4de8; cursor: pointer; font-weight: 900; }
       #result { grid-column: 1 / -1; margin: 0; color: #80edc1; font-size: 13px; }
       @media (max-width: 620px) { form { grid-template-columns: 1fr; padding: 20px; } .wide, button { grid-column: 1; } }
@@ -99,6 +105,25 @@
             <label><input name="sponsorship" type="radio" value="Yes" required /> Yes</label>
             <label><input name="sponsorship" type="radio" value="No" required /> No</label>
           </div>
+        </fieldset>
+        <fieldset class="wide">
+          <legend>Are you legally authorized to work in the United States? *</legend>
+          <div class="styled-options">
+            <label class="styled-option"><input name="authorization" type="radio" value="Yes" required /><span class="choice-marker"></span>Yes</label>
+            <label class="styled-option"><input name="authorization" type="radio" value="No" required /><span class="choice-marker"></span>No</label>
+          </div>
+        </fieldset>
+        <fieldset class="wide">
+          <legend>What development languages are you most experienced with? *</legend>
+          <div class="styled-options">
+            <label class="styled-option"><input name="languages" type="checkbox" value="Python" /><span class="choice-marker"></span>Python</label>
+            <label class="styled-option"><input name="languages" type="checkbox" value="Java" /><span class="choice-marker"></span>Java</label>
+            <label class="styled-option"><input name="languages" type="checkbox" value="Go" /><span class="choice-marker"></span>Go</label>
+          </div>
+        </fieldset>
+        <fieldset class="wide">
+          <legend>Please review the synthetic background-check policy. *</legend>
+          <label class="styled-option"><input name="background_policy" type="checkbox" value="reviewed" required /><span class="choice-marker"></span>I have reviewed the background-check policy</label>
         </fieldset>
         <label class="wide">
           Why are you interested in this role?

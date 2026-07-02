@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.4 - 2026-07-02
+
+- Added grouped radio and checkbox understanding, including styled controls
+  whose native input is visually hidden.
+- Added deterministic work-authorization, sponsorship, background-policy, and
+  captured-source mapping without an AI request.
+- Added evidence-only résumé matching for programming-language, tool, and cloud
+  checkbox groups; unsupported choices remain unselected.
+- Deduplicated unanswered multi-select groups so relocation and proficiency are
+  asked once and remembered instead of appearing as unrelated fields.
+- Made conversational commands such as “fill that part” rescan and update the
+  live application rather than falling through to ordinary AI chat.
+- Expanded the synthetic ATS with styled radio and checkbox regression fields.
+
 ## 0.7.3 - 2026-07-02
 
 - Added nested-frame and open-shadow-root discovery for employer Apply controls
