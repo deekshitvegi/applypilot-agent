@@ -27,6 +27,76 @@ body {
   backdrop-filter: blur(10px);
 }
 
+.drawer-open { overflow: hidden; }
+.settings-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  background: rgba(16, 24, 40, 0.28);
+}
+.settings-drawer {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  overflow-y: auto;
+  padding: 0 12px 24px;
+  background: #f5f6f8;
+}
+.drawer-header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 -12px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #e2e5e9;
+  background: rgba(255, 255, 255, 0.97);
+}
+.drawer-header h2, .drawer-header p { margin-bottom: 0; }
+.drawer-header .icon-button { flex: none; }
+.settings-tabs {
+  position: sticky;
+  z-index: 2;
+  top: 66px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin: 12px 0;
+  padding: 4px;
+  border: 1px solid #e0e3e7;
+  border-radius: 10px;
+  background: #fff;
+}
+.settings-tab {
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+  color: #667085;
+}
+.settings-tab:hover:not(:disabled) { background: #f2f4f7; }
+.settings-tab.active { background: #1f2937; color: #fff; }
+.settings-pane { display: grid; gap: 10px; }
+.settings-pane .advanced-settings > summary,
+.settings-pane .manual-workflow > summary { display: none; }
+.settings-pane .settings-stack,
+.settings-pane .manual-workflow .workflow { margin-top: 0; }
+.troubleshooting-tools {
+  padding: 11px;
+  border: 1px dashed #d0d5dd;
+  border-radius: 10px;
+}
+.troubleshooting-tools > summary {
+  cursor: pointer;
+  color: #667085;
+  font-size: 12px;
+  font-weight: 650;
+}
+.troubleshooting-tools > .workflow-step { margin-top: 8px; }
+main > .advanced-settings,
+main > .manual-workflow { display: none; }
+
 .brand-mark {
   display: grid;
   width: 34px;
@@ -191,7 +261,7 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
   line-height: 1.45;
 }
 
-.chat-card { min-height: 470px; display: flex; flex-direction: column; }
+.chat-card { min-height: 520px; display: flex; flex-direction: column; }
 .messages {
   display: flex;
   min-height: 310px;
@@ -223,6 +293,17 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
 .image-preview { position: relative; flex: none; }
 .image-preview img { width: 62px; height: 62px; border: 1px solid #e4e7ec; border-radius: 8px; object-fit: cover; }
 .image-preview button { position: absolute; top: -5px; right: -5px; width: 19px; min-height: 19px; padding: 0; border: 2px solid white; border-radius: 50%; background: #344054; font-size: 11px; }
+.chat-question-slot:empty { display: none; }
+.chat-question-slot .questionnaire {
+  margin: 0 0 10px;
+  padding: 12px;
+  border-color: #b8c0cc;
+  background: #f8f9fb;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+}
+.chat-question-slot .questionnaire label { font-size: 13px; }
+.chat-question-slot .questionnaire button { margin-top: 7px; }
+.chat-question-slot #save-unknown { background: #1f2937; color: white; }
 
 .workflow { display: grid; gap: 8px; }
 .workflow-title { margin: 8px 3px 1px; }
@@ -282,6 +363,11 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
   :root { color-scheme: dark; background: #17191c; color: #f2f4f7; }
   body, main { background: #17191c; }
   .app-header, .panel { border-color: #30343a; background: #202327; }
+  .settings-drawer { background: #17191c; }
+  .drawer-header { border-color: #30343a; background: rgba(32, 35, 39, 0.98); }
+  .settings-tabs { border-color: #30343a; background: #202327; }
+  .settings-tab.active { background: #e5e7eb; color: #111827; }
+  .troubleshooting-tools { border-color: #424750; }
   .advanced-settings > summary { border-color: #30343a; background: #202327; }
   .app-header { background: rgba(32, 35, 39, 0.96); }
   .brand-mark, button, .user-message { background: #e5e7eb; color: #111827; }
@@ -291,6 +377,7 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
   .secondary-button, .inline-button, .attach-button { border-color: #424750; background: #292d32; color: #e5e7eb; }
   .agent-message, .result-box { border-color: #383d44; background: #292d32; color: #e5e7eb; }
   .questionnaire { border-color: #424750; background: #292d32; }
+  .chat-question-slot .questionnaire { border-color: #424750; background: #292d32; }
   .step-content { border-color: #30343a; }
   .profile-editor { border-color: #30343a; }
   .profile-fields h3 { color: #f2f4f7; }

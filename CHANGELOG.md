@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.0 - 2026-07-02
+
+- Reworked the side panel around one primary application conversation: current
+  job controls, live activity, chat, and inline missing-question prompts.
+- Moved provider configuration and automation preferences into a dedicated
+  Settings drawer instead of showing them in the normal workflow.
+- Added a separate Profile & résumé settings tab and hid manual job/form tools
+  inside a collapsed troubleshooting section.
+- Made new application questions appear in chat, echo the user's answer, explain
+  that it was saved, and continue to the next question automatically.
+- Replaced the ambiguous overflow menu with a conventional Settings control.
+
 ## 0.7.4 - 2026-07-02
 
 - Added grouped radio and checkbox understanding, including styled controls
