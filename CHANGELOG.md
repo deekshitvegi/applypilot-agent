@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.2 - 2026-07-02
+
+- Ignored generic reusable labels such as “Select,” preventing an old “No” from
+  being applied to unrelated proficiency controls such as Linux experience.
+- Deduplicated reusable answers by normalized question whenever an answer is
+  saved or corrected.
+- Routed “fill the next,” “fill the rest,” and “ask me the remaining questions”
+  into the active form workflow instead of advisory AI chat.
+- Made automatic and manual fill flows ask every unknown required question in
+  chat one at a time; AI now refines user-provided answers rather than silently
+  inventing responses.
+
 ## 0.9.1 - 2026-07-02
 
 - Made the configured AI provider refine free-text application answers before

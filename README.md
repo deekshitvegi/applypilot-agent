@@ -21,6 +21,9 @@ be treated as an answer, and `change my last answer to ...` corrects a mistake.
 Free-text answers are first rewritten by the configured provider against the
 employer's visible instructions; a narrow deterministic formatter is used only
 when that provider is unavailable.
+Commands such as `fill the rest`, `fill the next`, and `ask me the remaining
+questions` operate on the current form and start the one-at-a-time question
+flow instead of producing advisory chat.
 Provider
 choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.
