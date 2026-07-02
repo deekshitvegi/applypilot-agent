@@ -37,4 +37,7 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     script = (root / "extension" / "sidepanel.js").read_text(encoding="utf-8")
     assert "persistUnknownAnswer(message, { appendUser: false })" in script
     assert "/api/resumes/active/file-status" in script
+    assert "looksLikeChatQuestion(message)" in script
+    assert "correctLastSavedAnswer(correction)" in script
+    assert "change my last answer to" in script
 

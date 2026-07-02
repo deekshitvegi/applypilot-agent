@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.3 - 2026-07-02
+
+- Distinguished questions and help requests from answers while an application
+  question is pending, so unrelated chat is no longer saved accidentally.
+- Added explicit `/answer`, `answer:`, and `my answer is` forms for ambiguous
+  replies without requiring an AI request.
+- Added conversational correction through “change my last answer to …”, which
+  updates encrypted reusable memory and refills the current page.
+- Made every saved-answer confirmation show both the question and exact stored
+  value so mistakes are visible immediately.
+
 ## 0.8.2 - 2026-07-02
 
 - Made a normal chat reply answer the currently pending application question,
