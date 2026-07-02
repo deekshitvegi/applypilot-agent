@@ -339,6 +339,37 @@ def test_cloud_aliases_require_explicit_resume_evidence() -> None:
     }
 
 
+def test_resume_skill_group_works_when_scanner_only_has_full_checkbox_labels() -> None:
+    question = "Please select all tools you have hands on experience with"
+    fields = [
+        FormField(
+            id="docker",
+            label=f"{question} Docker",
+            option_label="Docker",
+            field_type="checkbox",
+        ),
+        FormField(
+            id="jenkins",
+            label=f"{question} Jenkins",
+            option_label="Jenkins",
+            field_type="checkbox",
+        ),
+    ]
+
+    plan = plan_form_fill(
+        "https://careers.example.test",
+        fields,
+        CandidateProfile(),
+        [],
+        resume_text="Built and deployed Docker containers.",
+    )
+
+    assert {action.field_id: action.value for action in plan.actions} == {
+        "docker": "true",
+        "jenkins": "false",
+    }
+
+
 def test_relocation_willingness_does_not_select_every_city() -> None:
     group = "Which city would you be interested in for a relocation package?"
     fields = [

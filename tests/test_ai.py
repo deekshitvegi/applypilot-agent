@@ -14,6 +14,7 @@ from applypilot.models import (
     CandidateProfile,
     ChatImage,
     ChatResponse,
+    CoverLetterDraft,
     EvidenceItem,
     JobContext,
     JobFitAnalysis,
@@ -257,6 +258,35 @@ def test_application_answer_draft_uses_structured_provider(monkeypatch) -> None:
     )
 
     assert result == expected
+
+
+def test_answer_refinement_and_cover_letter_use_structured_provider(monkeypatch) -> None:
+    provider = GeminiProvider("test-key", "test-model")
+    refined = ApplicationAnswerDraft(answer="SIEM: 0 months; SOAR: 0 months.")
+    cover = CoverLetterDraft(
+        body="Dear Hiring Team,\n\nI offer verified Python automation experience."
+    )
+    outputs = iter([refined, cover])
+    monkeypatch.setattr(provider, "_structured", lambda _prompt, _schema: next(outputs))
+    resume = ResumeDocument(
+        filename="resume.txt",
+        media_type="text/plain",
+        sha256="abc",
+        extracted_text="Built Python automation.",
+    )
+    job = JobContext(title="Engineer", company="Example", description="Build automation.")
+
+    result = provider.refine_application_answer(
+        "List months for SIEM and SOAR.",
+        "zero for all",
+        CandidateProfile(),
+        resume,
+        job,
+    )
+    letter = provider.draft_cover_letter(CandidateProfile(), resume, job)
+
+    assert result == refined
+    assert letter == cover
 
 
 def test_gemini_quota_error_is_explained_without_client_internals() -> None:

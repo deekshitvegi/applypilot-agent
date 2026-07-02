@@ -3,9 +3,18 @@ from io import BytesIO
 from docx import Document
 from pypdf import PdfReader
 
-from applypilot.documents import artifact_filename, build_docx, build_pdf
+from applypilot.documents import (
+    artifact_filename,
+    build_cover_letter_docx,
+    build_docx,
+    build_pdf,
+    build_reconstructed_resume_docx,
+)
 from applypilot.models import (
     CandidateProfile,
+    GeneratedCoverLetter,
+    JobContext,
+    ResumeDocument,
     TailoredArtifact,
     TailoredBullet,
     TailoredExperience,
@@ -74,3 +83,36 @@ def test_build_pdf_is_single_page_and_extractable() -> None:
 
 def test_artifact_filename_is_safe() -> None:
     assert artifact_filename(sample_profile(), "pdf") == "test-candidate-tailored-resume.pdf"
+
+
+def test_reconstructed_resume_and_generated_cover_letter_are_attachable_docx() -> None:
+    resume = ResumeDocument(
+        filename="legacy.pdf",
+        media_type="application/pdf",
+        sha256="legacy",
+        extracted_text="TEST CANDIDATE\nEXPERIENCE\nBuilt reliable Python services.",
+    )
+    reconstructed = Document(BytesIO(build_reconstructed_resume_docx(resume)))
+    letter = GeneratedCoverLetter(
+        job_title="Software Engineer",
+        company="Example Robotics",
+        body="Dear Hiring Team,\n\nI offer verified Python automation experience.\n\nSincerely,",
+    )
+    cover = Document(
+        BytesIO(
+            build_cover_letter_docx(
+                letter,
+                sample_profile(),
+                JobContext(
+                    title="Software Engineer",
+                    company="Example Robotics",
+                    description="Build automation.",
+                ),
+            )
+        )
+    )
+
+    assert "Built reliable Python services" in "\n".join(
+        item.text for item in reconstructed.paragraphs
+    )
+    assert "verified Python automation" in "\n".join(item.text for item in cover.paragraphs)

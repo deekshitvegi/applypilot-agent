@@ -14,7 +14,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
-from .models import CandidateProfile, TailoredArtifact
+from .models import CandidateProfile, GeneratedCoverLetter, JobContext, ResumeDocument, TailoredArtifact
 
 
 def build_docx(artifact: TailoredArtifact, profile: CandidateProfile) -> bytes:
@@ -90,6 +90,59 @@ def build_docx(artifact: TailoredArtifact, profile: CandidateProfile) -> bytes:
                 paragraph.paragraph_format.space_after = Pt(2)
                 paragraph.add_run(bullet.text)
 
+    output = BytesIO()
+    document.save(output)
+    return output.getvalue()
+
+
+def build_reconstructed_resume_docx(resume: ResumeDocument) -> bytes:
+    """Create an attachable ATS-readable copy when a legacy raw file is unavailable."""
+    document = Document()
+    section = document.sections[0]
+    section.top_margin = Inches(0.65)
+    section.bottom_margin = Inches(0.65)
+    section.left_margin = Inches(0.7)
+    section.right_margin = Inches(0.7)
+    normal = document.styles["Normal"]
+    normal.font.name = "Arial"
+    normal.font.size = Pt(10.5)
+    normal.paragraph_format.space_after = Pt(3)
+    for raw_line in resume.extracted_text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        paragraph = document.add_paragraph()
+        run = paragraph.add_run(line)
+        run.font.name = "Arial"
+        run.font.size = Pt(10.5)
+        if len(line) <= 60 and (line.isupper() or not re.search(r"[.!?]$", line)):
+            run.bold = True
+    output = BytesIO()
+    document.save(output)
+    return output.getvalue()
+
+
+def build_cover_letter_docx(
+    letter: GeneratedCoverLetter,
+    profile: CandidateProfile,
+    job: JobContext,
+) -> bytes:
+    document = Document()
+    section = document.sections[0]
+    section.top_margin = Inches(0.8)
+    section.bottom_margin = Inches(0.8)
+    section.left_margin = Inches(0.85)
+    section.right_margin = Inches(0.85)
+    normal = document.styles["Normal"]
+    normal.font.name = "Arial"
+    normal.font.size = Pt(11)
+    normal.paragraph_format.space_after = Pt(8)
+    document.add_paragraph(profile.legal_name or "Candidate")
+    document.add_paragraph(" | ".join(item for item in (profile.email, profile.phone) if item))
+    document.add_paragraph()
+    document.add_paragraph(f"Re: {job.title or letter.job_title} — {job.company or letter.company}".strip(" —"))
+    for block in re.split(r"\n\s*\n", letter.body.strip()):
+        document.add_paragraph(block.strip())
     output = BytesIO()
     document.save(output)
     return output.getvalue()

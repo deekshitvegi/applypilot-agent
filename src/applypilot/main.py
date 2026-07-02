@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 import csv
 import io
 import os
+import re
 from pathlib import Path
 
 import uvicorn
@@ -14,7 +15,13 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .config import settings
-from .documents import artifact_filename, build_docx, build_pdf
+from .documents import (
+    artifact_filename,
+    build_docx,
+    build_pdf,
+    build_cover_letter_docx,
+    build_reconstructed_resume_docx,
+)
 from .ai import AIProviderError, AIProviderManager
 from .applications import (
     InvalidApplicationTransition,
@@ -28,13 +35,16 @@ from .models import (
     ApplicationTransition,
     ApplicationAnswerDraft,
     ApplicationQuestionDraftRequest,
+    ApplicationAnswerRefineRequest,
     CandidateProfile,
     CoverLetterDocument,
+    GeneratedCoverLetter,
     ChatRequest,
     ChatResponse,
     FormFillPlan,
     FormPlanRequest,
     JobApplicationOptions,
+    JobContext,
     JobFitAnalysis,
     JobPreparation,
     OnboardingState,
@@ -246,6 +256,21 @@ def active_resume_file_status() -> dict[str, str | bool]:
     }
 
 
+@app.get("/api/resumes/active/reconstructed.docx")
+def reconstructed_active_resume() -> Response:
+    require_local_data_mode()
+    resume = store.get_active_resume()
+    if resume is None:
+        raise HTTPException(status_code=404, detail="No resume has been uploaded")
+    stem = Path(resume.filename).stem or "resume"
+    filename = f"{stem}-reconstructed.docx".replace('"', "")
+    return Response(
+        content=build_reconstructed_resume_docx(resume),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.post("/api/cover-letters", response_model=CoverLetterDocument)
 async def upload_cover_letter(file: UploadFile = File(...)) -> CoverLetterDocument:
     require_local_data_mode()
@@ -287,6 +312,45 @@ def active_cover_letter_file() -> Response:
         content=content,
         media_type=document.media_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
+
+
+@app.post("/api/cover-letters/generate", response_model=GeneratedCoverLetter)
+def generate_cover_letter(request: TailorRequest) -> GeneratedCoverLetter:
+    require_local_data_mode()
+    resume = store.get_active_resume()
+    if resume is None:
+        raise HTTPException(status_code=404, detail="Upload a resume before generating a cover letter")
+    try:
+        draft = ai_provider.draft_cover_letter(store.load(), resume, request.job)
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return store.save_generated_cover_letter(
+        GeneratedCoverLetter(
+            job_title=request.job.title,
+            company=request.job.company,
+            body=draft.body,
+        )
+    )
+
+
+@app.get("/api/cover-letters/generated/{document_id}.docx")
+def generated_cover_letter_file(document_id: str) -> Response:
+    require_local_data_mode()
+    document = store.get_generated_cover_letter(document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Generated cover letter not found")
+    job = JobContext(
+        title=document.job_title,
+        company=document.company,
+        description="Generated cover-letter artifact",
+    )
+    company = re.sub(r"[^a-z0-9]+", "-", document.company.lower()).strip("-")
+    filename = f"{company}-cover-letter" if company else "cover-letter"
+    return Response(
+        content=build_cover_letter_docx(document, store.load(), job),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f'attachment; filename="{filename}.docx"'},
     )
 
 
@@ -429,6 +493,23 @@ def draft_application_answer(request: ApplicationQuestionDraftRequest) -> Applic
     try:
         return ai_provider.draft_application_answer(
             question=request.question,
+            profile=store.load(),
+            resume=store.get_active_resume(),
+            job=request.job,
+        )
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/questions/refine", response_model=ApplicationAnswerDraft)
+def refine_application_answer(
+    request: ApplicationAnswerRefineRequest,
+) -> ApplicationAnswerDraft:
+    require_local_data_mode()
+    try:
+        return ai_provider.refine_application_answer(
+            question=request.question,
+            user_answer=request.user_answer,
             profile=store.load(),
             resume=store.get_active_resume(),
             job=request.job,

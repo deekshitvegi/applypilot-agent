@@ -42,15 +42,14 @@ def plan_form_fill(
     blocked: list[UnknownField] = []
     seen_checkbox_unknowns: set[str] = set()
     resume_checkbox_groups = {
-        normalize(field.group_label)
+        resume_group_key(field)
         for field in fields
         if field.field_type == "checkbox"
-        and field.group_label
-        and is_resume_evidence_group(field.group_label)
+        and is_resume_evidence_group(field.group_label or field.label)
         and any(
             resume_mentions_option(candidate.option_label, resume_text)
             for candidate in fields
-            if normalize(candidate.group_label) == normalize(field.group_label)
+            if resume_group_key(candidate) == resume_group_key(field)
         )
     }
 
@@ -77,7 +76,7 @@ def plan_form_fill(
         if (
             mapped is None
             and field.field_type == "checkbox"
-            and normalize(field.group_label) in resume_checkbox_groups
+            and resume_group_key(field) in resume_checkbox_groups
         ):
             mapped = (
                 "true" if resume_mentions_option(field.option_label, resume_text) else "false",
@@ -287,6 +286,14 @@ def is_resume_evidence_group(label: str) -> bool:
             "cloud platforms",
         )
     )
+
+
+def resume_group_key(field: FormField) -> str:
+    label = normalize(field.group_label or field.label)
+    option = normalize(field.option_label)
+    if option and label.endswith(option):
+        label = label[: -len(option)].strip()
+    return label
 
 
 def resume_mentions_option(option: str, resume_text: str) -> bool:

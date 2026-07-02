@@ -105,6 +105,7 @@ const state = {
   resume: null,
   resumeFileAvailable: false,
   coverLetter: null,
+  generatedCoverLetter: null,
   submitClicked: false,
   formScan: null,
   formPlan: null,
@@ -359,7 +360,9 @@ async function loadAutomationSettings() {
   });
   state.automationPolicy = saved.automationPolicy;
   state.resumePolicy = saved.resumePolicy === "always_attach" ? "always_tailored" : saved.resumePolicy;
-  state.coverLetterPolicy = saved.coverLetterPolicy;
+  state.coverLetterPolicy = saved.coverLetterPolicy === "always_attach"
+    ? "always_saved"
+    : saved.coverLetterPolicy;
   state.minimumFit = saved.minimumFit;
   elements.automationPolicy.value = saved.automationPolicy;
   elements.resumePolicy.value = state.resumePolicy;
@@ -759,7 +762,7 @@ async function refreshResumeStatus() {
     state.resumeFileAvailable = fileStatus.available === true;
     elements.resumeStatus.textContent = state.resumeFileAvailable
       ? `${resume.filename} · ${resume.extracted_text.length.toLocaleString()} characters extracted`
-      : `${resume.filename} · re-upload once to enable automatic attachment`;
+      : `${resume.filename} · saved text will be reconstructed as ATS-readable DOCX`;
   } catch (error) {
     if (!error.message.includes("No resume")) throw error;
     state.resumeFileAvailable = false;
@@ -826,6 +829,7 @@ async function captureJob(options = {}) {
     state.job = captured;
     state.sourceTabId = captured.tab_id;
     state.artifact = null;
+    state.generatedCoverLetter = null;
     state.fitAnalysis = null;
     state.formPlan = null;
     state.formScan = null;
@@ -1298,15 +1302,21 @@ async function attachOriginalResume(options = {}) {
     action: "attachResume",
     fieldId: fileField.id,
     frameId: state.formScan?.frame_id ?? 0,
-    url: `${state.apiBase}/api/resumes/active/file`,
-    filename: state.resume.filename,
+    url: state.resumeFileAvailable
+      ? `${state.apiBase}/api/resumes/active/file`
+      : `${state.apiBase}/api/resumes/active/reconstructed.docx`,
+    filename: state.resumeFileAvailable
+      ? state.resume.filename
+      : `${state.resume.filename.replace(/\.[^.]+$/, "")}-reconstructed.docx`,
   });
   if (result.error || !result.attached) {
     elements.formStatus.textContent = result.error || "The original résumé could not be attached.";
     if (throwOnError) throw new Error(elements.formStatus.textContent);
     return false;
   }
-  elements.formStatus.textContent = `${result.filename} attached as the original résumé.`;
+  elements.formStatus.textContent = state.resumeFileAvailable
+    ? `${result.filename} attached as the original résumé.`
+    : `${result.filename} reconstructed from the saved résumé text and attached.`;
   return true;
 }
 
@@ -1315,10 +1325,9 @@ async function maybeAttachResume() {
   if (!fileField) return true;
   if (fileField.value) return true;
   if (!state.resumeFileAvailable) {
-    openSettings();
-    showSettingsPane("profile");
-    elements.resumeStatus.textContent = `${state.resume?.filename || "Résumé"} · choose the résumé again once to enable attachment`;
-    throw new Error("Re-upload your résumé once in Settings → Profile & résumé, then choose Start applying again.");
+    reportActivity(
+      "The older original file is unavailable; creating an ATS-readable DOCX from the saved résumé text instead…",
+    );
   }
   let choice = state.resumePolicy;
   if (choice === "ask_each") {
@@ -1338,26 +1347,50 @@ async function maybeAttachResume() {
 async function maybeAttachCoverLetter() {
   const fileField = findCoverLetterField();
   if (!fileField || fileField.value || state.coverLetterPolicy === "never") return true;
-  if (!state.coverLetter) {
-    if (state.coverLetterPolicy === "always_attach") {
-      throw new Error("A cover-letter field was found, but no cover letter is saved in Profile & résumé.");
+  let mode = state.coverLetterPolicy;
+  if (mode === "ask_each") {
+    if (state.coverLetter && window.confirm(
+      `Attach your saved cover letter (${state.coverLetter.filename})? Choose Cancel to consider generating one instead.`,
+    )) {
+      mode = "always_saved";
+    } else if (state.provider?.configured && window.confirm(
+      "Generate and attach a truthful job-specific cover letter from your saved résumé?",
+    )) {
+      mode = "always_generate";
+    } else {
+      return true;
     }
-    return true;
   }
-  if (state.coverLetterPolicy === "ask_each" && !window.confirm(
-    `Attach your saved cover letter (${state.coverLetter.filename}) to this application?`,
-  )) return true;
+  if (mode === "always_saved" && !state.coverLetter) {
+    throw new Error("No saved cover letter is available. Upload one or choose job-specific generation in Settings.");
+  }
+  if (mode === "always_generate" && !state.provider?.configured) {
+    throw new Error("Connect Gemini or Ollama before generating a job-specific cover letter.");
+  }
+  if (mode === "always_generate" && !state.generatedCoverLetter) {
+    reportActivity("Generating a truthful job-specific cover letter from your saved résumé…");
+    state.generatedCoverLetter = await api("/api/cover-letters/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ job: state.job }),
+    });
+  }
+  const generated = mode === "always_generate";
   const result = await chrome.runtime.sendMessage({
     action: "attachResume",
     fieldId: fileField.id,
     frameId: state.formScan?.frame_id ?? 0,
-    url: `${state.apiBase}/api/cover-letters/active/file`,
-    filename: state.coverLetter.filename,
+    url: generated
+      ? `${state.apiBase}/api/cover-letters/generated/${state.generatedCoverLetter.id}.docx`
+      : `${state.apiBase}/api/cover-letters/active/file`,
+    filename: generated
+      ? `${state.job?.company || "job"}-cover-letter.docx`
+      : state.coverLetter.filename,
   });
   if (result.error || !result.attached) {
     throw new Error(result.error || "The saved cover letter could not be attached.");
   }
-  reportActivity(`${result.filename} attached as the saved cover letter.`);
+  reportActivity(`${result.filename} attached as the ${generated ? "generated job-specific" : "saved"} cover letter.`);
   return true;
 }
 
@@ -1381,6 +1414,8 @@ async function persistUnknownAnswer(answer, options = {}) {
   const question = elements.unknownAnswerForm.dataset.question || elements.unknownQuestion.textContent.trim();
   if (!answer || !question) return;
   const appendUser = options.appendUser !== false;
+  const scannedType = elements.unknownAnswerForm.dataset.fieldType || "text";
+  const formattedAnswer = await formatApplicationAnswer(question, answer, scannedType);
   if (elements.unknownAnswerForm.dataset.unreadable === "true") {
     const result = await chrome.runtime.sendMessage({
       action: "fillForm",
@@ -1388,7 +1423,7 @@ async function persistUnknownAnswer(answer, options = {}) {
       actions: [
         {
           field_id: elements.unknownAnswerForm.dataset.fieldId,
-          value: answer,
+          value: formattedAnswer,
           source: "user.current_page",
           confidence: 1,
         },
@@ -1405,24 +1440,46 @@ async function persistUnknownAnswer(answer, options = {}) {
     (item) => normalizeQuestion(item.question) === normalizeQuestion(question),
   );
   const id = existing?.id || crypto.randomUUID();
-  const scannedType = elements.unknownAnswerForm.dataset.fieldType || "text";
   const fieldType = scannedType === "number"
     ? "number"
     : ["select", "radio", "checkbox"].includes(scannedType) ? "choice" : "text";
   await api(`/api/answers/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, question, answer, field_type: fieldType, sensitive: false }),
+    body: JSON.stringify({ id, question, answer: formattedAnswer, field_type: fieldType, sensitive: false }),
   });
-  state.lastSavedAnswer = { id, question, answer, fieldType };
+  state.lastSavedAnswer = { id, question, answer: formattedAnswer, fieldType };
   if (appendUser) appendMessage(answer, "user-message");
   appendMessage(
-    `Saved “${answer}” for “${question}”. I’ll reuse it next time. To correct it, say “change my last answer to …”.`,
+    `Saved “${formattedAnswer}” for “${question}”. I’ll reuse it next time. To correct it, say “change my last answer to …”.`,
     "agent-message",
   );
   state.answers = await api("/api/answers");
   await replanForm();
   await continueQuestionnaire();
+}
+
+async function formatApplicationAnswer(question, answer, fieldType) {
+  const normalizedQuestion = normalizeQuestion(question);
+  const normalizedAnswer = normalizeQuestion(answer);
+  if (
+    /security tool experience/.test(normalizedQuestion)
+    && /0|zero/.test(normalizedAnswer)
+    && /all|them|mentioned|none/.test(normalizedAnswer)
+  ) {
+    return "SIEM: 0 months; SOAR: 0 months; UEBA: 0 months; EDR: 0 months; OS logs: 0 months.";
+  }
+  if (!state.provider?.configured || fieldType !== "textarea") return answer;
+  try {
+    const refined = await api("/api/questions/refine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, user_answer: answer, job: state.job }),
+    });
+    return refined.answer?.trim() || answer;
+  } catch {
+    return answer;
+  }
 }
 
 function normalizeQuestion(value) {
@@ -2101,6 +2158,18 @@ async function correctLastSavedAnswer(answer) {
 }
 
 async function handleAnswerConversation(message) {
+  if (
+    state.lastSavedAnswer
+    && /\b(?:answer|rewrite|format)\b.*\b(?:properly|professionally|clearly)\b/i.test(message)
+  ) {
+    const improved = await formatApplicationAnswer(
+      state.lastSavedAnswer.question,
+      state.lastSavedAnswer.answer,
+      "textarea",
+    );
+    await correctLastSavedAnswer(improved);
+    return true;
+  }
   const correction = correctionValue(message);
   if (correction) {
     await correctLastSavedAnswer(correction);
@@ -2171,6 +2240,7 @@ async function handlePageActionCommand(message) {
     return true;
   }
   const explicitFillRequest = /(fill|complete|apply).*(everything|fields|form|page)/i.test(message)
+    || /^(?:then\s+)?(?:please\s+)?(?:fill|complete)\s+(?:the\s+)?(?:rest|remaining fields?)\b/i.test(message)
     || /^(?:then\s+)?(?:please\s+)?(?:fill|complete|apply)\s+(?:it|that|this|those|that\s+part|this\s+part|the\s+field|the\s+fields)\b/i.test(message);
   if (!explicitFillRequest) return false;
   let plan = await scanForm({ throwOnError: true });

@@ -8,6 +8,7 @@ from .models import (
     ApplicationRecord,
     CandidateProfile,
     CoverLetterDocument,
+    GeneratedCoverLetter,
     ResumeDocument,
     ReusableAnswer,
     TailoredArtifact,
@@ -101,6 +102,15 @@ class ProfileStore:
                     sha256 TEXT PRIMARY KEY,
                     payload BLOB NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS generated_cover_letters (
+                    id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
@@ -320,6 +330,28 @@ class ProfileStore:
                 "SELECT payload FROM cover_letter_files WHERE sha256 = ?", (sha256,)
             ).fetchone()
         return self.cipher.decrypt_bytes(row[0]) if row else None
+
+    def save_generated_cover_letter(
+        self, document: GeneratedCoverLetter
+    ) -> GeneratedCoverLetter:
+        self.initialize()
+        payload = self.cipher.encrypt(document.model_dump_json())
+        with self._connect() as connection:
+            connection.execute(
+                "INSERT INTO generated_cover_letters (id, payload) VALUES (?, ?)",
+                (document.id, payload),
+            )
+        return document
+
+    def get_generated_cover_letter(self, document_id: str) -> GeneratedCoverLetter | None:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM generated_cover_letters WHERE id = ?", (document_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return GeneratedCoverLetter.model_validate_json(self.cipher.decrypt(row[0]))
 
     def save_application(self, application: ApplicationRecord) -> ApplicationRecord:
         self.initialize()
