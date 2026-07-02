@@ -9,6 +9,14 @@ const elements = {
   progress: document.querySelector("#progress"),
   refresh: document.querySelector("#refresh"),
   settings: document.querySelector("#settings"),
+  settingsBackdrop: document.querySelector("#settings-backdrop"),
+  settingsDrawer: document.querySelector("#settings-drawer"),
+  closeSettings: document.querySelector("#close-settings"),
+  preferencesTab: document.querySelector("#preferences-tab"),
+  profileTab: document.querySelector("#profile-tab"),
+  preferencesPane: document.querySelector("#preferences-pane"),
+  profilePane: document.querySelector("#profile-pane"),
+  manualWorkflow: document.querySelector(".manual-workflow"),
   providerCard: document.querySelector("#provider-card"),
   providerForm: document.querySelector("#provider-form"),
   providerSelect: document.querySelector("#provider-select"),
@@ -78,6 +86,7 @@ const elements = {
   attachImageLabel: document.querySelector("#attach-image-label"),
   chatContext: document.querySelector("#chat-context"),
   messages: document.querySelector("#messages"),
+  chatQuestionSlot: document.querySelector("#chat-question-slot"),
 };
 
 const state = {
@@ -118,6 +127,55 @@ const state = {
 };
 
 const SITE_ORIGINS = ["https://*/*", "http://*/*"];
+
+function setupSimpleLayout() {
+  elements.advancedSettings.open = true;
+  elements.manualWorkflow.open = true;
+  elements.preferencesPane.append(elements.advancedSettings);
+  elements.profilePane.append(elements.manualWorkflow);
+  elements.chatQuestionSlot.append(elements.unknownAnswerForm);
+
+  const workflow = elements.manualWorkflow.querySelector(".workflow");
+  const steps = [...workflow.querySelectorAll(":scope > .workflow-step")];
+  if (steps.length > 2) {
+    const troubleshooting = document.createElement("details");
+    troubleshooting.className = "troubleshooting-tools";
+    const summary = document.createElement("summary");
+    summary.textContent = "Troubleshooting tools";
+    const help = document.createElement("p");
+    help.className = "field-help";
+    help.textContent = "Manual job capture and form controls for diagnosing an unsupported page.";
+    troubleshooting.append(summary, help, ...steps.slice(2));
+    workflow.append(troubleshooting);
+  }
+}
+
+function showSettingsPane(name) {
+  const preferences = name === "preferences";
+  elements.preferencesPane.classList.toggle("hidden", !preferences);
+  elements.profilePane.classList.toggle("hidden", preferences);
+  elements.preferencesTab.classList.toggle("active", preferences);
+  elements.profileTab.classList.toggle("active", !preferences);
+  elements.preferencesTab.setAttribute("aria-selected", String(preferences));
+  elements.profileTab.setAttribute("aria-selected", String(!preferences));
+}
+
+function openSettings() {
+  elements.settingsDrawer.classList.remove("hidden");
+  elements.settingsBackdrop.classList.remove("hidden");
+  elements.settingsDrawer.setAttribute("aria-hidden", "false");
+  document.body.classList.add("drawer-open");
+  showSettingsPane("preferences");
+  elements.closeSettings.focus();
+}
+
+function closeSettings() {
+  elements.settingsDrawer.classList.add("hidden");
+  elements.settingsBackdrop.classList.add("hidden");
+  elements.settingsDrawer.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("drawer-open");
+  elements.settings.focus();
+}
 
 const PROFILE_FIELDS = [
   { section: "Personal information", key: "legal_name", label: "Full legal name" },
@@ -977,6 +1035,13 @@ async function replanForm() {
     elements.unknownAnswerForm.dataset.unreadable = String(unreadable);
     elements.unknownAnswerForm.dataset.question = firstUnknown.label;
     elements.unknownAnswerForm.dataset.fieldType = scanned?.field_type || "text";
+    if (elements.unknownAnswerForm.dataset.announcedFieldId !== firstUnknown.field_id) {
+      appendMessage(
+        `I need one answer before I can continue:\n**${firstUnknown.label}**`,
+        "agent-message",
+      );
+      elements.unknownAnswerForm.dataset.announcedFieldId = firstUnknown.field_id;
+    }
     const answered = Math.max(0, state.questionnaireTotal - reviewUnknown.length);
     elements.unknownProgress.textContent = `Question ${answered + 1} of ${Math.max(state.questionnaireTotal, reviewUnknown.length)}`;
     elements.unknownAnswer.value = "";
@@ -1020,6 +1085,7 @@ async function replanForm() {
     }
   } else {
     elements.unknownAnswerForm.classList.add("hidden");
+    delete elements.unknownAnswerForm.dataset.announcedFieldId;
     if (requiredBlocked.length) {
       await transitionApplication("blocked", "A required authentication field needs the user.", {
         field: requiredBlocked[0].label,
@@ -1214,6 +1280,8 @@ async function saveUnknownAnswer(event) {
       ],
     });
     if (result.error) throw new Error(result.error);
+    appendMessage(answer, "user-message");
+    appendMessage("Got it. I filled that answer on this page.", "agent-message");
     await scanForm();
     await continueQuestionnaire();
     return;
@@ -1231,6 +1299,8 @@ async function saveUnknownAnswer(event) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, question, answer, field_type: fieldType, sensitive: false }),
   });
+  appendMessage(answer, "user-message");
+  appendMessage("Saved. I’ll reuse that answer when the same question appears again.", "agent-message");
   state.answers = await api("/api/answers");
   await replanForm();
   await continueQuestionnaire();
@@ -2062,6 +2132,8 @@ function escapeHtml(value) {
   return element.innerHTML;
 }
 
+setupSimpleLayout();
+
 elements.answerForm.addEventListener("submit", saveOnboardingAnswer);
 elements.editProfile.addEventListener("click", openProfileEditor);
 elements.profileEditor.addEventListener("submit", saveProfile);
@@ -2119,9 +2191,14 @@ elements.toggleKey.addEventListener("click", () => {
 });
 elements.refresh.addEventListener("click", loadState);
 elements.retryConnection.addEventListener("click", loadState);
-elements.settings.addEventListener("click", () => {
-  elements.advancedSettings.open = true;
-  elements.advancedSettings.scrollIntoView({ behavior: "smooth", block: "start" });
-  elements.providerSelect.focus();
+elements.settings.addEventListener("click", openSettings);
+elements.closeSettings.addEventListener("click", closeSettings);
+elements.settingsBackdrop.addEventListener("click", closeSettings);
+elements.preferencesTab.addEventListener("click", () => showSettingsPane("preferences"));
+elements.profileTab.addEventListener("click", () => showSettingsPane("profile"));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !elements.settingsDrawer.classList.contains("hidden")) {
+    closeSettings();
+  }
 });
 loadState();

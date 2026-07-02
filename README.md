@@ -12,6 +12,11 @@ job currently open in the user's browser, tailor application materials, fill
 repeatable questions, and keep the user in control through a browser side
 panel.
 
+The normal side-panel experience is intentionally conversational: start the
+current application, follow live progress in chat, and answer any genuinely new
+question inline. Provider choices, automation preferences, profile editing,
+résumé replacement, and troubleshooting tools stay behind the Settings button.
+
 This is an open-source project intended for public use. Personal data remains
 local and is never part of the repository.
 
