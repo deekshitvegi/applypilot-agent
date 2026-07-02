@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.1 - 2026-07-02
+
+- Added explicit consent wording for hands-off normal login using credentials
+  already filled by the browser password manager.
+- Waited for delayed password-manager autofill and supported multi-step
+  username/Next/password login flows before resuming the application.
+- Kept CAPTCHA, MFA, verification codes, empty credentials, and ambiguous
+  authentication controls as mandatory user/security handoffs.
+
 ## 0.7.0 - 2026-07-01
 
 - Added an AI page-planning fallback that observes visible controls and page

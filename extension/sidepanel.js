@@ -349,7 +349,7 @@ async function changeContinueNext() {
 async function changeLoginAssistance() {
   if (elements.loginAssistance.checked) {
     const confirmed = window.confirm(
-      "Allow ApplyPilot to click a unique Sign in button only after your browser password manager has filled the login fields? ApplyPilot checks only whether fields are filled, never captures or stores credentials, and still pauses for MFA or CAPTCHA.",
+      "Allow ApplyPilot to wait for your browser password manager, click unique Sign in/Next controls, and resume the application automatically? It never reads or stores credentials and cannot bypass CAPTCHA, MFA, verification codes, or security checks.",
     );
     if (!confirmed) {
       elements.loginAssistance.checked = false;
@@ -1509,16 +1509,12 @@ async function runCurrentApplicationPage() {
     await waitForTabReady(entry.tab_id);
   }
 
-  const login = await chrome.runtime.sendMessage({
-    action: "assistLogin",
-    allowClick: state.loginAssistance,
-  });
-  if (login.login_page && !login.clicked) {
+  const login = await continueConsentedLogin();
+  if (login.login_page) {
     throw new Error(login.error || "Login requires your attention.");
   }
   if (login.clicked) {
-    reportActivity("Browser-assisted login submitted; waiting for the application…");
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    reportActivity("Browser-assisted login completed; resuming the application…");
   }
 
   reportActivity("Scanning and filling known fields from your profile…");
@@ -1558,6 +1554,35 @@ async function runCurrentApplicationPage() {
   if (plan.actions.length) await fillForm({ throwOnError: true });
 
   await completeAutomationApplication();
+}
+
+async function continueConsentedLogin() {
+  let clicked = false;
+  let last = { clicked: false, login_page: false };
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    last = await chrome.runtime.sendMessage({
+      action: "assistLogin",
+      allowClick: state.loginAssistance,
+    });
+    if (last.error && /captcha|mfa|verification/i.test(last.error)) return last;
+    if (!last.login_page) return { ...last, clicked };
+    if (!state.loginAssistance) return last;
+    if (last.clicked) {
+      clicked = true;
+      reportActivity("Submitted a password-manager-filled login step; observing the next page…");
+      await new Promise((resolve) => setTimeout(resolve, 750));
+      continue;
+    }
+    if (last.error && !/password manager|fill the login fields/i.test(last.error)) return last;
+    reportActivity("Waiting for the browser password manager to fill the login fields…");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return {
+    ...last,
+    clicked,
+    login_page: true,
+    error: "Login fields were not filled after waiting for the browser password manager.",
+  };
 }
 
 async function scanApplicationFormWithRetry() {
