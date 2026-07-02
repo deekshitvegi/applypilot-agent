@@ -108,6 +108,18 @@ class CoverLetterDocument(BaseModel):
     active: bool = True
 
 
+class CoverLetterDraft(BaseModel):
+    body: str = Field(min_length=40, max_length=8000)
+
+
+class GeneratedCoverLetter(BaseModel):
+    id: str = Field(default_factory=new_id)
+    job_title: str = ""
+    company: str = ""
+    body: str
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class EvidenceItem(BaseModel):
     id: str = Field(default_factory=new_id)
     category: Literal["summary", "skill", "experience", "education", "project", "other"]
@@ -216,6 +228,12 @@ class ChatResponse(BaseModel):
 
 class ApplicationQuestionDraftRequest(BaseModel):
     question: str = Field(min_length=3, max_length=1000)
+    job: JobContext | None = None
+
+
+class ApplicationAnswerRefineRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=2000)
+    user_answer: str = Field(min_length=1, max_length=4000)
     job: JobContext | None = None
 
 

@@ -89,7 +89,7 @@ This repository currently contains:
 - encrypted local SQLite persistence with a separate local encryption key;
 - DOCX, PDF, and TXT résumé extraction;
 - encrypted optional cover-letter storage with never, ask-each-time, and
-  always-attach preferences;
+  always-attach preferences, plus grounded job-specific cover-letter generation;
 - a Chrome Manifest V3 side panel for onboarding, résumé upload, active-job
   capture, chat, and tailoring preview;
 - a fully editable encrypted profile, including optional voluntary
@@ -104,8 +104,12 @@ This repository currently contains:
   user through every unanswered visible question, and remembers new answers;
 - grouped radio/checkbox support for styled application controls, with captured
   job-source mapping and evidence-only résumé matching for technology choices;
+- custom ARIA radio and pressed-button support for ATS sites that render Yes/No
+  and referral-source choices without native radio inputs;
 - separate résumé and cover-letter field detection so the selected résumé is
   attached early and a cover letter is included only under the user's policy;
+- automatic ATS-readable reconstruction from saved résumé text when a legacy
+  upload no longer has attachable original bytes;
 - optional browser-assisted login that clicks a unique login/continue control
   only after the browser password manager has filled credentials;
 - a synthetic employer ATS for safe end-to-end testing;

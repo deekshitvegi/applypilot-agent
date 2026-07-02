@@ -6,6 +6,7 @@ from applypilot.models import (
     ApplicationRecord,
     CandidateProfile,
     CoverLetterDocument,
+    GeneratedCoverLetter,
     JobContext,
     ProviderConfigRequest,
     ResumeDocument,
@@ -75,6 +76,19 @@ def test_cover_letter_file_is_encrypted_and_round_trips(tmp_path: Path) -> None:
             "SELECT payload FROM cover_letter_files WHERE sha256 = ?", (document.sha256,)
         ).fetchone()[0]
     assert raw not in payload
+
+
+def test_generated_cover_letter_round_trip(tmp_path: Path) -> None:
+    store = ProfileStore(tmp_path / "profile.sqlite3")
+    letter = GeneratedCoverLetter(
+        job_title="AI Engineer",
+        company="Example",
+        body="Dear Hiring Team,\n\nI offer verified AI engineering experience.",
+    )
+
+    store.save_generated_cover_letter(letter)
+
+    assert store.get_generated_cover_letter(letter.id) == letter
 
 
 def test_application_round_trip(tmp_path: Path) -> None:

@@ -112,9 +112,12 @@ def test_resume_file_status_detects_legacy_metadata_without_raw_file(
     monkeypatch.setattr(main_module, "store", local_store)
 
     response = client.get("/api/resumes/active/file-status")
+    reconstructed = client.get("/api/resumes/active/reconstructed.docx")
 
     assert response.status_code == 200
     assert response.json() == {"available": False, "filename": "legacy.pdf"}
+    assert reconstructed.status_code == 200
+    assert reconstructed.content.startswith(b"PK")
 
 
 def test_local_cover_letter_upload_and_download(monkeypatch, tmp_path: Path) -> None:

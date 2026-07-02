@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.0 - 2026-07-02
+
+- Added custom ARIA radio and pressed-button support for segmented Yes/No,
+  referral-source, sponsorship, and similar ATS controls.
+- Improved résumé-evidence checkbox matching when an ATS exposes the full
+  question on every option instead of a clean group label.
+- Added grounded answer refinement so shorthand such as “0 months for all” is
+  converted into the employer-requested category format without inventing facts.
+- Added automatic ATS-readable DOCX reconstruction from saved résumé text when
+  an older upload lacks original file bytes, eliminating forced re-upload.
+- Added truthful AI-generated, job-specific cover-letter DOCX files with an
+  explicit always-generate preference alongside saved/never/ask choices.
+- Made “fill the rest” rescan and fill the active form instead of becoming an
+  advisory chat response.
+
 ## 0.8.3 - 2026-07-02
 
 - Distinguished questions and help requests from answers while an application
