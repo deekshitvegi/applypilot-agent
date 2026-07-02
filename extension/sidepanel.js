@@ -103,6 +103,7 @@ const state = {
   application: null,
   artifact: null,
   resume: null,
+  resumeFileAvailable: false,
   coverLetter: null,
   submitClicked: false,
   formScan: null,
@@ -749,11 +750,18 @@ async function saveOnboardingAnswer(event) {
 
 async function refreshResumeStatus() {
   try {
-    const resume = await api("/api/resumes/active");
+    const [resume, fileStatus] = await Promise.all([
+      api("/api/resumes/active"),
+      api("/api/resumes/active/file-status"),
+    ]);
     state.resume = resume;
-    elements.resumeStatus.textContent = `${resume.filename} · ${resume.extracted_text.length.toLocaleString()} characters extracted`;
+    state.resumeFileAvailable = fileStatus.available === true;
+    elements.resumeStatus.textContent = state.resumeFileAvailable
+      ? `${resume.filename} · ${resume.extracted_text.length.toLocaleString()} characters extracted`
+      : `${resume.filename} · re-upload once to enable automatic attachment`;
   } catch (error) {
     if (!error.message.includes("No resume")) throw error;
+    state.resumeFileAvailable = false;
   }
 }
 
@@ -766,6 +774,7 @@ async function uploadResume() {
   try {
     const resume = await api("/api/resumes", { method: "POST", body });
     state.resume = resume;
+    state.resumeFileAvailable = true;
     elements.resumeStatus.textContent = `${resume.filename} uploaded and encrypted locally.`;
   } catch (error) {
     elements.resumeStatus.textContent = error.message;
@@ -1304,6 +1313,12 @@ async function maybeAttachResume() {
   const fileField = findResumeFileField();
   if (!fileField) return true;
   if (fileField.value) return true;
+  if (!state.resumeFileAvailable) {
+    openSettings();
+    showSettingsPane("profile");
+    elements.resumeStatus.textContent = `${state.resume?.filename || "Résumé"} · choose the résumé again once to enable attachment`;
+    throw new Error("Re-upload your résumé once in Settings → Profile & résumé, then choose Start applying again.");
+  }
   let choice = state.resumePolicy;
   if (choice === "ask_each") {
     choice = window.confirm(
@@ -1358,8 +1373,13 @@ async function saveUnknownAnswer(event) {
   const answer = elements.unknownChoice.classList.contains("hidden")
     ? elements.unknownAnswer.value.trim()
     : elements.unknownChoice.value.trim();
+  await persistUnknownAnswer(answer);
+}
+
+async function persistUnknownAnswer(answer, options = {}) {
   const question = elements.unknownAnswerForm.dataset.question || elements.unknownQuestion.textContent.trim();
   if (!answer || !question) return;
+  const appendUser = options.appendUser !== false;
   if (elements.unknownAnswerForm.dataset.unreadable === "true") {
     const result = await chrome.runtime.sendMessage({
       action: "fillForm",
@@ -1374,7 +1394,7 @@ async function saveUnknownAnswer(event) {
       ],
     });
     if (result.error) throw new Error(result.error);
-    appendMessage(answer, "user-message");
+    if (appendUser) appendMessage(answer, "user-message");
     appendMessage("Got it. I filled that answer on this page.", "agent-message");
     await scanForm();
     await continueQuestionnaire();
@@ -1393,7 +1413,7 @@ async function saveUnknownAnswer(event) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, question, answer, field_type: fieldType, sensitive: false }),
   });
-  appendMessage(answer, "user-message");
+  if (appendUser) appendMessage(answer, "user-message");
   appendMessage("Saved. I’ll reuse that answer when the same question appears again.", "agent-message");
   state.answers = await api("/api/answers");
   await replanForm();
@@ -1971,6 +1991,16 @@ async function sendChat(event) {
 
   try {
     if (await handlePageActionCommand(message)) return;
+    if (
+      message
+      && !images.length
+      && state.questionnaireActive
+      && !elements.unknownAnswerForm.classList.contains("hidden")
+      && elements.unknownAnswerForm.dataset.fieldId
+    ) {
+      await persistUnknownAnswer(message, { appendUser: false });
+      return;
+    }
     if (!state.provider?.configured) {
       appendMessage(
         "AI chat is off because no provider key is saved. Common-field scanning and filling still work without AI.",

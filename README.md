@@ -14,7 +14,9 @@ panel.
 
 The normal side-panel experience is intentionally conversational: start the
 current application, follow live progress in chat, and answer any genuinely new
-question inline. Provider choices, automation preferences, profile editing,
+question directly in the chat composer. ApplyPilot stores that verified answer
+locally, fills it, and reuses it on matching future applications. Provider
+choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.
 
 This is an open-source project intended for public use. Personal data remains

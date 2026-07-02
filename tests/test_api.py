@@ -84,13 +84,37 @@ def test_local_resume_upload_and_provider_status(monkeypatch, tmp_path: Path) ->
     )
     provider = client.get("/api/provider")
     original = client.get("/api/resumes/active/file")
+    file_status = client.get("/api/resumes/active/file-status")
 
     assert upload.status_code == 200
     assert upload.json()["filename"] == "resume.txt"
     assert original.status_code == 200
     assert original.content == resume_text.encode()
+    assert file_status.json() == {"available": True, "filename": "resume.txt"}
     assert provider.status_code == 200
     assert provider.json()["provider"] == "gemini"
+
+
+def test_resume_file_status_detects_legacy_metadata_without_raw_file(
+    monkeypatch, tmp_path: Path
+) -> None:
+    local_settings = Settings(database_path=tmp_path / "legacy.sqlite3", demo_mode=False)
+    local_store = ProfileStore(local_settings.database_path)
+    local_store.save_resume(
+        ResumeDocument(
+            filename="legacy.pdf",
+            media_type="application/pdf",
+            sha256="legacy123",
+            extracted_text="Legacy extracted resume text",
+        )
+    )
+    monkeypatch.setattr(main_module, "settings", local_settings)
+    monkeypatch.setattr(main_module, "store", local_store)
+
+    response = client.get("/api/resumes/active/file-status")
+
+    assert response.status_code == 200
+    assert response.json() == {"available": False, "filename": "legacy.pdf"}
 
 
 def test_local_cover_letter_upload_and_download(monkeypatch, tmp_path: Path) -> None:
