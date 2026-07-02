@@ -15,6 +15,20 @@ panel.
 This is an open-source project intended for public use. Personal data remains
 local and is never part of the repository.
 
+## What users install
+
+ApplyPilot has two user-facing pieces:
+
+1. **ApplyPilot Companion** — the private local engine that stores the profile,
+   prepares résumés, and runs local AI. Windows starts it automatically after
+   the one-time setup.
+2. **ApplyPilot browser extension** — the side panel that reads and fills the
+   job page currently open in Chrome or Edge.
+
+Users do not deploy or manage separate frontend and backend services. The
+companion runs quietly on their own computer; the public Render deployment is
+only a no-data demonstration for people viewing the GitHub project.
+
 ## Application strategy
 
 ApplyPilot prefers the employer's official careers page or applicant tracking
@@ -26,7 +40,8 @@ verified company application route is available.
 
 ## Product boundaries
 
-- The user reviews every application before the final submission.
+- The user chooses whether ApplyPilot asks before every final submission or
+  submits automatically for the current browser.
 - ApplyPilot uses the user's existing browser session and password manager. It
   never stores LinkedIn or employer passwords.
 - It never bypasses CAPTCHA, MFA, rate limits, or anti-bot controls.
@@ -53,15 +68,17 @@ This repository currently contains:
 - ask-each-time and always-allow policies for tailored résumé attachment and
   final submission, plus LinkedIn queue continuation with a 10-job run cap;
 - a company-site-first route planner;
-- a generic form scanner/filler that maps verified profile answers, leaves
-  passwords and authentication fields untouched, and reports unknown required
-  questions;
+- a generic form scanner/filler that maps verified profile answers, guides the
+  user through every unanswered visible question, and remembers new answers;
+- optional browser-assisted login that clicks a unique login/continue control
+  only after the browser password manager has filled credentials;
 - a synthetic employer ATS for safe end-to-end testing;
 - adapter detection and job extraction for LinkedIn, Greenhouse, Lever, and
   Workday, with recognized ATS links auto-verified and unknown external links
   held for review;
 - encrypted per-job application sessions and audit events;
-- blocked-question recovery that remembers a new answer and replans the form;
+- guided blocked-question recovery that captures page options, remembers each
+  answer, replans, fills, and resumes the active application runner;
 - an explicit two-step final-submit approval that pauses for CAPTCHA/MFA and
   records `submitted` only after the site displays a confirmation signal;
 - ATS-friendly DOCX and PDF generation from the evidence-grounded tailored
@@ -72,8 +89,8 @@ This repository currently contains:
 
 This is a working MVP, not a claim of universal ATS compatibility. Employer
 sites change frequently; unknown layouts stop safely and need a new adapter or
-manual completion. CAPTCHA, MFA, credential entry, and ambiguous submit controls
-always remain user handoffs.
+manual completion. CAPTCHA, MFA, verification codes, and ambiguous submit
+controls always remain user handoffs.
 
 ## Hosted demo
 
@@ -91,11 +108,24 @@ repository. Free instances can take about a minute to wake after being idle.
 
 Requirements: Python 3.11+ and Chrome/Edge with extension developer mode.
 
-Quick setup on Windows:
+### Windows quick start
+
+Run the one-time setup:
 
 ```powershell
 .\scripts\setup.ps1
 ```
+
+This installs the Python package, starts the private companion, and registers
+ApplyPilot to start automatically when the user signs in. Then:
+
+1. Open `chrome://extensions` or `edge://extensions`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked** and select the repository's `extension` folder.
+4. Open a job listing and click ApplyPilot.
+
+To disable automatic startup later, run
+`.\scripts\disable-autostart.ps1`.
 
 Quick setup on macOS/Linux:
 
@@ -103,7 +133,7 @@ Quick setup on macOS/Linux:
 ./scripts/setup.sh
 ```
 
-Start the local service:
+The companion can also be started manually when needed:
 
 ```powershell
 .\scripts\start.ps1
@@ -128,11 +158,27 @@ Copy-Item .env.example .env
 applypilot
 ```
 
-In the side panel, choose Gemini, OpenAI, or Anthropic, paste a newly generated
+### Free local AI with Ollama
+
+ApplyPilot can run Qwen3 entirely on your computer with no API key, request
+limit, or cloud call. Install Ollama and download the model:
+
+```powershell
+winget install --id Ollama.Ollama --exact
+ollama pull qwen3:8b
+ollama pull gemma3:4b
+```
+
+In the side panel, choose **Ollama (local and free)**, keep `qwen3:8b`, and
+choose **Save securely**. The first response is slower while the model loads.
+Qwen3 handles text, reasoning, and résumé work; image attachments automatically
+use the local `gemma3:4b` vision model.
+
+Alternatively, choose Gemini, OpenAI, or Anthropic, paste a newly generated
 API key, and choose **Save securely**. The local agent encrypts the credential;
 the extension never stores it or receives it back. After saving, the key field
 is intentionally blank and marked **Saved key is active**; the **Connected**
-badge means AI features are using that encrypted key. **Remove key** deletes it
+badge means AI features are using that encrypted key. **Disconnect** deletes it
 and turns off AI chat and AI drafting. Common-field scanning, mapping, and
 filling still work without any API key. Environment variables remain available
 for headless setups:
@@ -152,26 +198,27 @@ The API will be available at `http://127.0.0.1:8765`. Check it with:
 Invoke-RestMethod http://127.0.0.1:8765/health
 ```
 
-To load the browser side panel:
-
-1. Open `chrome://extensions` (or `edge://extensions`).
-2. Enable **Developer mode**.
-3. Choose **Load unpacked** and select the `extension` directory.
-4. Pin ApplyPilot and click its toolbar icon on a job page.
-
 For a safe form-filling test, open the synthetic ATS link above, capture the
-job in the side panel, choose **Analyze visible fields**, inspect the plan, then
-choose **Fill known fields**. The page intercepts submission and stores nothing.
+job in the side panel, and choose **Run current job**. ApplyPilot analyzes the
+page, asks each unanswered question in human-readable form, remembers the
+answers, and fills the form. The page intercepts submission and stores nothing.
 
 The extension defaults to the local service. Its settings page can point to a
 hosted demo URL; Chrome will ask for permission to contact that exact origin.
+
+If the panel says **Agent is offline**, run
+`.\scripts\start-background.ps1`, then choose **Try again**. Provider and
+automation controls remain hidden while offline so users are not asked to
+configure something that cannot yet be saved.
 
 Profile values, reusable answers, résumés, provider credentials, and application
 history are encrypted in `data/applypilot.sqlite3`. The local encryption key is
 stored separately in `data/applypilot.sqlite3.key`; both paths are ignored by
 Git. Saved profile values are reused across supported application pages and do
-not require an AI provider. ApplyPilot never stores employer passwords and
-pauses when login, CAPTCHA, or MFA is required.
+not require an AI provider. ApplyPilot never sends employer passwords to an AI
+model. With login assistance enabled, it can click a unique login button after
+Chrome's password manager has filled the fields; CAPTCHA, MFA, and verification
+codes still pause the runner.
 
 ## Development
 

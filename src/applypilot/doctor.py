@@ -94,6 +94,13 @@ def _provider_check(config: Settings) -> DoctorCheck:
             f"{local.provider.title()} configured for {local.model} in encrypted local storage",
             required=False,
         )
+    if config.ai_provider == "ollama":
+        return DoctorCheck(
+            "ai_provider",
+            True,
+            f"Ollama selected for {config.ai_model or 'qwen3:8b'}; no API key required",
+            required=False,
+        )
     environment_keys = {
         "gemini": config.gemini_api_key,
         "openai": config.openai_api_key,

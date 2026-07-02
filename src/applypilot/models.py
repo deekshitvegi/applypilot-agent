@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class CandidateProfile(BaseModel):
@@ -217,14 +217,20 @@ class ProviderStatus(BaseModel):
 
 
 class ProviderConfigRequest(BaseModel):
-    provider: Literal["gemini", "openai", "anthropic"]
-    api_key: str = Field(min_length=8, max_length=500)
+    provider: Literal["ollama", "gemini", "openai", "anthropic"]
+    api_key: str = Field(default="", max_length=500)
     model: str = Field(min_length=2, max_length=120)
 
     @field_validator("api_key", "model", mode="before")
     @classmethod
     def strip_config_value(cls, value: str) -> str:
         return str(value).strip()
+
+    @model_validator(mode="after")
+    def require_remote_provider_key(self) -> ProviderConfigRequest:
+        if self.provider != "ollama" and len(self.api_key) < 8:
+            raise ValueError("An API key is required for this provider")
+        return self
 
 
 class FormOption(BaseModel):

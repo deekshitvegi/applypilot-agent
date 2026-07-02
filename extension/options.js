@@ -64,14 +64,16 @@ function renderDiagnostics(health, provider, capabilities) {
   diagnosticFields.mode.textContent = health.mode;
   diagnosticFields.provider.textContent = provider.configured
     ? `${provider.provider} (configured)`
-    : `${provider.provider} (missing key)`;
+    : `${provider.provider} (not configured)`;
   diagnosticFields.model.textContent = provider.model;
   diagnosticFields.adapters.textContent = (capabilities.supported_adapters || []).join(", ");
   providerHelp.textContent = health.mode === "demo"
     ? "The hosted demo intentionally disables personal data and AI calls. Use the local service to apply."
     : provider.configured
-      ? "The AI provider is ready. The key remains inside the local backend."
-      : "Open the ApplyPilot side panel and connect Gemini, OpenAI, or Anthropic.";
+      ? provider.provider === "ollama"
+        ? "The local Ollama provider is ready. No API key or cloud quota is used."
+        : "The AI provider is ready. The key remains inside the local backend."
+      : "Open the ApplyPilot side panel and connect Ollama, Gemini, OpenAI, or Anthropic.";
 }
 
 form.addEventListener("submit", saveAndTest);
