@@ -27,7 +27,7 @@ def choose_application_route(options: JobApplicationOptions) -> ApplicationRoute
         return ApplicationRouteDecision(
             route="company_button",
             target_url=options.source_url,
-            reason="The listing provides an external employer Apply button.",
+            reason="The job page provides a primary employer Apply button.",
         )
 
     if options.easy_apply_available:

@@ -4,7 +4,7 @@ const routeResult = document.querySelector("#route-result");
 
 const routeNames = {
   company_site: "Company application",
-  company_button: "LinkedIn employer application",
+  company_button: "Employer application button",
   easy_apply: "Easy Apply fallback",
   manual_review: "Manual verification required",
   unavailable: "No application route found",

@@ -103,6 +103,7 @@ const state = {
   seenJobUrls: new Set(),
   jobsProcessed: 0,
   applicationsSubmitted: 0,
+  applicationSteps: 0,
   minimumFit: 60,
   siteAccessGranted: false,
   loginAssistance: false,
@@ -779,6 +780,7 @@ async function captureJob(options = {}) {
 
 async function openApplication(options = {}) {
   const throwOnError = options?.throwOnError === true;
+  const updateApplicationState = options?.transition !== false;
   if (!state.route?.target_url) return;
   elements.openApplication.disabled = true;
   try {
@@ -790,7 +792,9 @@ async function openApplication(options = {}) {
       });
     if (result.error) throw new Error(result.error);
     elements.openApplication.textContent = "Company application opened";
-    await transitionApplication("filling", "Opened the company application route.");
+    if (updateApplicationState) {
+      await transitionApplication("filling", "Opened the company application route.");
+    }
     return result;
   } catch (error) {
     elements.jobCompany.textContent = error.message;
@@ -1371,12 +1375,36 @@ async function runAutomationCycle() {
   state.formScan = null;
   state.artifact = null;
   state.submitClicked = false;
+  state.applicationSteps = 0;
   elements.automationStatus.textContent = "Reading the current job and company route…";
   const captured = await captureJob({ throwOnError: true });
   state.seenJobUrls.add(normalizeJobUrl(captured.source_url));
   state.jobQueue = state.jobQueue.filter(
     (url) => !state.seenJobUrls.has(normalizeJobUrl(url)),
   );
+
+  const target = state.route?.target_url || "";
+  let companyRouteReady = false;
+  if (state.route?.route === "company_button") {
+    elements.automationStatus.textContent = "Opening the employer application from this job page...";
+    const opened = await openApplication({ throwOnError: true, transition: false });
+    await waitForTabReady(opened.tab_id);
+    companyRouteReady = true;
+  } else if (["company_site", "manual_review"].includes(state.route?.route) && target) {
+    companyRouteReady = true;
+    if (normalizeJobUrl(target) !== normalizeJobUrl(captured.source_url)) {
+      elements.automationStatus.textContent = "Opening the company application...";
+      const opened = await openApplication({ throwOnError: true, transition: false });
+      await waitForTabReady(opened.tab_id);
+    }
+  }
+  if (companyRouteReady) {
+    const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
+    if (entry.clicked) {
+      elements.automationStatus.textContent = "Opening the employer's application form...";
+      await waitForTabReady(entry.tab_id);
+    }
+  }
 
   if (state.provider?.configured) {
     elements.automationStatus.textContent = "Analyzing fit and preparing a job-specific résumé…";
@@ -1398,17 +1426,8 @@ async function runAutomationCycle() {
   }
   if (!state.automationRunning) return;
 
-  const target = state.route?.target_url || "";
-  if (state.route?.route === "company_button") {
-    elements.automationStatus.textContent = "Opening the employer application from LinkedIn...";
-    const opened = await openApplication({ throwOnError: true });
-    await waitForTabReady(opened.tab_id);
-  } else if (["company_site", "manual_review"].includes(state.route?.route) && target) {
-    if (normalizeJobUrl(target) !== normalizeJobUrl(captured.source_url)) {
-      elements.automationStatus.textContent = "Opening the company application…";
-      const opened = await openApplication({ throwOnError: true });
-      await waitForTabReady(opened.tab_id);
-    }
+  if (companyRouteReady) {
+    await transitionApplication("filling", "Opened the company application route.");
   } else if (state.route?.route === "easy_apply") {
     elements.automationStatus.textContent = "Opening LinkedIn Easy Apply fallback…";
     const easyApply = await chrome.runtime.sendMessage({ action: "openEasyApply" });
@@ -1448,7 +1467,16 @@ async function runCurrentApplicationPage() {
   state.questionnaireActive = true;
   state.questionnaireTotal = 0;
   state.skippedFieldIds = new Set();
-  let plan = await scanForm({ throwOnError: true });
+  let plan;
+  try {
+    plan = await scanApplicationFormWithRetry();
+  } catch (error) {
+    if (!/no fillable fields/i.test(error.message)) throw error;
+    state.formScan = { page_url: "", fields: [], adapter: "generic" };
+    state.formPlan = { actions: [], unknown_fields: [], blocked_fields: [] };
+    await completeAutomationApplication();
+    return;
+  }
   if (plan.actions.length) {
     await fillForm({ throwOnError: true });
     plan = await scanForm({ throwOnError: true });
@@ -1474,6 +1502,21 @@ async function runCurrentApplicationPage() {
   await completeAutomationApplication();
 }
 
+async function scanApplicationFormWithRetry() {
+  let lastError = new Error("No fillable fields were found on this page.");
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    try {
+      return await scanForm({ throwOnError: true });
+    } catch (error) {
+      lastError = error;
+      if (!/no fillable fields/i.test(error.message) || attempt === 15) throw error;
+      elements.automationStatus.textContent = "Waiting for the employer application form...";
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+  throw lastError;
+}
+
 async function completeAutomationApplication() {
   const requiredUnknown = unresolvedRequiredUnknowns();
   const blocked = (state.formPlan?.blocked_fields || []).filter((field) => field.required);
@@ -1484,12 +1527,32 @@ async function completeAutomationApplication() {
     );
     return;
   }
-  if (state.artifact && state.formScan.fields.some((field) => field.field_type === "file")) {
+  if (state.artifact && state.formScan?.fields?.some((field) => field.field_type === "file")) {
     elements.automationStatus.textContent = "Selecting the job-specific tailored résumé…";
     const attached = await maybeAttachTailoredResume();
     if (!attached && state.automationPolicy === "always_allow") {
       throw new Error("Tailored résumé attachment was not approved.");
     }
+  }
+
+  const step = await chrome.runtime.sendMessage({ action: "advanceApplication" });
+  if (step.error && step.intermediate) throw new Error(step.error);
+  if (step.clicked) {
+    state.applicationSteps += 1;
+    if (state.applicationSteps > 15) {
+      throw new Error("Application paused after 15 form steps to prevent an unintended loop.");
+    }
+    elements.automationStatus.textContent = `Opening the next application step (${step.label})...`;
+    state.formPlan = null;
+    state.formScan = null;
+    state.questionnaireTotal = 0;
+    state.skippedFieldIds = new Set();
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    await runCurrentApplicationPage();
+    return;
+  }
+  if (!step.final_ready) {
+    throw new Error(step.error || "No Next, Review, or final Submit control was found.");
   }
 
   if (state.application?.status !== "review_required") {

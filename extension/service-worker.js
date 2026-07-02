@@ -7,8 +7,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     captureJob: captureActiveJob,
     scanForm: scanActiveForm,
     fillForm: () => fillActiveForm(message.actions || []),
+    advanceApplication: advanceActiveApplication,
     openApplication: () => openApplicationRoute(message.url),
-    openExternalApply: openLinkedInExternalApply,
+    openExternalApply: openExternalApply,
     submitApplication: submitActiveApplication,
     verifySubmission: verifyActiveSubmission,
     attachResume: () => attachResumeFile(message.fieldId, message.url, message.filename),
@@ -52,6 +53,11 @@ async function scanActiveForm() {
 async function fillActiveForm(actions) {
   const tab = await getActiveHttpTab();
   return runInTab(tab.id, applyFormFillPlan, [actions]);
+}
+
+async function advanceActiveApplication() {
+  const tab = await getActiveHttpTab();
+  return runInTab(tab.id, clickIntermediateApplicationStep);
 }
 
 async function submitActiveApplication() {
@@ -162,35 +168,44 @@ async function openLinkedInEasyApply() {
   return runInTab(tab.id, clickLinkedInEasyApply);
 }
 
-async function openLinkedInExternalApply() {
+async function openExternalApply() {
   const tab = await getActiveHttpTab();
-  if (!/(^|\.)linkedin\.com$/i.test(new URL(tab.url).hostname)) {
-    throw new Error("Open the captured LinkedIn job before opening its employer application.");
-  }
+  const source = new URL(tab.url);
   const before = new Set(
     (await chrome.tabs.query({ currentWindow: true })).map((candidate) => candidate.id),
   );
-  const result = await runInTab(tab.id, clickLinkedInExternalApply);
+  const initialSurface = await runInTab(tab.id, detectApplicationSurface);
+  const result = await runInTab(tab.id, clickExternalApplyControl);
   if (!result.clicked) return { opened: false, ...result };
 
   for (let attempt = 0; attempt < 60; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 250));
     const tabs = await chrome.tabs.query({ currentWindow: true });
-    const created = tabs.find((candidate) => {
-      if (before.has(candidate.id) || !/^https?:/i.test(candidate.url || "")) return false;
-      return !/(^|\.)linkedin\.com$/i.test(new URL(candidate.url).hostname);
-    });
+    const created = tabs.find(
+      (candidate) => !before.has(candidate.id) && /^https?:/i.test(candidate.url || ""),
+    );
     const original = tabs.find((candidate) => candidate.id === tab.id);
+    if (
+      original
+      && /(^|\.)linkedin\.com$/i.test(source.hostname)
+      && /(^|\.)linkedin\.com$/i.test(new URL(original.url || tab.url).hostname)
+    ) {
+      await runInTab(tab.id, clickLinkedInContinueApplying).catch(() => ({ clicked: false }));
+    }
     const originalMoved = original && /^https?:/i.test(original.url || "")
-      && !/(^|\.)linkedin\.com$/i.test(new URL(original.url).hostname);
-    const target = created || (originalMoved ? original : null);
+      && original.url.split("#")[0] !== tab.url.split("#")[0];
+    const currentSurface = original
+      ? await runInTab(tab.id, detectApplicationSurface).catch(() => ({ ready: false }))
+      : { ready: false };
+    const openedInline = original && !initialSurface.ready && currentSurface.ready;
+    const target = created || (originalMoved || openedInline ? original : null);
     if (!target) continue;
     await chrome.tabs.update(target.id, { active: true });
     return { opened: true, tab_id: target.id, url: target.url || "" };
   }
   return {
     opened: false,
-    error: "LinkedIn's Apply button did not open an employer page. Click it once manually, then resume ApplyPilot.",
+    error: "The Apply button did not open an application page. Click it once manually, then resume ApplyPilot.",
   };
 }
 
@@ -206,7 +221,12 @@ async function loadJobContext() {
 
 async function openActiveApplicationForm() {
   const tab = await getActiveHttpTab();
-  const result = await runInTab(tab.id, clickApplicationEntry);
+  let result = { clicked: false, error: "The application page is still loading." };
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    result = await runInTab(tab.id, clickApplicationEntry);
+    if (result.clicked || result.already_form || result.listing_page) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
   if (!result.clicked) return { ...result, tab_id: tab.id };
   await new Promise((resolve) => setTimeout(resolve, 500));
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -555,8 +575,17 @@ function clickFinalSubmit() {
     return { clicked: false, error: "CAPTCHA or verification is present and requires the user." };
   }
 
-  const labels = ["submit application", "submit", "send application", "finish application"];
-  const candidates = [...document.querySelectorAll("button, input[type='submit']")].filter((button) => {
+  const root = location.hostname.toLowerCase().includes("linkedin.com")
+    ? document.querySelector(".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal']")
+    : document;
+  const labels = [
+    "submit application",
+    "submit your application",
+    "submit",
+    "send application",
+    "finish application",
+  ];
+  const candidates = [...root.querySelectorAll("button, input[type='submit']")].filter((button) => {
     if (button.disabled || !visible(button)) return false;
     const label = (button.textContent || button.value || button.getAttribute("aria-label") || "")
       .replace(/\s+/g, " ")
@@ -577,6 +606,79 @@ function clickFinalSubmit() {
   const label = (candidates[0].textContent || candidates[0].value || "Submit").trim();
   candidates[0].click();
   return { clicked: true, label };
+}
+
+function clickIntermediateApplicationStep() {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+  const linkedinRoot = document.querySelector(
+    ".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal']",
+  );
+  const formCandidates = [...document.querySelectorAll("form")]
+    .map((form) => ({
+      form,
+      count: form.querySelectorAll("input, textarea, select, [role='combobox']").length,
+    }))
+    .sort((left, right) => right.count - left.count);
+  const root = linkedinRoot
+    || (formCandidates[0]?.count >= 2 ? formCandidates[0].form : null)
+    || document.querySelector("main, [role='main']")
+    || document;
+  const labelOf = (element) => String(
+    element.textContent || element.value || element.getAttribute("aria-label") || "",
+  ).replace(/\s+/g, " ").trim().toLowerCase();
+  const controls = [...root.querySelectorAll("button, input[type='submit'], [role='button']")]
+    .filter(visible);
+  const finalLabels = [
+    "submit application",
+    "submit your application",
+    "submit",
+    "send application",
+    "finish application",
+  ];
+  const finalControls = controls.filter((control) => finalLabels.includes(labelOf(control)));
+  if (finalControls.length === 1) {
+    return { clicked: false, final_ready: true, label: labelOf(finalControls[0]) };
+  }
+  const intermediateLabels = [
+    "next",
+    "continue",
+    "review",
+    "review application",
+    "continue to review",
+    "save and continue",
+  ];
+  const intermediate = controls.filter((control) => {
+    const label = labelOf(control);
+    return intermediateLabels.includes(label)
+      || /^next(?: step)?$/.test(label)
+      || /^continue(?: application| to (?:the )?next step)?$/.test(label)
+      || /^review (?:your )?application$/.test(label)
+      || /^save (?:and|&) continue$/.test(label);
+  });
+  if (intermediate.length !== 1) {
+    return {
+      clicked: false,
+      final_ready: false,
+      error: intermediate.length > 1
+        ? "Multiple Next or Review controls were found; choose the correct one."
+        : "No Next, Review, or final Submit control was found.",
+    };
+  }
+  const control = intermediate[0];
+  if (control.disabled || control.getAttribute("aria-disabled") === "true") {
+    return {
+      clicked: false,
+      final_ready: false,
+      intermediate: true,
+      error: `${labelOf(control) || "Continue"} is disabled. Review the required fields on this step.`,
+    };
+  }
+  control.click();
+  return { clicked: true, final_ready: false, label: labelOf(control) };
 }
 
 function detectSubmissionConfirmation() {
@@ -613,7 +715,7 @@ function clickLinkedInEasyApply() {
   return { opened: true };
 }
 
-function clickLinkedInExternalApply() {
+function clickExternalApplyControl() {
   const visible = (element) => {
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
@@ -622,15 +724,25 @@ function clickLinkedInExternalApply() {
   const labelOf = (element) => String(
     element.textContent || element.getAttribute("aria-label") || element.getAttribute("title") || "",
   ).replace(/\s+/g, " ").trim().toLowerCase();
-  const preferred = [...document.querySelectorAll(".jobs-apply-button")].filter((element) => {
+  const primaryLabel = (label) => (
+    label === "apply"
+    || label === "apply now"
+    || label === "apply for this job"
+    || label === "apply for this position"
+    || /^apply to .+/.test(label)
+    || label.includes("company website")
+  );
+  const preferred = [...document.querySelectorAll(
+    "button.jobs-apply-button, a.jobs-apply-button, [role='button'].jobs-apply-button, button[data-testid*='apply' i], a[data-testid*='apply' i], button[data-cy*='apply' i], a[data-cy*='apply' i]",
+  )].filter((element) => {
     const label = labelOf(element);
-    return visible(element) && !element.disabled && label.includes("apply") && !label.includes("easy apply");
+    return visible(element) && !element.disabled && primaryLabel(label)
+      && !label.includes("easy apply") && !label.includes("quick apply");
   });
-  const fallback = [...document.querySelectorAll("button, a[href]")].filter((element) => {
+  const fallback = [...document.querySelectorAll("button, a[href], [role='button']")].filter((element) => {
     const label = labelOf(element);
-    return visible(element) && !element.disabled && !label.includes("easy apply") && (
-      label === "apply" || /^apply to .+/.test(label) || label.includes("company website")
-    );
+    return visible(element) && !element.disabled && !label.includes("easy apply")
+      && !label.includes("quick apply") && primaryLabel(label);
   });
   const candidates = preferred.length ? preferred : fallback;
   if (candidates.length !== 1) {
@@ -638,11 +750,49 @@ function clickLinkedInExternalApply() {
       clicked: false,
       error: candidates.length
         ? "Multiple employer Apply buttons were found; choose the correct one."
-        : "The employer Apply button was not found on this LinkedIn job.",
+        : "The primary Apply button was not found on this job page.",
     };
   }
   candidates[0].click();
   return { clicked: true, label: labelOf(candidates[0]) || "Apply" };
+}
+
+function detectApplicationSurface() {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+  const roots = [...document.querySelectorAll("form, [role='dialog']")];
+  const ready = roots.some((root) => {
+    if (!visible(root)) return false;
+    const controls = [...root.querySelectorAll("input, textarea, select, [role='combobox']")]
+      .filter((control) => visible(control) && !["hidden", "search"].includes((control.type || "").toLowerCase()));
+    return controls.length >= 2;
+  });
+  return { ready };
+}
+
+function clickLinkedInContinueApplying() {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+  const dialogs = [...document.querySelectorAll(".artdeco-modal, [role='dialog']")].filter(
+    (dialog) => visible(dialog) && /job search safety reminder/i.test(dialog.textContent || ""),
+  );
+  if (dialogs.length !== 1) return { clicked: false };
+  const buttons = [...dialogs[0].querySelectorAll("button, a, [role='button']")].filter((button) => {
+    const label = String(button.textContent || button.getAttribute("aria-label") || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+    return visible(button) && label === "continue applying";
+  });
+  if (buttons.length !== 1) return { clicked: false };
+  buttons[0].click();
+  return { clicked: true };
 }
 
 function clickApplicationEntry() {
@@ -666,8 +816,8 @@ function clickApplicationEntry() {
     return visible(control) && !["hidden", "submit", "button"].includes(type);
   });
   const labels = ["apply now", "apply for this job", "apply for this position", "start application", "continue application"];
-  const candidates = [...document.querySelectorAll("a, button")].filter((element) => {
-    if (!visible(element) || element.disabled) return false;
+  const candidates = [...document.querySelectorAll("a, button, [role='button']")].filter((element) => {
+    if (!visible(element) || element.disabled || element.getAttribute("aria-disabled") === "true") return false;
     const label = (element.textContent || element.getAttribute("aria-label") || "")
       .replace(/\s+/g, " ")
       .trim()
@@ -901,15 +1051,19 @@ function extractJobFromPage() {
     const rect = element.getBoundingClientRect();
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
-  const externalApplyAvailable = adapter === "linkedin" && [...document.querySelectorAll(
-    ".jobs-apply-button, button, a[href]",
+  const onAtsPage = ["greenhouse", "lever", "workday"].includes(adapter);
+  const primaryApplyLabels = ["apply", "apply now", "apply for this job", "apply for this position"];
+  const externalApplyAvailable = !onAtsPage && [...document.querySelectorAll(
+    ".jobs-apply-button, button, a[href], [role='button']",
   )].some((element) => {
     const label = clean(element.textContent || element.getAttribute("aria-label") || "").toLowerCase();
-    return visible(element) && label.includes("apply") && !label.includes("easy apply") && (
-      element.matches(".jobs-apply-button") || label === "apply" || label.includes("company website")
-    );
+    return visible(element) && !element.disabled && !label.includes("easy apply")
+      && !label.includes("quick apply") && (
+        element.matches(".jobs-apply-button")
+        || primaryApplyLabels.includes(label)
+        || label.includes("company website")
+      );
   });
-  const onAtsPage = ["greenhouse", "lever", "workday"].includes(adapter);
   const companyApplicationUrl = onAtsPage
     ? location.href
     : externalApply?.href || (structured.url !== location.href ? structured.url || "" : "");
