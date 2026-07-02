@@ -98,7 +98,7 @@ def _provider_check(config: Settings) -> DoctorCheck:
         return DoctorCheck(
             "ai_provider",
             True,
-            f"Ollama selected for {config.ai_model or 'qwen3:8b'}; no API key required",
+            f"Ollama selected for {config.ai_model or 'qwen3:4b'}; no API key required",
             required=False,
         )
     environment_keys = {

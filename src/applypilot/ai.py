@@ -33,7 +33,7 @@ from .store import ProfileStore
 
 
 DEFAULT_MODELS = {
-    "ollama": "qwen3:8b",
+    "ollama": "qwen3:4b",
     "gemini": "gemini-2.5-flash",
     "openai": "gpt-5-mini",
     "anthropic": "claude-sonnet-4-20250514",
@@ -473,14 +473,19 @@ class OllamaProvider(BaseAIProvider):
             "messages": [message],
             "stream": False,
             "format": json_schema,
-            "keep_alive": "30m",
-            "options": {"temperature": 0.2},
+            "keep_alive": "45s",
+            "think": False,
+            "options": {
+                "temperature": 0.2,
+                "num_ctx": 8192,
+                "num_predict": 3072,
+            },
         }
         try:
             response = httpx.post(
                 "http://127.0.0.1:11434/api/chat",
                 json=payload,
-                timeout=300,
+                timeout=120,
             )
             response.raise_for_status()
             output_text = response.json().get("message", {}).get("content", "")

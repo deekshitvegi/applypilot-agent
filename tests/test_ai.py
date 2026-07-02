@@ -215,6 +215,9 @@ def test_ollama_structured_response_uses_local_schema_without_key(monkeypatch) -
     assert captured["payload"]["model"] == "qwen3:8b"
     assert captured["payload"]["stream"] is False
     assert captured["payload"]["format"]["type"] == "object"
+    assert captured["payload"]["think"] is False
+    assert captured["payload"]["keep_alive"] == "45s"
+    assert captured["payload"]["options"]["num_ctx"] == 8192
 
 
 def test_ollama_routes_images_to_local_vision_model(monkeypatch) -> None:
