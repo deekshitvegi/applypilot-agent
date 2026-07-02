@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4 - 2026-07-01
+
+- Fixed LinkedIn `/safety/go` links by preserving LinkedIn's in-page click
+  context instead of opening the internal safety endpoint as a new tab.
+- Waited for a genuine non-LinkedIn employer destination before treating the
+  safety handoff as complete.
+
 ## 0.5.3 - 2026-07-01
 
 - Fixed LinkedIn's safety reminder when its **Continue applying** control is

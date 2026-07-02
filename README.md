@@ -48,7 +48,9 @@ ask/always-allow policy still controls the final submission.
 
 LinkedIn's job-search safety reminder is handled as part of the employer-site
 handoff: ApplyPilot resolves **Continue applying** and opens the disclosed
-destination without relying on the selected AI provider.
+destination without relying on the selected AI provider. LinkedIn-internal
+`/safety/go` links remain inside LinkedIn's page context until they redirect to
+the employer, preventing context-free “Page not found” tabs.
 
 ## Product boundaries
 
