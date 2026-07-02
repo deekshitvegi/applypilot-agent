@@ -6,22 +6,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const actions = {
     captureJob: captureActiveJob,
     scanForm: scanActiveForm,
-    fillForm: () => fillActiveForm(message.actions || []),
-    advanceApplication: advanceActiveApplication,
+    fillForm: () => fillActiveForm(message.actions || [], message.frameId),
+    advanceApplication: () => advanceActiveApplication(message.frameId),
     openApplication: () => openApplicationRoute(message.url),
     openExternalApply: openExternalApply,
-    submitApplication: submitActiveApplication,
-    verifySubmission: verifyActiveSubmission,
-    attachResume: () => attachResumeFile(message.fieldId, message.url, message.filename),
+    submitApplication: () => submitActiveApplication(message.frameId),
+    verifySubmission: () => verifyActiveSubmission(message.frameId),
+    attachResume: () => attachResumeFile(
+      message.fieldId,
+      message.url,
+      message.filename,
+      message.frameId,
+    ),
     getActiveTab: getActiveTabInfo,
     getTab: () => getTabInfo(message.tabId),
     readPageContext: readActivePageContext,
     inspectPageActions: inspectActivePageActions,
-    clickPageAction: () => clickActivePageAction(message.actionId),
+    clickPageAction: () => clickActivePageAction(
+      message.actionId,
+      message.expectedLabel,
+      message.expectedKind,
+      message.frameId,
+    ),
     collectJobQueue: () => collectLinkedInJobQueue(message.tabId),
     openQueuedJob: () => openQueuedJob(message.tabId, message.url),
     openEasyApply: openLinkedInEasyApply,
-    highlightField: () => highlightActiveField(message.fieldId),
+    highlightField: () => highlightActiveField(message.fieldId, message.frameId),
     saveJobContext: () => saveJobContext(message.context),
     loadJobContext,
     openApplicationForm: openActiveApplicationForm,
@@ -48,31 +58,49 @@ async function captureActiveJob() {
 
 async function scanActiveForm() {
   const tab = await getActiveHttpTab();
-  const fields = await runInTab(tab.id, extractFormFields);
-  return { page_url: tab.url, fields, adapter: detectAdapterFromUrl(tab.url) };
+  const frames = await runInAllFrames(tab.id, extractFormFields);
+  const best = frames
+    .filter((frame) => Array.isArray(frame.result))
+    .sort((left, right) => right.result.length - left.result.length)[0];
+  return {
+    page_url: tab.url,
+    fields: best?.result || [],
+    frame_id: best?.frame_id ?? 0,
+    adapter: detectAdapterFromUrl(tab.url),
+  };
 }
 
-async function fillActiveForm(actions) {
+async function fillActiveForm(actions, frameId) {
   const tab = await getActiveHttpTab();
-  return runInTab(tab.id, applyFormFillPlan, [actions]);
+  return runInFrame(tab.id, frameId, applyFormFillPlan, [actions]);
 }
 
-async function advanceActiveApplication() {
+async function advanceActiveApplication(frameId) {
   const tab = await getActiveHttpTab();
-  return runInTab(tab.id, clickIntermediateApplicationStep);
+  return runInFrame(tab.id, frameId, clickIntermediateApplicationStep);
 }
 
-async function submitActiveApplication() {
+async function submitActiveApplication(frameId) {
   const tab = await getActiveHttpTab();
-  return runInTab(tab.id, clickFinalSubmit);
+  return runInFrame(tab.id, frameId, clickFinalSubmit);
 }
 
-async function verifyActiveSubmission() {
+async function verifyActiveSubmission(frameId) {
   const tab = await getActiveHttpTab();
-  return runInTab(tab.id, detectSubmissionConfirmation);
+  try {
+    const selected = await runInFrame(tab.id, frameId, detectSubmissionConfirmation);
+    if (selected.confirmed) return selected;
+  } catch {
+    // The submitted iframe may have navigated or been removed; inspect remaining frames.
+  }
+  const frames = await runInAllFrames(tab.id, detectSubmissionConfirmation);
+  return frames.find((frame) => frame.result?.confirmed)?.result || {
+    confirmed: false,
+    signal: "",
+  };
 }
 
-async function attachResumeFile(fieldId, url, filename) {
+async function attachResumeFile(fieldId, url, filename, frameId) {
   const source = new URL(url);
   if (!["127.0.0.1", "localhost"].includes(source.hostname)) {
     throw new Error("Resume files can only be attached from the local ApplyPilot service.");
@@ -85,18 +113,38 @@ async function attachResumeFile(fieldId, url, filename) {
     binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
   }
   const tab = await getActiveHttpTab();
-  return runInTab(tab.id, applyFileToInput, [fieldId, btoa(binary), filename]);
+  return runInFrame(tab.id, frameId, applyFileToInput, [fieldId, btoa(binary), filename]);
 }
 
 async function runInTab(tabId, func, args = []) {
+  return runInFrame(tabId, 0, func, args);
+}
+
+async function runInFrame(tabId, frameId, func, args = []) {
   try {
     const [result] = await chrome.scripting.executeScript({
-      target: { tabId },
+      target: { tabId, frameIds: [Number.isInteger(frameId) ? frameId : 0] },
       func,
       args,
     });
     if (!result) throw new Error("The page did not return a result.");
     return result.result;
+  } catch (error) {
+    if (/cannot access|permission|host permission/i.test(error.message)) {
+      throw new Error("ApplyPilot needs site access for this page. Enable access in the side panel.");
+    }
+    throw error;
+  }
+}
+
+async function runInAllFrames(tabId, func, args = []) {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      func,
+      args,
+    });
+    return results.map((item) => ({ frame_id: item.frameId, result: item.result }));
   } catch (error) {
     if (/cannot access|permission|host permission/i.test(error.message)) {
       throw new Error("ApplyPilot needs site access for this page. Enable access in the side panel.");
@@ -124,12 +172,32 @@ async function readActivePageContext() {
 
 async function inspectActivePageActions() {
   const tab = await getActiveHttpTab();
-  return runInTab(tab.id, extractPageActionControls);
+  const frames = await runInAllFrames(tab.id, extractPageActionControls);
+  const ranked = frames
+    .filter((frame) => frame.result?.controls?.length)
+    .sort((left, right) => {
+      const score = (frame) => frame.result.controls.reduce((total, control) => (
+        total + (/apply|continue|next|review|start/i.test(control.label) ? 10 : 1)
+      ), 0);
+      return score(right) - score(left);
+    });
+  const best = ranked[0];
+  return best ? { ...best.result, frame_id: best.frame_id } : {
+    page_title: tab.title || "",
+    page_text: "",
+    controls: [],
+    frame_id: 0,
+  };
 }
 
-async function clickActivePageAction(actionId) {
+async function clickActivePageAction(actionId, expectedLabel, expectedKind, frameId) {
   const tab = await getActiveHttpTab();
-  return runInTab(tab.id, clickPlannedPageAction, [actionId]);
+  return runInFrame(
+    tab.id,
+    frameId,
+    clickPlannedPageAction,
+    [actionId, expectedLabel || "", expectedKind || ""],
+  );
 }
 
 async function collectLinkedInJobQueue(tabId) {
@@ -247,7 +315,24 @@ async function openActiveApplicationForm() {
   const tab = await getActiveHttpTab();
   let result = { clicked: false, error: "The application page is still loading." };
   for (let attempt = 0; attempt < 20; attempt += 1) {
-    result = await runInTab(tab.id, clickApplicationEntry);
+    const frames = await runInAllFrames(tab.id, clickApplicationEntry, [true]);
+    const clickable = frames.filter((frame) => frame.result?.clickable);
+    if (clickable.length === 1) {
+      const selected = clickable[0];
+      result = await runInFrame(tab.id, selected.frame_id, clickApplicationEntry, [false]);
+      result = { ...result, frame_id: selected.frame_id };
+    } else if (clickable.length > 1) {
+      result = { clicked: false, error: "Multiple Apply controls were found across the page frames." };
+    } else {
+      const ready = frames.find((frame) => frame.result?.already_form);
+      if (ready) {
+        result = { ...ready.result, frame_id: ready.frame_id };
+        break;
+      }
+      const listing = frames.find((frame) => frame.result?.listing_page);
+      const informative = frames.find((frame) => frame.result?.error);
+      result = listing?.result || informative?.result || result;
+    }
     if (result.clicked || result.already_form || result.listing_page) break;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -262,9 +347,9 @@ async function assistActiveLogin(allowClick) {
   return runInTab(tab.id, clickReadyLogin, [allowClick]);
 }
 
-async function highlightActiveField(fieldId) {
+async function highlightActiveField(fieldId, frameId) {
   const tab = await getActiveHttpTab();
-  return runInTab(tab.id, highlightFormField, [fieldId]);
+  return runInFrame(tab.id, frameId, highlightFormField, [fieldId]);
 }
 
 function detectAdapterFromUrl(url) {
@@ -283,11 +368,20 @@ function extractPageActionControls() {
     return style.display !== "none" && style.visibility !== "hidden"
       && rect.width > 0 && rect.height > 0 && style.opacity !== "0";
   };
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const elements = roots.flatMap((root) => [...root.querySelectorAll(
+    "button, a[href], [role='button'], input[type='button'], input[type='submit']",
+  )]);
   const controls = [];
-  [...document.querySelectorAll("button, a[href], [role='button']")].forEach((element, index) => {
+  elements.forEach((element, index) => {
     if (!visible(element)) return;
     const label = String(
-      element.textContent || element.getAttribute("aria-label") || element.getAttribute("title") || "",
+      element.textContent || element.value || element.getAttribute("aria-label") || element.getAttribute("title") || "",
     ).replace(/\s+/g, " ").trim().slice(0, 240);
     if (!label) return;
     const id = `action-${index}`;
@@ -295,7 +389,7 @@ function extractPageActionControls() {
     controls.push({
       id,
       label,
-      kind: element.matches("a[href]") ? "link" : element.matches("button") ? "button" : "control",
+      kind: element.matches("a[href]") ? "link" : element.matches("button, input[type='button'], input[type='submit']") ? "button" : "control",
       disabled: Boolean(element.disabled || element.getAttribute("aria-disabled") === "true"),
     });
   });
@@ -307,11 +401,50 @@ function extractPageActionControls() {
   };
 }
 
-function clickPlannedPageAction(actionId) {
-  const control = document.querySelector(`[data-applypilot-action-id="${CSS.escape(actionId || "")}"]`);
-  if (!control) return { clicked: false, error: "The planned control is no longer available." };
-  const label = String(control.textContent || control.getAttribute("aria-label") || "")
-    .replace(/\s+/g, " ").trim().toLowerCase();
+function clickPlannedPageAction(actionId, expectedLabel, expectedKind) {
+  const visible = (element) => {
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden"
+      && rect.width > 0 && rect.height > 0 && style.opacity !== "0";
+  };
+  const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const labelOf = (element) => normalize(
+    element.textContent || element.value || element.getAttribute("aria-label") || element.getAttribute("title") || "",
+  );
+  const kindOf = (element) => element.matches("a[href]")
+    ? "link"
+    : element.matches("button, input[type='button'], input[type='submit']") ? "button" : "control";
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const elements = roots.flatMap((root) => [...root.querySelectorAll(
+    "button, a[href], [role='button'], input[type='button'], input[type='submit']",
+  )]);
+  let control = roots
+    .map((root) => root.querySelector(`[data-applypilot-action-id="${CSS.escape(actionId || "")}"]`))
+    .find(Boolean);
+  const expected = normalize(expectedLabel);
+  if (!control || (expected && labelOf(control) !== expected)) {
+    const matches = elements.filter((element) => (
+      visible(element)
+      && (!expected || labelOf(element) === expected)
+      && (!expectedKind || kindOf(element) === expectedKind)
+    ));
+    if (matches.length !== 1) {
+      return {
+        clicked: false,
+        error: matches.length
+          ? "The page changed and multiple matching controls are now visible."
+          : "The page changed and the planned control could not be safely re-identified.",
+      };
+    }
+    [control] = matches;
+  }
+  const label = labelOf(control);
   if (/submit|send application|finish application|sign in|log in|login|withdraw|delete|purchase|pay/.test(label)) {
     return { clicked: false, error: "The AI planner cannot click final or destructive controls." };
   }
@@ -336,9 +469,16 @@ async function extractFormFields() {
   } else {
     root = document.querySelector("main, [role='main']") || document;
   }
-  const controls = [...root.querySelectorAll(
+  const roots = [root];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const queryAll = (selector) => roots.flatMap((candidate) => [...candidate.querySelectorAll(selector)]);
+  const controls = queryAll(
     "input, textarea, select, [role='combobox'], button[aria-haspopup='listbox'], input[aria-haspopup='listbox']",
-  )].filter((control) => {
+  ).filter((control) => {
     const type = (control.type || "").toLowerCase();
     const customCombobox = control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox";
     const style = getComputedStyle(control);
@@ -356,7 +496,7 @@ async function extractFormFields() {
   const labelledByText = (control) => cleanText(
     (control.getAttribute("aria-labelledby") || "")
       .split(/\s+/)
-      .map((id) => document.getElementById(id)?.textContent || "")
+      .map((id) => control.getRootNode()?.getElementById?.(id)?.textContent || document.getElementById(id)?.textContent || "")
       .join(" "),
   );
   const nearbyLabel = (control) => {
@@ -415,7 +555,8 @@ async function extractFormFields() {
     const applypilotId = `ap-${index}`;
     control.dataset.applypilotId = applypilotId;
     const explicitLabel = control.id
-      ? document.querySelector(`label[for="${CSS.escape(control.id)}"]`)?.textContent
+      ? control.getRootNode()?.querySelector?.(`label[for="${CSS.escape(control.id)}"]`)?.textContent
+        || document.querySelector(`label[for="${CSS.escape(control.id)}"]`)?.textContent
       : "";
     const nativeLabels = [...(control.labels || [])].map((label) => label.textContent).join(" ");
     const wrappingLabel = control.closest("label")?.textContent || "";
@@ -452,7 +593,7 @@ async function extractFormFields() {
     if (fieldType === "select" && tag !== "select") {
       options = collectCustomOptions(control);
     } else if (fieldType === "radio" && control.name) {
-      options = [...root.querySelectorAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`)]
+      options = queryAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`)
         .map((radio) => ({
           value: radio.value || cleanText(radio.labels?.[0]?.textContent),
           label: cleanText(radio.labels?.[0]?.textContent || radio.value),
@@ -494,8 +635,18 @@ async function applyFormFillPlan(actions) {
     control.dispatchEvent(new Event("blur", { bubbles: true }));
   };
 
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const findControl = (fieldId) => roots
+    .map((root) => root.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`))
+    .find(Boolean);
+
   for (const action of actions) {
-    const control = document.querySelector(`[data-applypilot-id="${CSS.escape(action.field_id)}"]`);
+    const control = findControl(action.field_id);
     if (!control || control.disabled) {
       errors.push({ field_id: action.field_id, message: "The field is no longer available." });
       continue;
@@ -805,8 +956,15 @@ function clickExternalApplyControl() {
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
   const labelOf = (element) => String(
-    element.textContent || element.getAttribute("aria-label") || element.getAttribute("title") || "",
+    element.textContent || element.value || element.getAttribute("aria-label") || element.getAttribute("title") || "",
   ).replace(/\s+/g, " ").trim().toLowerCase();
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const queryAll = (selector) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
   const primaryLabel = (label) => (
     label === "apply"
     || label === "apply now"
@@ -815,14 +973,16 @@ function clickExternalApplyControl() {
     || /^apply to .+/.test(label)
     || label.includes("company website")
   );
-  const preferred = [...document.querySelectorAll(
-    "button.jobs-apply-button, a.jobs-apply-button, [role='button'].jobs-apply-button, button[data-testid*='apply' i], a[data-testid*='apply' i], button[data-cy*='apply' i], a[data-cy*='apply' i]",
-  )].filter((element) => {
+  const preferred = queryAll(
+    "button.jobs-apply-button, a.jobs-apply-button, [role='button'].jobs-apply-button, button[data-testid*='apply' i], a[data-testid*='apply' i], button[data-cy*='apply' i], a[data-cy*='apply' i], input[type='button'][value*='apply' i], input[type='submit'][value*='apply' i]",
+  ).filter((element) => {
     const label = labelOf(element);
     return visible(element) && !element.disabled && primaryLabel(label)
       && !label.includes("easy apply") && !label.includes("quick apply");
   });
-  const fallback = [...document.querySelectorAll("button, a[href], [role='button']")].filter((element) => {
+  const fallback = queryAll(
+    "button, a[href], [role='button'], input[type='button'], input[type='submit']",
+  ).filter((element) => {
     const label = labelOf(element);
     return visible(element) && !element.disabled && !label.includes("easy apply")
       && !label.includes("quick apply") && primaryLabel(label);
@@ -893,7 +1053,7 @@ function resolveLinkedInContinueApplying() {
   return { found: true, href: "", clicked: true };
 }
 
-function clickApplicationEntry() {
+function clickApplicationEntry(inspectOnly = false) {
   const visible = (element) => {
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
@@ -909,18 +1069,48 @@ function clickApplicationEntry() {
       error: "Open the employer Apply button before scanning application fields.",
     };
   }
-  const formControls = [...document.querySelectorAll("input, textarea, select")].filter((control) => {
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const queryAll = (selector) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
+  const labelOf = (element) => String(
+    element.textContent || element.value || element.getAttribute("aria-label") || element.getAttribute("title") || "",
+  ).replace(/\s+/g, " ").trim().toLowerCase();
+  const formControls = queryAll("input, textarea, select, [role='combobox']").filter((control) => {
     const type = (control.type || "").toLowerCase();
-    return visible(control) && !["hidden", "submit", "button"].includes(type);
+    return visible(control) && !["hidden", "submit", "button", "reset", "search"].includes(type);
   });
+  const applicationSignal = (control) => String([
+    control.name,
+    control.id,
+    control.getAttribute("aria-label"),
+    control.getAttribute("placeholder"),
+    control.getAttribute("autocomplete"),
+    control.labels?.[0]?.textContent,
+  ].filter(Boolean).join(" ")).toLowerCase();
+  const signalPatterns = [
+    /(?:full|first|last|preferred)\s*name|\bname\b/,
+    /e-?mail/,
+    /phone|mobile/,
+    /resume|r[eé]sum[eé]|curriculum|\bcv\b/,
+    /cover\s*letter/,
+    /linkedin|github|portfolio/,
+    /work\s*authorization|sponsor|visa/,
+  ];
+  const applicationSignalCount = (controls) => signalPatterns.filter(
+    (pattern) => controls.some((control) => pattern.test(applicationSignal(control))),
+  ).length;
+  const applicationSurface = applicationSignalCount(formControls) >= 2
+    || (formControls.some((control) => (control.type || "").toLowerCase() === "file") && formControls.length >= 2);
   const labels = ["apply now", "apply for this job", "apply for this position", "start application", "continue application"];
-  const rawCandidates = [...document.querySelectorAll("a, button, [role='button']")].filter((element) => {
+  const rawCandidates = queryAll(
+    "a[href], button, [role='button'], input[type='button'], input[type='submit']",
+  ).filter((element) => {
     if (!visible(element) || element.disabled || element.getAttribute("aria-disabled") === "true") return false;
-    const label = (element.textContent || element.getAttribute("aria-label") || "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase();
-    return labels.includes(label);
+    return labels.includes(labelOf(element));
   });
   let candidates = rawCandidates.filter(
     (candidate) => !rawCandidates.some(
@@ -935,9 +1125,7 @@ function clickApplicationEntry() {
     if (onScreen.length) candidates = onScreen;
   }
   if (candidates.length > 1) {
-    const normalized = candidates.map((candidate) => (
-      candidate.textContent || candidate.getAttribute("aria-label") || ""
-    ).replace(/\s+/g, " ").trim().toLowerCase());
+    const normalized = candidates.map(labelOf);
     if (new Set(normalized).size === 1) {
       candidates.sort((left, right) => {
         const leftRect = left.getBoundingClientRect();
@@ -948,11 +1136,18 @@ function clickApplicationEntry() {
     }
   }
   if (candidates.length === 1) {
-    if (formControls.length >= 3 && candidates[0].closest("form")) {
+    const candidateForm = candidates[0].closest("form");
+    const candidateFormControls = candidateForm
+      ? formControls.filter((control) => candidateForm.contains(control))
+      : [];
+    if (candidateFormControls.length >= 2 && applicationSignalCount(candidateFormControls) >= 2) {
       return { clicked: false, already_form: true };
     }
+    if (inspectOnly) {
+      return { clicked: false, clickable: true, label: labelOf(candidates[0]) || "Apply" };
+    }
     candidates[0].click();
-    return { clicked: true, label: (candidates[0].textContent || "Apply").trim() };
+    return { clicked: true, label: labelOf(candidates[0]) || "Apply" };
   }
   if (candidates.length > 1) {
     return {
@@ -960,7 +1155,7 @@ function clickApplicationEntry() {
       error: "Multiple Apply buttons were found; choose the correct one.",
     };
   }
-  if (formControls.length >= 3) return { clicked: false, already_form: true };
+  if (applicationSurface) return { clicked: false, already_form: true };
   return { clicked: false, error: "No unique Apply button was found on this page." };
 }
 
@@ -1019,7 +1214,15 @@ function clickReadyLogin(allowClick) {
 }
 
 function highlightFormField(fieldId) {
-  const control = document.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`);
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const control = roots
+    .map((root) => root.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`))
+    .find(Boolean);
   if (!control) return { highlighted: false };
   control.scrollIntoView({ behavior: "smooth", block: "center" });
   const previousOutline = control.style.outline;
@@ -1034,7 +1237,15 @@ function highlightFormField(fieldId) {
 }
 
 function applyFileToInput(fieldId, base64, filename) {
-  const input = document.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`);
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const input = roots
+    .map((root) => root.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`))
+    .find(Boolean);
   if (!input || input.type !== "file") {
     return { attached: false, error: "The resume upload field is no longer available." };
   }

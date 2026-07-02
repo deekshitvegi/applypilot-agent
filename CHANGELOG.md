@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.3 - 2026-07-02
+
+- Added nested-frame and open-shadow-root discovery for employer Apply controls
+  and application fields.
+- Added button-like input support for job sites that do not use normal links or
+  buttons.
+- Made AI-planned controls resilient to page re-renders by safely re-identifying
+  the selected visible label before clicking.
+- Changed the balanced Ollama default to `qwen3:4b`, disabled slow thinking for
+  structured actions, limited context, and reduced model memory residency from
+  30 minutes to 45 seconds.
+
 ## 0.7.2 - 2026-07-02
 
 - Added explicit application-stage state so the runner stops searching for an

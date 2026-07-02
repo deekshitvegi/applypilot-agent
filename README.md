@@ -193,14 +193,16 @@ limit, or cloud call. Install Ollama and download the model:
 
 ```powershell
 winget install --id Ollama.Ollama --exact
-ollama pull qwen3:8b
+ollama pull qwen3:4b
 ollama pull gemma3:4b
 ```
 
-In the side panel, choose **Ollama (local and free)**, keep `qwen3:8b`, and
+In the side panel, choose **Ollama (local and free)**, keep `qwen3:4b`, and
 choose **Save securely**. The first response is slower while the model loads.
 Qwen3 handles text, reasoning, and résumé work; image attachments automatically
-use the local `gemma3:4b` vision model.
+use the local `gemma3:4b` vision model. ApplyPilot limits the local context and
+unloads the model after a short idle period so it does not occupy several
+gigabytes of RAM for the rest of the browser session.
 
 Alternatively, choose Gemini, OpenAI, or Anthropic, paste a newly generated
 API key, and choose **Save securely**. The local agent encrypts the credential;

@@ -159,9 +159,9 @@ const PROFILE_FIELDS = [
 const PROVIDERS = {
   ollama: {
     label: "Ollama",
-    model: "qwen3:8b",
+    model: "qwen3:4b",
     keyRequired: false,
-    help: "Runs privately with no API key or usage limits. Qwen3 handles text; image attachments automatically use local gemma3:4b.",
+    help: "Runs privately with no API key or usage limits. Qwen3 4B is the balanced low-memory default; image attachments use local gemma3:4b.",
   },
   gemini: {
     label: "Google Gemini",
@@ -1004,6 +1004,7 @@ async function replanForm() {
     chrome.runtime.sendMessage({
       action: "highlightField",
       fieldId: firstUnknown.field_id,
+      frameId: state.formScan?.frame_id ?? 0,
     }).catch(() => {});
     if (firstUnknown.required) {
       await transitionApplication("blocked", "A required question needs a verified answer.", {
@@ -1074,6 +1075,7 @@ async function resolveNarrativeUnknowns() {
     const draft = await requestApplicationAnswer(unknown.label);
     const result = await chrome.runtime.sendMessage({
       action: "fillForm",
+      frameId: state.formScan?.frame_id ?? 0,
       actions: [
         {
           field_id: unknown.field_id,
@@ -1131,6 +1133,7 @@ async function attachTailoredResume(options = {}) {
   const result = await chrome.runtime.sendMessage({
     action: "attachResume",
     fieldId: fileField.id,
+    frameId: state.formScan?.frame_id ?? 0,
     url: `${state.apiBase}/api/tailored/${state.artifact.id}.docx`,
     filename: "tailored-resume.docx",
   });
@@ -1152,6 +1155,7 @@ async function attachOriginalResume(options = {}) {
   const result = await chrome.runtime.sendMessage({
     action: "attachResume",
     fieldId: fileField.id,
+    frameId: state.formScan?.frame_id ?? 0,
     url: `${state.apiBase}/api/resumes/active/file`,
     filename: state.resume.filename,
   });
@@ -1192,6 +1196,7 @@ async function saveUnknownAnswer(event) {
   if (elements.unknownAnswerForm.dataset.unreadable === "true") {
     const result = await chrome.runtime.sendMessage({
       action: "fillForm",
+      frameId: state.formScan?.frame_id ?? 0,
       actions: [
         {
           field_id: elements.unknownAnswerForm.dataset.fieldId,
@@ -1266,6 +1271,7 @@ async function fillForm(options = {}) {
   try {
     const result = await chrome.runtime.sendMessage({
       action: "fillForm",
+      frameId: state.formScan?.frame_id ?? 0,
       actions: state.formPlan.actions,
     });
     if (result.error) throw new Error(result.error);
@@ -1323,7 +1329,10 @@ async function approveAndSubmit(options = {}) {
 
       elements.approveSubmit.disabled = true;
       elements.approveSubmit.textContent = "Submitting…";
-      const result = await chrome.runtime.sendMessage({ action: "submitApplication" });
+      const result = await chrome.runtime.sendMessage({
+        action: "submitApplication",
+        frameId: state.formScan?.frame_id ?? 0,
+      });
       if (result.error || !result.clicked) {
         throw new Error(result.error || "Submission was not completed.");
       }
@@ -1331,7 +1340,10 @@ async function approveAndSubmit(options = {}) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
 
-    const verification = await chrome.runtime.sendMessage({ action: "verifySubmission" });
+    const verification = await chrome.runtime.sendMessage({
+      action: "verifySubmission",
+      frameId: state.formScan?.frame_id ?? 0,
+    });
     if (verification.error || !verification.confirmed) {
       elements.formStatus.textContent =
         verification.error || "Submit was clicked, but site confirmation is not visible yet.";
@@ -1637,7 +1649,10 @@ async function completeAutomationApplication() {
     }
   }
 
-  const step = await chrome.runtime.sendMessage({ action: "advanceApplication" });
+  const step = await chrome.runtime.sendMessage({
+    action: "advanceApplication",
+    frameId: state.formScan?.frame_id ?? 0,
+  });
   if (step.error && step.intermediate) throw new Error(step.error);
   if (step.clicked) {
     if (step.fingerprint && step.fingerprint === state.lastStepFingerprint) {
@@ -1733,9 +1748,18 @@ async function planAndClickPageAction(goal) {
     if (fingerprint === state.lastStepFingerprint) {
       return { clicked: false, error: "The observed page has not changed since the previous planned action." };
     }
+    const selectedControl = snapshot.controls.find(
+      (control) => control.id === decision.action_id,
+    );
+    if (!selectedControl) {
+      return { clicked: false, error: "The model selected a control that was not in the page snapshot." };
+    }
     const result = await chrome.runtime.sendMessage({
       action: "clickPageAction",
       actionId: decision.action_id,
+      expectedLabel: selectedControl.label,
+      expectedKind: selectedControl.kind,
+      frameId: snapshot.frame_id ?? 0,
     });
     return { ...result, fingerprint, explanation: decision.explanation };
   } catch (error) {
