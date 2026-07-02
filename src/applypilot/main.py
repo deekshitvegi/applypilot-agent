@@ -29,6 +29,7 @@ from .models import (
     ApplicationAnswerDraft,
     ApplicationQuestionDraftRequest,
     CandidateProfile,
+    CoverLetterDocument,
     ChatRequest,
     ChatResponse,
     FormFillPlan,
@@ -229,6 +230,50 @@ def active_resume_file() -> Response:
     return Response(
         content=content,
         media_type=resume.media_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+    )
+
+
+@app.post("/api/cover-letters", response_model=CoverLetterDocument)
+async def upload_cover_letter(file: UploadFile = File(...)) -> CoverLetterDocument:
+    require_local_data_mode()
+    content = await file.read()
+    try:
+        extracted = extract_resume(
+            filename=file.filename or "cover-letter",
+            content=content,
+            media_type=file.content_type or "",
+        )
+    except ResumeExtractionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    document = CoverLetterDocument(**extracted.model_dump(exclude={"id", "uploaded_at"}))
+    saved = store.save_cover_letter(document)
+    store.save_cover_letter_file(document.sha256, content)
+    return saved
+
+
+@app.get("/api/cover-letters/active", response_model=CoverLetterDocument)
+def active_cover_letter() -> CoverLetterDocument:
+    require_local_data_mode()
+    document = store.get_active_cover_letter()
+    if document is None:
+        raise HTTPException(status_code=404, detail="No cover letter has been uploaded")
+    return document
+
+
+@app.get("/api/cover-letters/active/file")
+def active_cover_letter_file() -> Response:
+    require_local_data_mode()
+    document = store.get_active_cover_letter()
+    if document is None:
+        raise HTTPException(status_code=404, detail="No cover letter has been uploaded")
+    content = store.get_cover_letter_file(document.sha256)
+    if content is None:
+        raise HTTPException(status_code=404, detail="Re-upload this cover letter to attach it")
+    safe_name = document.filename.replace('"', "").replace("\r", "").replace("\n", "")
+    return Response(
+        content=content,
+        media_type=document.media_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
     )
 

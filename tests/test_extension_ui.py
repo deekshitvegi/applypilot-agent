@@ -29,5 +29,8 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
         "profile-pane",
         "chat-question-slot",
         "unknown-answer-form",
+        "cover-letter-policy",
+        "cover-letter-file",
+        "cover-letter-status",
     }.issubset(parser.ids)
 

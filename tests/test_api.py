@@ -93,6 +93,25 @@ def test_local_resume_upload_and_provider_status(monkeypatch, tmp_path: Path) ->
     assert provider.json()["provider"] == "gemini"
 
 
+def test_local_cover_letter_upload_and_download(monkeypatch, tmp_path: Path) -> None:
+    local_settings = Settings(database_path=tmp_path / "cover.sqlite3", demo_mode=False)
+    local_store = ProfileStore(local_settings.database_path)
+    monkeypatch.setattr(main_module, "settings", local_settings)
+    monkeypatch.setattr(main_module, "store", local_store)
+    text = "Dear hiring team,\nI am interested in this role.\n" * 3
+
+    upload = client.post(
+        "/api/cover-letters",
+        files={"file": ("cover-letter.txt", text, "text/plain")},
+    )
+    downloaded = client.get("/api/cover-letters/active/file")
+
+    assert upload.status_code == 200
+    assert upload.json()["filename"] == "cover-letter.txt"
+    assert downloaded.status_code == 200
+    assert downloaded.content == text.encode()
+
+
 def test_provider_can_be_configured_without_returning_key(monkeypatch, tmp_path: Path) -> None:
     local_settings = Settings(database_path=tmp_path / "provider.sqlite3", demo_mode=False)
     local_store = ProfileStore(local_settings.database_path)

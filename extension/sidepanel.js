@@ -34,6 +34,7 @@ const elements = {
   enableSiteAccess: document.querySelector("#enable-site-access"),
   automationPolicy: document.querySelector("#automation-policy"),
   resumePolicy: document.querySelector("#resume-policy"),
+  coverLetterPolicy: document.querySelector("#cover-letter-policy"),
   minimumFit: document.querySelector("#minimum-fit"),
   continueNext: document.querySelector("#continue-next"),
   loginAssistance: document.querySelector("#login-assistance"),
@@ -52,6 +53,8 @@ const elements = {
   cancelProfile: document.querySelector("#cancel-profile"),
   resumeFile: document.querySelector("#resume-file"),
   resumeStatus: document.querySelector("#resume-status"),
+  coverLetterFile: document.querySelector("#cover-letter-file"),
+  coverLetterStatus: document.querySelector("#cover-letter-status"),
   captureJob: document.querySelector("#capture-job"),
   openApplication: document.querySelector("#open-application"),
   tailorResume: document.querySelector("#tailor-resume"),
@@ -100,6 +103,7 @@ const state = {
   application: null,
   artifact: null,
   resume: null,
+  coverLetter: null,
   submitClicked: false,
   formScan: null,
   formPlan: null,
@@ -110,6 +114,7 @@ const state = {
   automationRunning: false,
   automationPolicy: "review_each",
   resumePolicy: "ask_each",
+  coverLetterPolicy: "never",
   fitAnalysis: null,
   seenJobUrls: new Set(),
   jobsProcessed: 0,
@@ -327,6 +332,7 @@ async function loadState() {
     renderOnboarding();
     renderProfileEditor();
     await refreshResumeStatus();
+    await refreshCoverLetterStatus();
     await restoreJobContext();
   } catch (error) {
     elements.connection.textContent = "Agent is offline";
@@ -344,15 +350,18 @@ async function loadAutomationSettings() {
   const saved = await chrome.storage.local.get({
     automationPolicy: "review_each",
     resumePolicy: "ask_each",
+    coverLetterPolicy: "never",
     minimumFit: 60,
     continueNext: true,
     loginAssistance: false,
   });
   state.automationPolicy = saved.automationPolicy;
   state.resumePolicy = saved.resumePolicy === "always_attach" ? "always_tailored" : saved.resumePolicy;
+  state.coverLetterPolicy = saved.coverLetterPolicy;
   state.minimumFit = saved.minimumFit;
   elements.automationPolicy.value = saved.automationPolicy;
   elements.resumePolicy.value = state.resumePolicy;
+  elements.coverLetterPolicy.value = state.coverLetterPolicy;
   elements.minimumFit.value = String(saved.minimumFit);
   elements.continueNext.checked = saved.continueNext;
   state.loginAssistance = saved.loginAssistance;
@@ -425,6 +434,11 @@ async function changeLoginAssistance() {
 async function changeResumePolicy() {
   state.resumePolicy = elements.resumePolicy.value;
   await chrome.storage.local.set({ resumePolicy: state.resumePolicy });
+}
+
+async function changeCoverLetterPolicy() {
+  state.coverLetterPolicy = elements.coverLetterPolicy.value;
+  await chrome.storage.local.set({ coverLetterPolicy: state.coverLetterPolicy });
 }
 
 async function changeMinimumFit() {
@@ -757,6 +771,34 @@ async function uploadResume() {
     elements.resumeStatus.textContent = error.message;
   } finally {
     elements.resumeFile.value = "";
+  }
+}
+
+async function refreshCoverLetterStatus() {
+  try {
+    const document = await api("/api/cover-letters/active");
+    state.coverLetter = document;
+    elements.coverLetterStatus.textContent = `${document.filename} saved locally`;
+  } catch (error) {
+    if (!error.message.includes("No cover letter")) throw error;
+    state.coverLetter = null;
+    elements.coverLetterStatus.textContent = "No cover letter saved";
+  }
+}
+
+async function uploadCoverLetter() {
+  const [file] = elements.coverLetterFile.files;
+  if (!file) return;
+  elements.coverLetterStatus.textContent = "Saving cover letter…";
+  const body = new FormData();
+  body.append("file", file);
+  try {
+    state.coverLetter = await api("/api/cover-letters", { method: "POST", body });
+    elements.coverLetterStatus.textContent = `${state.coverLetter.filename} uploaded and encrypted locally.`;
+  } catch (error) {
+    elements.coverLetterStatus.textContent = error.message;
+  } finally {
+    elements.coverLetterFile.value = "";
   }
 }
 
@@ -1186,8 +1228,25 @@ function unresolvedUnknowns() {
 }
 
 function updateAttachButton() {
-  const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
+  const fileField = findResumeFileField();
   elements.attachResume.disabled = !(state.artifact && fileField);
+}
+
+function fileFieldText(field) {
+  return normalizeQuestion(`${field?.label || ""} ${field?.name || ""}`);
+}
+
+function findCoverLetterField() {
+  return state.formScan?.fields.find((field) => (
+    field.field_type === "file" && /cover letter/.test(fileFieldText(field))
+  ));
+}
+
+function findResumeFileField() {
+  const files = state.formScan?.fields.filter((field) => field.field_type === "file") || [];
+  return files.find((field) => /resume|curriculum vitae|\bcv\b/.test(fileFieldText(field)))
+    || files.find((field) => !/cover letter/.test(fileFieldText(field)))
+    || null;
 }
 
 function openArtifact(extension) {
@@ -1200,7 +1259,7 @@ function openArtifact(extension) {
 
 async function attachTailoredResume(options = {}) {
   const throwOnError = options?.throwOnError === true;
-  const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
+  const fileField = findResumeFileField();
   if (!state.artifact || !fileField) return false;
   elements.attachResume.disabled = true;
   const result = await chrome.runtime.sendMessage({
@@ -1223,7 +1282,7 @@ async function attachTailoredResume(options = {}) {
 
 async function attachOriginalResume(options = {}) {
   const throwOnError = options?.throwOnError === true;
-  const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
+  const fileField = findResumeFileField();
   if (!fileField || !state.resume) return false;
   const result = await chrome.runtime.sendMessage({
     action: "attachResume",
@@ -1242,8 +1301,9 @@ async function attachOriginalResume(options = {}) {
 }
 
 async function maybeAttachResume() {
-  const fileField = state.formScan?.fields.find((field) => field.field_type === "file");
+  const fileField = findResumeFileField();
   if (!fileField) return true;
+  if (fileField.value) return true;
   let choice = state.resumePolicy;
   if (choice === "ask_each") {
     choice = window.confirm(
@@ -1257,6 +1317,40 @@ async function maybeAttachResume() {
     return attachTailoredResume({ throwOnError: true });
   }
   return attachOriginalResume({ throwOnError: true });
+}
+
+async function maybeAttachCoverLetter() {
+  const fileField = findCoverLetterField();
+  if (!fileField || fileField.value || state.coverLetterPolicy === "never") return true;
+  if (!state.coverLetter) {
+    if (state.coverLetterPolicy === "always_attach") {
+      throw new Error("A cover-letter field was found, but no cover letter is saved in Profile & résumé.");
+    }
+    return true;
+  }
+  if (state.coverLetterPolicy === "ask_each" && !window.confirm(
+    `Attach your saved cover letter (${state.coverLetter.filename}) to this application?`,
+  )) return true;
+  const result = await chrome.runtime.sendMessage({
+    action: "attachResume",
+    fieldId: fileField.id,
+    frameId: state.formScan?.frame_id ?? 0,
+    url: `${state.apiBase}/api/cover-letters/active/file`,
+    filename: state.coverLetter.filename,
+  });
+  if (result.error || !result.attached) {
+    throw new Error(result.error || "The saved cover letter could not be attached.");
+  }
+  reportActivity(`${result.filename} attached as the saved cover letter.`);
+  return true;
+}
+
+async function attachConfiguredApplicationFiles() {
+  if (findResumeFileField()) {
+    reportActivity("Selecting the résumé configured for this application…");
+    await maybeAttachResume();
+  }
+  await maybeAttachCoverLetter();
 }
 
 async function saveUnknownAnswer(event) {
@@ -1643,6 +1737,10 @@ async function runCurrentApplicationPage() {
     await fillForm({ throwOnError: true });
     plan = await scanForm({ throwOnError: true });
   }
+  await attachConfiguredApplicationFiles();
+  if (findResumeFileField() || findCoverLetterField()) {
+    plan = await scanForm({ throwOnError: true });
+  }
   try {
     await resolveNarrativeUnknowns();
   } catch (error) {
@@ -1718,13 +1816,7 @@ async function completeAutomationApplication() {
     );
     return;
   }
-  if (state.formScan?.fields?.some((field) => field.field_type === "file")) {
-    reportActivity("Selecting the résumé configured for this application…");
-    const attached = await maybeAttachResume();
-    if (!attached && state.automationPolicy === "always_allow") {
-      throw new Error("Tailored résumé attachment was not approved.");
-    }
-  }
+  await attachConfiguredApplicationFiles();
 
   const step = await chrome.runtime.sendMessage({
     action: "advanceApplication",
@@ -2139,6 +2231,7 @@ elements.editProfile.addEventListener("click", openProfileEditor);
 elements.profileEditor.addEventListener("submit", saveProfile);
 elements.cancelProfile.addEventListener("click", () => elements.profileEditor.classList.add("hidden"));
 elements.resumeFile.addEventListener("change", uploadResume);
+elements.coverLetterFile.addEventListener("change", uploadCoverLetter);
 elements.captureJob.addEventListener("click", captureJob);
 elements.openApplication.addEventListener("click", openApplication);
 elements.tailorResume.addEventListener("click", tailorResume);
@@ -2179,6 +2272,7 @@ elements.enableSiteAccess.addEventListener("click", async () => {
 });
 elements.automationPolicy.addEventListener("change", changeAutomationPolicy);
 elements.resumePolicy.addEventListener("change", changeResumePolicy);
+elements.coverLetterPolicy.addEventListener("change", changeCoverLetterPolicy);
 elements.minimumFit.addEventListener("change", changeMinimumFit);
 elements.continueNext.addEventListener("change", changeContinueNext);
 elements.loginAssistance.addEventListener("change", changeLoginAssistance);

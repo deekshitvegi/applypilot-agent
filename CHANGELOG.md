@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.1 - 2026-07-02
+
+- Fixed styled Yes/No radio groups that do not share a conventional HTML name,
+  including work authorization and sponsorship questions.
+- Made the captured LinkedIn/Indeed/Dice source override stale generic referral
+  answers so source-of-application questions select the correct job board.
+- Attached the configured original or tailored résumé immediately after form
+  discovery instead of waiting until every missing question was answered.
+- Added encrypted local cover-letter upload with never, ask-each-time, and
+  always-attach preferences; résumé and cover-letter fields are identified
+  separately by their visible labels.
+- Expanded explicit cloud résumé aliases while continuing to leave unsupported
+  skills unselected.
+
 ## 0.8.0 - 2026-07-02
 
 - Reworked the side panel around one primary application conversation: current

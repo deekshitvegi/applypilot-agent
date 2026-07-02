@@ -69,9 +69,11 @@ def plan_form_fill(
 
         mapped = map_profile_field(label, field, profile)
         if mapped is None:
-            mapped = map_reusable_answer(label, field, answers)
-        if mapped is None:
+            # A captured job-board URL is more reliable than a previously saved
+            # generic referral answer (for example, "Current Employee").
             mapped = map_source_field(label, field, source_url)
+        if mapped is None:
+            mapped = map_reusable_answer(label, field, answers)
         if (
             mapped is None
             and field.field_type == "checkbox"
@@ -297,6 +299,9 @@ def resume_mentions_option(option: str, resume_text: str) -> bool:
         "c#": r"(?<!\w)c#(?!\w)",
         "go": r"\b(?:Go|Golang)\b",
         "github ci": r"\bgithub\s+(?:ci|actions)\b",
+        "gcp": r"\b(?:gcp|google\s+cloud(?:\s+platform)?)\b",
+        "aws": r"\b(?:aws|amazon\s+web\s+services)\b",
+        "azure": r"\b(?:(?:microsoft\s+)?azure)\b",
     }
     special = special_patterns.get(option.lower())
     if special:

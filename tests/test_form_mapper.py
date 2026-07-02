@@ -248,6 +248,33 @@ def test_maps_referral_source_from_captured_job_url() -> None:
     assert plan.actions[0].source == "job.source_url"
 
 
+def test_captured_source_overrides_stale_reusable_referral_answer() -> None:
+    field = FormField(
+        id="source",
+        label="How did you find out about this position?",
+        field_type="radio",
+        options=[
+            FormOption(value="employee", label="Current Employee"),
+            FormOption(value="linkedin", label="LinkedIn"),
+        ],
+    )
+    stale = ReusableAnswer(
+        question="How did you find out about this position?",
+        answer="Current Employee",
+    )
+
+    plan = plan_form_fill(
+        "https://careers.example.test",
+        [field],
+        CandidateProfile(),
+        [stale],
+        source_url="https://www.linkedin.com/jobs/view/123",
+    )
+
+    assert plan.actions[0].value == "linkedin"
+    assert plan.actions[0].source == "job.source_url"
+
+
 def test_selects_only_resume_supported_skill_checkboxes() -> None:
     group = "What development languages are you most experienced with?"
     fields = [
@@ -282,6 +309,34 @@ def test_selects_only_resume_supported_skill_checkboxes() -> None:
         "ruby": "false",
     }
     assert not plan.unknown_fields
+
+
+def test_cloud_aliases_require_explicit_resume_evidence() -> None:
+    group = "What Cloud environments are you most experienced deploying code to?"
+    fields = [
+        FormField(
+            id=name.lower(),
+            label=f"{group} {name}",
+            group_label=group,
+            option_label=name,
+            field_type="checkbox",
+        )
+        for name in ("GCP", "Azure", "AWS")
+    ]
+
+    plan = plan_form_fill(
+        "https://careers.example.test",
+        fields,
+        CandidateProfile(),
+        [],
+        resume_text="Deployed services on Google Cloud Platform and Amazon Web Services.",
+    )
+
+    assert {action.field_id: action.value for action in plan.actions} == {
+        "gcp": "true",
+        "azure": "false",
+        "aws": "true",
+    }
 
 
 def test_relocation_willingness_does_not_select_every_city() -> None:
