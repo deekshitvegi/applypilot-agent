@@ -46,6 +46,10 @@ ApplyPilot rescans each step, fills reusable answers, asks only for missing
 information, and advances through **Next** and **Review**. The configured
 ask/always-allow policy still controls the final submission.
 
+LinkedIn's job-search safety reminder is handled as part of the employer-site
+handoff: ApplyPilot resolves **Continue applying** and opens the disclosed
+destination without relying on the selected AI provider.
+
 ## Product boundaries
 
 - The user chooses whether ApplyPilot asks before every final submission or
