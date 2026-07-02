@@ -289,6 +289,41 @@ def test_answer_refinement_and_cover_letter_use_structured_provider(monkeypatch)
     assert letter == cover
 
 
+def test_ollama_cover_letter_falls_back_when_json_grammar_is_rejected(monkeypatch) -> None:
+    provider = OllamaProvider("", "qwen3:4b")
+    monkeypatch.setattr(
+        provider,
+        "_structured",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ai_module.AIProviderError("Failed to parse grammar")
+        ),
+    )
+    monkeypatch.setattr(
+        ai_module.httpx,
+        "post",
+        lambda *_args, **_kwargs: FakeResponse(
+            {
+                "message": {
+                    "content": "Dear Hiring Team,\n\nI offer verified Python automation experience."
+                }
+            }
+        ),
+    )
+
+    letter = provider.draft_cover_letter(
+        CandidateProfile(),
+        ResumeDocument(
+            filename="resume.txt",
+            media_type="text/plain",
+            sha256="resume",
+            extracted_text="Built Python automation.",
+        ),
+        JobContext(title="Engineer", company="Example", description="Build automation."),
+    )
+
+    assert "verified Python automation" in letter.body
+
+
 def test_gemini_quota_error_is_explained_without_client_internals() -> None:
     error = type(
         "QuotaError",

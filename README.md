@@ -114,8 +114,12 @@ This repository currently contains:
   job-source mapping and evidence-only résumé matching for technology choices;
 - custom ARIA radio and pressed-button support for ATS sites that render Yes/No
   and referral-source choices without native radio inputs;
+- custom ARIA checkbox support for technology and location groups, including
+  ATS controls rendered as accessible buttons rather than native inputs;
 - separate résumé and cover-letter field detection so the selected résumé is
   attached early and a cover letter is included only under the user's policy;
+- non-blocking document generation: an Ollama/cover-letter failure is reported
+  without aborting deterministic form filling;
 - automatic ATS-readable reconstruction from saved résumé text when a legacy
   upload no longer has attachable original bytes;
 - optional browser-assisted login that clicks a unique login/continue control

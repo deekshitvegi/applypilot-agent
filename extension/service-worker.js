@@ -498,16 +498,19 @@ async function extractFormFields() {
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
   const controls = queryAll(
-    "input, textarea, select, [role='combobox'], [role='radio'], button[aria-pressed], button[aria-haspopup='listbox'], input[aria-haspopup='listbox']",
+    "input, textarea, select, [role='combobox'], [role='radio'], [role='checkbox'], button[aria-pressed], button[aria-checked], button[aria-haspopup='listbox'], input[aria-haspopup='listbox']",
   ).filter((control) => {
     const type = (control.type || "").toLowerCase();
     const customCombobox = control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox";
+    const customChoice = ["radio", "checkbox"].includes(control.getAttribute("role"))
+      || control.hasAttribute("aria-pressed")
+      || control.hasAttribute("aria-checked");
     const labelledControlVisible = ["checkbox", "radio"].includes(type)
       && [...(control.labels || [])].some(elementVisible);
     const visible = type === "file" || elementVisible(control) || labelledControlVisible;
     const popupChild = control.closest("[role='listbox'], [role='menu'], [data-radix-popper-content-wrapper]");
     return visible && !popupChild && !control.disabled && (
-      customCombobox || !["hidden", "submit", "button", "reset", "image"].includes(type)
+      customCombobox || customChoice || !["hidden", "submit", "button", "reset", "image"].includes(type)
     );
   });
 
@@ -562,9 +565,19 @@ async function extractFormFields() {
       return { label: cleanText(fieldsetLegend), required: /\*/.test(fieldsetLegend) };
     }
     let container = control.parentElement;
-    const type = (control.type || "").toLowerCase();
+    const nativeType = (control.type || "").toLowerCase();
+    const choiceType = control.getAttribute("role") === "radio" || control.hasAttribute("aria-pressed")
+      ? "radio"
+      : control.getAttribute("role") === "checkbox" || control.hasAttribute("aria-checked")
+        ? "checkbox"
+        : nativeType;
+    const groupSelector = choiceType === "radio"
+      ? 'input[type="radio"], [role="radio"], button[aria-pressed]'
+      : choiceType === "checkbox"
+        ? 'input[type="checkbox"], [role="checkbox"], button[aria-checked]'
+        : `input[type="${CSS.escape(nativeType)}"]`;
     for (let depth = 0; container && depth < 7; depth += 1, container = container.parentElement) {
-      const grouped = [...container.querySelectorAll(`input[type="${CSS.escape(type)}"]`)]
+      const grouped = [...container.querySelectorAll(groupSelector)]
         .filter((candidate) => candidate.getRootNode() === control.getRootNode());
       if (grouped.length < 2) continue;
       const candidates = [
@@ -646,8 +659,12 @@ async function extractFormFields() {
     ));
     const tag = control.tagName.toLowerCase();
     const customRadio = control.getAttribute("role") === "radio" || control.hasAttribute("aria-pressed");
+    const customCheckbox = control.getAttribute("role") === "checkbox"
+      || (control.hasAttribute("aria-checked") && !customRadio);
     let fieldType = customRadio
       ? "radio"
+      : customCheckbox
+        ? "checkbox"
       : tag === "textarea" ? "textarea" : tag === "select" || control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox" ? "select" : control.type || "text";
     if (!["text", "email", "tel", "url", "number", "textarea", "select", "checkbox", "radio", "file", "password"].includes(fieldType)) {
       fieldType = "other";
@@ -714,7 +731,7 @@ async function extractFormFields() {
         }))
         .filter((option) => option.value || option.label);
     } else if (fieldType === "checkbox" && groupedQuestion) {
-      options = queryAll('input[type="checkbox"]')
+      options = queryAll('input[type="checkbox"], [role="checkbox"], button[aria-checked]')
         .filter((candidate) => (
           candidate.getRootNode() === control.getRootNode()
           && groupQuestion(candidate).label === groupedQuestion
@@ -808,6 +825,8 @@ async function applyFormFillPlan(actions) {
     try {
       const type = control.getAttribute("role") === "radio" || control.hasAttribute("aria-pressed")
         ? "radio"
+        : control.getAttribute("role") === "checkbox" || control.hasAttribute("aria-checked")
+          ? "checkbox"
         : (control.type || control.tagName).toLowerCase();
       if (type === "file" || type === "password") continue;
       if (
@@ -875,8 +894,13 @@ async function applyFormFillPlan(actions) {
       }
       if (type === "checkbox") {
         const desired = ["true", "yes", "1", "on"].includes(String(action.value).toLowerCase());
-        if (control.checked !== desired) control.click();
-        if (control.checked !== desired) {
+        const isSelected = () => Boolean(
+          control.checked
+          || control.getAttribute("aria-checked") === "true"
+          || control.getAttribute("aria-pressed") === "true"
+        );
+        if (isSelected() !== desired) control.click();
+        if (isSelected() !== desired && control instanceof HTMLInputElement) {
           const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
           if (descriptor?.set) descriptor.set.call(control, desired);
           else control.checked = desired;
