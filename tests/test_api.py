@@ -198,6 +198,12 @@ def test_application_api_lifecycle(monkeypatch, tmp_path: Path) -> None:
     assert transitioned.json()["status"] == "analyzed"
     assert listed.json()[0]["id"] == application_id
 
+    exported = client.get("/api/applications.csv")
+    assert exported.status_code == 200
+    assert "text/csv" in exported.headers["content-type"]
+    assert "Software Engineer" in exported.text
+    assert "Example Robotics" in exported.text
+
 
 def test_tailored_artifact_downloads(monkeypatch, tmp_path: Path) -> None:
     local_store = ProfileStore(tmp_path / "tailored.sqlite3")

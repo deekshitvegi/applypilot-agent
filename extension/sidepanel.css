@@ -226,6 +226,22 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
 
 .workflow { display: grid; gap: 8px; }
 .workflow-title { margin: 8px 3px 1px; }
+.manual-workflow > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.manual-workflow > summary strong, .manual-workflow > summary small { grid-column: 1; }
+.manual-workflow > summary::-webkit-details-marker { display: none; }
+.manual-workflow > summary::after { content: "⌄"; grid-column: 2; grid-row: 1 / span 2; color: #98a2b3; }
+.manual-workflow[open] > summary::after { transform: rotate(180deg); }
+.manual-workflow > summary small { color: var(--muted); }
+.manual-workflow .workflow { margin-top: 8px; }
 .workflow-step summary { display: flex; align-items: center; gap: 10px; padding: 12px 13px; cursor: pointer; list-style: none; }
 .workflow-step summary::-webkit-details-marker { display: none; }
 .workflow-step summary::after { content: "⌄"; margin-left: auto; color: #98a2b3; }

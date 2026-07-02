@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import csv
+import io
 import os
 from pathlib import Path
 
@@ -367,6 +369,46 @@ def start_application(request: ApplicationCreate) -> ApplicationRecord:
 def list_applications() -> list[ApplicationRecord]:
     require_local_data_mode()
     return store.list_applications()
+
+
+@app.get("/api/applications.csv")
+def export_applications_csv() -> Response:
+    require_local_data_mode()
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "created_at",
+            "updated_at",
+            "status",
+            "job_title",
+            "company",
+            "location",
+            "source_url",
+            "route",
+            "last_event",
+        ]
+    )
+    for application in store.list_applications():
+        last_event = application.events[-1].message if application.events else ""
+        writer.writerow(
+            [
+                application.created_at.isoformat(),
+                application.updated_at.isoformat(),
+                application.status,
+                application.job.title,
+                application.job.company,
+                application.job.location,
+                application.job.source_url,
+                application.route.route if application.route else "",
+                last_event,
+            ]
+        )
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="applypilot-applications.csv"'},
+    )
 
 
 @app.get("/api/applications/{application_id}", response_model=ApplicationRecord)

@@ -698,16 +698,18 @@ function detectSubmissionConfirmation() {
   const patterns = [
     "application submitted",
     "application has been submitted",
+    "your application was sent",
+    "application was sent",
+    "application sent",
     "thank you for applying",
     "thanks for applying",
     "we received your application",
     "we've received your application",
   ];
-  const urlSignal = /submitted|thank[-_]?you|confirmation/i.test(location.pathname);
   const matched = patterns.find((pattern) => text.includes(pattern));
   return {
-    confirmed: Boolean(matched || urlSignal),
-    signal: matched || (urlSignal ? "confirmation URL" : ""),
+    confirmed: Boolean(matched),
+    signal: matched || "",
   };
 }
 
@@ -996,6 +998,9 @@ function extractJobFromPage() {
   const selectors = {
     title: [
       ".job-details-jobs-unified-top-card__job-title h1",
+      ".job-details-jobs-unified-top-card__job-title",
+      ".jobs-unified-top-card__job-title",
+      ".job-details-jobs-unified-top-card__job-title-link",
       ".posting-headline h2",
       "#header .app-title",
       "[data-automation-id='jobPostingHeader']",
@@ -1003,6 +1008,8 @@ function extractJobFromPage() {
     ],
     company: [
       ".job-details-jobs-unified-top-card__company-name",
+      ".jobs-unified-top-card__company-name",
+      ".job-details-jobs-unified-top-card__primary-description-container a",
       ".posting-headline .company",
       "#header .company-name",
       "[data-automation-id='jobPostingCompany']",

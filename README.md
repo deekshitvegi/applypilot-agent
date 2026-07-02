@@ -91,6 +91,10 @@ This repository currently contains:
   Workday, with recognized ATS links auto-verified and unknown external links
   held for review;
 - encrypted per-job application sessions and audit events;
+- downloadable local CSV application history with timestamps and confirmed
+  submission status;
+- live runner activity in chat plus remembered-answer commands for updating
+  the current form and future applications;
 - guided blocked-question recovery that captures page options, remembers each
   answer, replans, fills, and resumes the active application runner;
 - an explicit two-step final-submit approval that pauses for CAPTCHA/MFA and
