@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.2 - 2026-07-02
+
+- Made a normal chat reply answer the currently pending application question,
+  save it as a reusable encrypted answer, fill the page, and continue the run.
+- Added an original-file availability check for résumés uploaded before raw-file
+  storage existed, with a direct one-time re-upload instruction in the correct
+  settings tab.
+- Preserved detailed local file-download errors instead of replacing them with
+  a generic attachment failure.
+
 ## 0.8.1 - 2026-07-02
 
 - Fixed styled Yes/No radio groups that do not share a conventional HTML name,

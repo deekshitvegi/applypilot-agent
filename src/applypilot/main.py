@@ -234,6 +234,18 @@ def active_resume_file() -> Response:
     )
 
 
+@app.get("/api/resumes/active/file-status")
+def active_resume_file_status() -> dict[str, str | bool]:
+    require_local_data_mode()
+    resume = store.get_active_resume()
+    if resume is None:
+        raise HTTPException(status_code=404, detail="No resume has been uploaded")
+    return {
+        "available": store.get_resume_file(resume.sha256) is not None,
+        "filename": resume.filename,
+    }
+
+
 @app.post("/api/cover-letters", response_model=CoverLetterDocument)
 async def upload_cover_letter(file: UploadFile = File(...)) -> CoverLetterDocument:
     require_local_data_mode()

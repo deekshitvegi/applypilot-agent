@@ -106,7 +106,16 @@ async function attachResumeFile(fieldId, url, filename, frameId) {
     throw new Error("Resume files can only be attached from the local ApplyPilot service.");
   }
   const response = await fetch(source.href);
-  if (!response.ok) throw new Error("Could not download the application file from the local agent.");
+  if (!response.ok) {
+    let detail = "Could not download the application file from the local agent.";
+    try {
+      const payload = await response.json();
+      if (payload?.detail) detail = payload.detail;
+    } catch {
+      // Keep the generic message when the local service did not return JSON.
+    }
+    throw new Error(detail);
+  }
   const bytes = new Uint8Array(await response.arrayBuffer());
   let binary = "";
   for (let index = 0; index < bytes.length; index += 0x8000) {
