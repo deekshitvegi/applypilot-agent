@@ -1785,6 +1785,9 @@ async function startAutomation() {
 }
 
 function stopAutomation() {
+  state.applicationStarted = false;
+  state.lastStepFingerprint = "";
+  persistJobContext().catch(() => {});
   setAutomationRunning(false, "Stopped by you.");
 }
 
@@ -1880,7 +1883,9 @@ async function runAutomationCycle() {
 }
 
 async function runCurrentApplicationPage() {
-  if (!state.applicationStarted) {
+  // Re-inspect the live page on every start or resume. The stored flag is only
+  // history; the user may have stopped or navigated back to an employer listing.
+  {
     const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
     if (entry.error && !entry.already_form) {
       reportActivity(`${entry.error} Checking the current page for a form…`);

@@ -21,7 +21,6 @@ from .models import (
     CoverLetterDraft,
     FormAgentDecision,
     FormAgentRequest,
-    FormField,
     JobContext,
     JobFitAnalysis,
     ProviderConfigRequest,
@@ -76,18 +75,40 @@ def gemini_error_message(exc: Exception, retry_attempted: bool = False) -> str:
     status = str(getattr(exc, "status", "") or "").upper()
     message = str(getattr(exc, "message", "") or exc)
     lowered = message.lower()
+    safe_detail = re.sub(r"AIza[A-Za-z0-9_-]{16,}|AQ\.[A-Za-z0-9_-]{16,}", "[redacted key]", message)
+    safe_detail = re.sub(
+        r"(?i)(api[_ -]?key\s*[=:]\s*)[^\s,;}\]]+",
+        r"\1[redacted]",
+        safe_detail,
+    )
+    safe_detail = re.sub(r"\s+", " ", safe_detail).strip()[:320]
     if code == 429 or status == "RESOURCE_EXHAUSTED":
         if retry_attempted:
             return "Gemini request limit was reached. ApplyPilot waited for the reset and retried once, but the quota is still unavailable. Try again later; common-field autofill still works without AI."
         retry = re.search(r"retry in\s+([0-9.]+)s", lowered)
         wait = f" Wait about {math.ceil(float(retry.group(1)))} seconds and try again." if retry else " Try again shortly."
         return f"Gemini free-tier rate limit reached.{wait} Common-field autofill still works without AI."
-    if code in {401, 403} or "api key not valid" in lowered or "permission_denied" in lowered:
-        return "Gemini rejected this API key. Create a new key in Google AI Studio, then replace the saved key in ApplyPilot."
+    if "free tier" in lowered and any(
+        marker in lowered
+        for marker in ("unavailable", "not available", "not supported", "region", "country")
+    ):
+        return "Gemini access is unavailable on the free tier for this account or region. Google requires a billing-enabled project for this request."
+    if any(marker in lowered for marker in ("service_disabled", "api has not been used", "generative language api has not been used")):
+        return "The Generative Language API is not enabled for this Google Cloud project. Enable it for the project linked to the key, then try again."
+    key_problem = "api key" in lowered and any(
+        marker in lowered
+        for marker in ("not valid", "invalid", "expired", "blocked", "leaked", "restricted", "rejected")
+    )
+    if code == 401 or key_problem:
+        return "Gemini rejected this API key. Check its status and Gemini API restriction in Google AI Studio, then replace it in ApplyPilot."
+    if code == 403 or status == "PERMISSION_DENIED":
+        detail = f" Google reported: {safe_detail}" if safe_detail else ""
+        return f"Gemini denied this project's access.{detail}"
     if code == 404 or status == "NOT_FOUND" or "model" in lowered and "not found" in lowered:
         return "The selected Gemini model is unavailable for this key. Choose an available Gemini model and save again."
-    if code == 400 or status == "INVALID_ARGUMENT":
-        return "Gemini rejected the request. Check the saved model name and API-key access, then try again."
+    if code == 400 or status in {"INVALID_ARGUMENT", "FAILED_PRECONDITION"}:
+        detail = safe_detail or "No additional detail was returned."
+        return f"Gemini rejected the connection test. Google reported: {detail}"
     return "Gemini could not complete the request. Check the saved key, model access, and Google AI Studio quota."
 
 
@@ -99,6 +120,14 @@ class BaseAIProvider:
     @property
     def configured(self) -> bool:
         return bool(self.api_key)
+
+    def probe_connection(self) -> None:
+        response = self._structured(
+            "This is a connection test. Reply with a short confirmation.",
+            ChatResponse,
+        )
+        if not response.answer.strip():
+            raise AIProviderError("The provider returned an empty connection response.")
 
     def extract_evidence(self, resume: ResumeDocument) -> ResumeEvidence:
         prompt = f"""
@@ -450,6 +479,37 @@ ACTIVE JOB:
 
 
 class GeminiProvider(BaseAIProvider):
+    def probe_connection(self) -> None:
+        """Verify key and model access without a complex JSON-schema grammar."""
+        if not self.configured:
+            raise AIProviderError("Gemini is not configured. Add an API key in ApplyPilot.")
+        client = genai.Client(api_key=self.api_key)
+        retry_attempted = False
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents="Reply only with CONNECTED.",
+                    config=types.GenerateContentConfig(
+                        temperature=0,
+                        max_output_tokens=16,
+                    ),
+                )
+                if not response.text:
+                    raise AIProviderError("Gemini connected but returned an empty response.")
+                return
+            except AIProviderError:
+                raise
+            except Exception as exc:
+                delay = gemini_retry_delay(exc)
+                if attempt == 0 and delay is not None and delay <= 60:
+                    retry_attempted = True
+                    time.sleep(min(delay + 0.5, 60))
+                    continue
+                raise AIProviderError(
+                    gemini_error_message(exc, retry_attempted=retry_attempted)
+                ) from exc
+
     def _structured(
         self,
         prompt: str,
@@ -869,19 +929,7 @@ class AIProviderManager:
     def configure_reasoning(self, config: ProviderConfigRequest) -> ProviderStatus:
         if config.provider == "ollama":
             raise ValueError("The optional reasoning provider must be a cloud model")
-        probe = create_provider(config).plan_form_actions(
-            FormAgentRequest(
-                user_message="Set the test field to Connected",
-                fields=[FormField(id="probe", label="Test field", field_type="text")],
-            ),
-            CandidateProfile(),
-            [],
-            None,
-        )
-        if not probe.actions or probe.actions[0].field_id != "probe":
-            raise AIProviderError(
-                "The provider responded but did not return a usable action plan. Check the model name and key access."
-            )
+        create_provider(config).probe_connection()
         self.store.save_reasoning_provider_config(config)
         return self.reasoning_status()
 
