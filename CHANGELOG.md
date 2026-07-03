@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.1 - 2026-07-03
+
+- Fixed ordinary segmented ATS buttons whose visible Yes/No text was not
+  exposed through an HTML value or ARIA attribute.
+- Routed concise visible-option replies such as `Experienced` directly to the
+  matching application question instead of generic AI chat.
+- Recognized `fill out the whole thing` as a form action and allowed `add that
+  to the application` to reapply the last verified page answer.
+- Made Enter send chat messages and Shift+Enter insert a new line.
+- Expanded autocomplete option discovery for city/state controls that render
+  visible suggestions without standard listbox roles.
+
 ## 0.10.0 - 2026-07-02
 
 - Turned explicit chat corrections into immediate page actions: one message can

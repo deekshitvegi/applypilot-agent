@@ -29,6 +29,9 @@ Explicit corrections are executable too. For example, a single message can say
 ApplyPilot applies every matching choice on the current page, stores the
 verified answers locally, and reuses them later. It never converts an unrelated
 question or ordinary chat message into a saved application answer.
+When a visible question has a unique option, a concise reply such as
+`Experienced` is applied directly. Enter sends the message; Shift+Enter adds a
+line break.
 Provider
 choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.

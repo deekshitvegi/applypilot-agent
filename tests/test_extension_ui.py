@@ -42,13 +42,17 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "correctLastSavedAnswer(correction)" in script
     assert "change my last answer to" in script
     assert "ask each unanswered application question here, one at a time" in script
-    assert "(?:rest|next|remaining fields?)" in script
+    assert "(?:rest|next|remaining fields?|whole thing)" in script
     assert "The application frame changed; rescanning" in script
     assert "frameRetry: true" in script
     assert "I couldn't continue the form scan" in script
     assert "executeExplicitPageAnswers(message)" in script
     assert "Applied and remembered" in script
     assert "Preview generated cover letter" in script
+    assert 'elements.chatInput.addEventListener("keydown"' in script
+    assert "elements.chatForm.requestSubmit()" in script
+    assert "directOptionMatches" in script
+    assert "whole thing" in script
     assert script.index('/api/questions/refine') < script.index('SIEM: 0 months')
 
     worker = (root / "extension" / "service-worker.js").read_text(encoding="utf-8")
@@ -59,4 +63,6 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "control.hasAttribute(\"aria-checked\")" in worker
     assert "isPlainChoiceButton" in worker
     assert "applypilotChoiceKind" in worker
+    assert "individualChoiceLabel" in worker
+    assert "candidate.textContent || \"\"" in worker
 

@@ -133,6 +133,7 @@ const state = {
   skippedFieldIds: new Set(),
   lastActivity: "",
   lastSavedAnswer: null,
+  lastPageAnswer: null,
 };
 
 const SITE_ORIGINS = ["https://*/*", "http://*/*"];
@@ -2216,15 +2217,39 @@ async function savePageAnswer(question, answer, fieldType = "choice") {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, question, answer, field_type: fieldType, sensitive: false }),
   });
+  state.lastPageAnswer = { question, answer, fieldType };
 }
 
 async function executeExplicitPageAnswers(message) {
-  const actionable = /\b(add|select|check|choose|include|set|authorized|authorization|sponsor|sponsorship|relocate|relocation|for this one)\b/i.test(message);
-  if (!actionable || !state.localMode) return false;
+  const normalizedMessage = normalizeQuestion(message);
+  const knownOptions = (state.formScan?.fields || []).flatMap((field) => field.options || []);
+  const knownVisibleOption = knownOptions.some((option) => (
+    normalizeQuestion(option.label || option.value) === normalizedMessage
+  ));
+  const namedVisibleOption = knownOptions.some((option) => {
+    const optionText = normalizeQuestion(option.label || option.value);
+    return optionText.length >= 2 && normalizedMessage.includes(optionText);
+  });
+  const answerOptionInstruction = /\banswer\b/i.test(message) && namedVisibleOption;
+  const actionable = /\b(add|select|check|choose|include|set|authorized|authorization|sponsor|sponsorship|relocate|relocation|for this one)\b/i.test(message)
+    || answerOptionInstruction;
+  const possibleOptionReply = normalizedMessage.split(" ").length <= 5
+    && knownVisibleOption
+    && !looksLikeChatQuestion(message);
+  if ((!actionable && !possibleOptionReply) || !state.localMode) return false;
   await scanForm({ throwOnError: true });
   const fields = state.formScan?.fields || [];
   const updates = new Map();
   const selectedCheckboxes = new Map();
+  if (/\b(?:add|apply|fill|put)\s+(?:that|it)\s+(?:in|to|on)\s+(?:the\s+)?(?:application|form|page)\b/i.test(message) && state.lastPageAnswer) {
+    await replanForm();
+    const result = await fillForm({ throwOnError: true });
+    appendMessage(
+      `Reapplied “${state.lastPageAnswer.answer}” for “${state.lastPageAnswer.question}”. ${result?.filled || 0} mapped fields were refreshed.`,
+      "agent-message",
+    );
+    return true;
+  }
   for (const field of fields.filter((candidate) => candidate.field_type === "checkbox")) {
     const group = field.group_label || field.label.replace(field.option_label || "", "").trim();
     if (field.value) {
@@ -2276,6 +2301,38 @@ async function executeExplicitPageAnswers(message) {
         selectedCheckboxes.set(group, current);
       }
     }
+  }
+
+  const directOptionMatches = [];
+  const shortReply = normalizeQuestion(message).split(" ").length <= 5;
+  for (const field of fields.filter((candidate) => ["radio", "select"].includes(candidate.field_type))) {
+    for (const option of field.options || []) {
+      const visibleOption = String(option.label || option.value || "").trim();
+      if (!visibleOption) continue;
+      const escaped = escapeRegularExpression(visibleOption);
+      const explicitlyNamed = new RegExp(
+        `(?:\\banswer\\s*(?:is|:|-)?\\s*["']?${escaped}\\b|\\b${escaped}\\b\\s+is\\s+the\\s+answer\\b|\\b(?:set|select|choose|use)\\s+(?:it\\s+to\\s+)?${escaped}\\b)`,
+        "i",
+      ).test(message);
+      const exactShortReply = shortReply && normalizeQuestion(message) === normalizeQuestion(visibleOption);
+      if (explicitlyNamed || exactShortReply) {
+        directOptionMatches.push({ field, value: visibleOption });
+      }
+    }
+  }
+  const uniqueDirectFields = new Map();
+  for (const match of directOptionMatches) {
+    if (!uniqueDirectFields.has(match.field.id)) uniqueDirectFields.set(match.field.id, match);
+    else uniqueDirectFields.set(match.field.id, null);
+  }
+  const unambiguousDirect = [...uniqueDirectFields.values()].filter(Boolean);
+  if (unambiguousDirect.length === 1) {
+    const { field, value } = unambiguousDirect[0];
+    updates.set(field.id, {
+      field,
+      value,
+      question: field.group_label || field.label,
+    });
   }
 
   if (!updates.size) return false;
@@ -2368,9 +2425,9 @@ async function handlePageActionCommand(message) {
     appendMessage(`Saved “${question}” as “${answer}” and applied it to the current page when matched.`, "agent-message");
     return true;
   }
-  const explicitFillRequest = /(fill|complete|apply).*(everything|fields|form|page)/i.test(message)
-    || /^(?:then\s+)?(?:please\s+)?(?:fill|complete)\s+(?:the\s+)?(?:rest|next|remaining fields?)\b/i.test(message)
-    || /^(?:then\s+)?(?:please\s+)?(?:fill|complete|apply)\s+(?:it|that|this|those|that\s+part|this\s+part|the\s+field|the\s+fields)\b/i.test(message);
+  const explicitFillRequest = /(fill(?:\s+out)?|complete|apply).*(everything|whole thing|all fields|fields|form|page)/i.test(message)
+    || /^(?:then\s+)?(?:please\s+)?(?:fill(?:\s+out)?|complete)\s+(?:the\s+)?(?:rest|next|remaining fields?|whole thing)\b/i.test(message)
+    || /^(?:then\s+)?(?:please\s+)?(?:fill(?:\s+out)?|complete|apply)\s+(?:it|that|this|those|that\s+part|this\s+part|the\s+field|the\s+fields)\b/i.test(message);
   if (!explicitFillRequest) return false;
   state.questionnaireActive = true;
   state.questionnaireTotal = 0;
@@ -2568,6 +2625,11 @@ elements.draftUnknown.addEventListener("click", draftUnknownAnswer);
 elements.skipUnknown.addEventListener("click", skipUnknownQuestion);
 elements.approveSubmit.addEventListener("click", approveAndSubmit);
 elements.chatForm.addEventListener("submit", sendChat);
+elements.chatInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  if (!elements.chatButton.disabled) elements.chatForm.requestSubmit();
+});
 elements.chatImages.addEventListener("change", addChatImages);
 elements.providerForm.addEventListener("submit", saveProvider);
 elements.disconnectProvider.addEventListener("click", disconnectProvider);
