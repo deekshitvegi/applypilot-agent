@@ -66,11 +66,14 @@ def plan_form_fill(
             )
             continue
 
-        mapped = map_profile_field(label, field, profile)
+        # The captured job-board URL is authoritative for referral source.
+        mapped = map_source_field(label, field, source_url)
         if mapped is None:
-            # A captured job-board URL is more reliable than a previously saved
-            # generic referral answer (for example, "Current Employee").
-            mapped = map_source_field(label, field, source_url)
+            # A direct correction made against this exact page question should
+            # override an older profile default.
+            mapped = map_exact_reusable_answer(label, field, answers)
+        if mapped is None:
+            mapped = map_profile_field(label, field, profile)
         if mapped is None:
             mapped = map_reusable_answer(label, field, answers)
         if (
@@ -201,6 +204,16 @@ def map_reusable_answer(
     return boolean_value(best[1].answer, field), f"answer.{best[1].id}", best[0]
 
 
+def map_exact_reusable_answer(
+    label: str, field: FormField, answers: list[ReusableAnswer]
+) -> tuple[str, str, float] | None:
+    comparison_label = normalize(field.group_label) or label
+    for answer in reversed(answers):
+        if normalize(answer.question) == comparison_label:
+            return boolean_value(answer.answer, field), f"answer.{answer.id}", 1.0
+    return None
+
+
 def coerce_option(value: str, field: FormField) -> str:
     if not field.options:
         return value
@@ -209,17 +222,35 @@ def coerce_option(value: str, field: FormField) -> str:
     if semantic:
         for option in field.options:
             if semantic_choice(normalize(f"{option.value} {option.label}")) == semantic:
-                return option.value
+                return usable_option_value(option.value, option.label)
     for option in field.options:
         if normalized_value in {normalize(option.value), normalize(option.label)}:
-            return option.value
+            return usable_option_value(option.value, option.label)
     for option in field.options:
         option_text = normalize(f"{option.value} {option.label}")
         if normalized_value.isdigit() and normalized_value in option_text.split():
-            return option.value
+            return usable_option_value(option.value, option.label)
         if normalized_value in option_text or option_text in normalized_value:
-            return option.value
+            return usable_option_value(option.value, option.label)
+    fuzzy = max(
+        (
+            (
+                SequenceMatcher(
+                    None, normalized_value, normalize(option.label or option.value)
+                ).ratio(),
+                option,
+            )
+            for option in field.options
+        ),
+        key=lambda item: item[0],
+    )
+    if fuzzy[0] >= 0.82:
+        return usable_option_value(fuzzy[1].value, fuzzy[1].label)
     return value
+
+
+def usable_option_value(value: str, label: str) -> str:
+    return label if normalize(value) in {"", "on"} else value
 
 
 def semantic_choice(value: str) -> str:

@@ -294,6 +294,75 @@ def test_captured_source_overrides_stale_reusable_referral_answer() -> None:
     assert plan.actions[0].source == "job.source_url"
 
 
+def test_generic_radio_on_values_use_the_visible_option_label() -> None:
+    field = FormField(
+        id="source",
+        label="How did you find out about this position?",
+        field_type="radio",
+        options=[
+            FormOption(value="on", label="Current Employee"),
+            FormOption(value="on", label="LinkedIn"),
+        ],
+    )
+
+    plan = plan_form_fill(
+        "https://jobs.ashbyhq.com/example/application",
+        [field],
+        CandidateProfile(),
+        [],
+        source_url="https://www.linkedin.com/jobs/view/123",
+    )
+
+    assert plan.actions[0].value == "LinkedIn"
+
+
+def test_correctly_spelled_answer_matches_misspelled_visible_option() -> None:
+    field = FormField(
+        id="linux",
+        label="Regarding Linux, select your present Linux experience",
+        group_label="Regarding Linux, select your present Linux experience",
+        field_type="radio",
+        options=[
+            FormOption(value="on", label="Intermediate"),
+            FormOption(value="on", label="Expereinced"),
+            FormOption(value="on", label="Expert"),
+        ],
+    )
+    answer = ReusableAnswer(question=field.group_label, answer="Experienced")
+
+    plan = plan_form_fill(
+        "https://jobs.ashbyhq.com/example/application",
+        [field],
+        CandidateProfile(),
+        [answer],
+    )
+
+    assert plan.actions[0].value == "Expereinced"
+
+
+def test_exact_page_answer_overrides_stale_profile_default() -> None:
+    question = "Are you legally authorized to work in the United States?"
+    field = FormField(
+        id="authorized",
+        label=question,
+        group_label=question,
+        field_type="radio",
+        options=[FormOption(value="Yes", label="Yes"), FormOption(value="No", label="No")],
+    )
+    profile = CandidateProfile(work_authorization="No")
+    correction = ReusableAnswer(question=question, answer="Yes")
+
+    plan = plan_form_fill(
+        "https://jobs.ashbyhq.com/example/application",
+        [field],
+        profile,
+        [correction],
+    )
+
+    assert plan.actions[0].value == "Yes"
+    assert plan.actions[0].source == f"answer.{correction.id}"
+
+
 def test_selects_only_resume_supported_skill_checkboxes() -> None:
     group = "What development languages are you most experienced with?"
     fields = [

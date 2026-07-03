@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.10.2 - 2026-07-03
+
+- Added an Ashby-safe control model based on the live TENEX application: visible
+  Yes/No buttons are treated as one field and their hidden backing checkbox is
+  no longer scanned or filled separately.
+- Fixed Ashby radio groups whose every input uses the generic value `on`; the
+  visible option label now drives LinkedIn, Linux, consent, and similar choices.
+- Added fuzzy visible-option matching for employer typos such as `Expereinced`.
+- Made exact page corrections override stale profile defaults and prevented a
+  saved `Current Employee` answer from overriding a captured LinkedIn source.
+- Added natural commands for changing referral source, confirming background
+  policy review, applying `it is ...` answers, `answer these`, and `do it`.
+- Page-action reports now distinguish saved requests from selections actually
+  verified by the extension rather than claiming every planned update worked.
+
 ## 0.10.1 - 2026-07-03
 
 - Fixed ordinary segmented ATS buttons whose visible Yes/No text was not

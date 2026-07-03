@@ -32,6 +32,9 @@ question or ordinary chat message into a saved application answer.
 When a visible question has a unique option, a concise reply such as
 `Experienced` is applied directly. Enter sends the message; Shift+Enter adds a
 line break.
+On Ashby, ApplyPilot uses visible option labels rather than the platform's
+generic internal `on` value, verifies each requested selection, and treats the
+two Yes/No buttons plus their hidden backing input as one logical field.
 Provider
 choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.

@@ -504,6 +504,12 @@ async function extractFormFields() {
     }
     return false;
   };
+  const isYesNoBackingInput = (control) => {
+    if (control.tagName !== "INPUT" || (control.type || "").toLowerCase() !== "checkbox") return false;
+    const buttons = [...(control.parentElement?.querySelectorAll("button") || [])]
+      .map((candidate) => String(candidate.textContent || "").trim().toLowerCase());
+    return buttons.includes("yes") && buttons.includes("no");
+  };
   const elementVisible = (element) => {
     if (!element) return false;
     const style = getComputedStyle(element);
@@ -513,6 +519,7 @@ async function extractFormFields() {
   const controls = queryAll(
     "input, textarea, select, button, [role='combobox'], [role='radio'], [role='checkbox'], input[aria-haspopup='listbox']",
   ).filter((control) => {
+    if (isYesNoBackingInput(control)) return false;
     const type = (control.type || "").toLowerCase();
     const customCombobox = control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox";
     const customChoice = ["radio", "checkbox"].includes(control.getAttribute("role"))
@@ -756,10 +763,14 @@ async function extractFormFields() {
       options = collectCustomOptions(control);
     } else if (fieldType === "radio") {
       options = radioGroupControls
-        .map((radio) => ({
-          value: radio.value || cleanText(radio.labels?.[0]?.textContent),
-          label: radio.dataset.applypilotOptionLabel || cleanText(radio.value),
-        }))
+        .map((radio) => {
+          const option = radio.dataset.applypilotOptionLabel || individualChoiceLabel(radio);
+          const rawValue = cleanText(radio.value);
+          return {
+            value: !rawValue || rawValue.toLowerCase() === "on" ? option : rawValue,
+            label: option || rawValue,
+          };
+        })
         .filter((option) => option.value || option.label);
     } else if (fieldType === "checkbox" && groupedQuestion) {
       options = queryAll('input[type="checkbox"], [role="checkbox"], button[aria-checked]')
@@ -810,6 +821,7 @@ async function extractFormFields() {
 
 async function applyFormFillPlan(actions) {
   let filled = 0;
+  const filledIds = [];
   const errors = [];
   const dispatch = (control) => {
     control.dispatchEvent(new Event("input", { bubbles: true }));
@@ -918,6 +930,7 @@ async function applyFormFillPlan(actions) {
         if (!option) throw new Error(`No dropdown option matched "${action.value}".`);
         option.click();
         filled += 1;
+        filledIds.push(action.field_id);
         continue;
       }
       if (type === "checkbox") {
@@ -928,13 +941,18 @@ async function applyFormFillPlan(actions) {
           || control.getAttribute("aria-pressed") === "true"
         );
         if (isSelected() !== desired) control.click();
+        if (isSelected() !== desired && control.labels?.[0]) control.labels[0].click();
         if (isSelected() !== desired && control instanceof HTMLInputElement) {
           const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
           if (descriptor?.set) descriptor.set.call(control, desired);
           else control.checked = desired;
           dispatch(control);
         }
+        if (isSelected() !== desired) {
+          throw new Error(`The checkbox did not remain ${desired ? "selected" : "cleared"}.`);
+        }
         filled += 1;
+        filledIds.push(action.field_id);
         continue;
       } else if (type === "radio") {
         const taggedGroup = queryAll(
@@ -973,13 +991,22 @@ async function applyFormFillPlan(actions) {
           || candidate.getAttribute("aria-pressed") === "true"
         );
         if (!isSelected(desired)) desired.click();
+        if (!isSelected(desired) && desired.labels?.[0]) desired.labels[0].click();
         if (!isSelected(desired) && desired instanceof HTMLInputElement) {
           const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
           if (descriptor?.set) descriptor.set.call(desired, true);
           else desired.checked = true;
           dispatch(desired);
         }
+        const backingInput = desired.parentElement?.querySelector('input[type="checkbox"]');
+        const backingMatches = backingInput && ["yes", "no"].includes(target)
+          ? backingInput.checked === (target === "yes")
+          : true;
+        if (!isSelected(desired) && !backingMatches) {
+          throw new Error(`The radio option "${action.value}" did not remain selected.`);
+        }
         filled += 1;
+        filledIds.push(action.field_id);
         continue;
       } else if (control.tagName === "SELECT") {
         const normalizeOption = (value) => String(value || "")
@@ -1007,12 +1034,13 @@ async function applyFormFillPlan(actions) {
       }
       dispatch(control);
       filled += 1;
+      filledIds.push(action.field_id);
     } catch (error) {
       errors.push({ field_id: action.field_id, message: error.message });
     }
   }
 
-  return { filled, errors, submit_clicked: false };
+  return { filled, filled_ids: filledIds, errors, submit_clicked: false };
 }
 
 function clickFinalSubmit() {
