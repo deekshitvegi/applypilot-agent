@@ -163,6 +163,7 @@ main {
 .advanced-settings > summary span { display: grid; min-width: 0; gap: 2px; }
 .advanced-settings > summary strong { font-size: 13px; }
 .settings-stack { display: grid; min-width: 0; gap: 10px; margin-top: 10px; }
+.reasoning-provider-box { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #d0d5dd; }
 
 .setup-panel, .automation-panel, .chat-card { padding: 15px; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }

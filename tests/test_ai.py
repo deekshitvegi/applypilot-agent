@@ -3,12 +3,15 @@ from types import SimpleNamespace
 
 import applypilot.ai as ai_module
 from applypilot.ai import (
+    AIProviderError,
+    AIProviderManager,
     AnthropicProvider,
     GeminiProvider,
     OllamaProvider,
     OpenAIProvider,
     gemini_error_message,
 )
+from applypilot.config import Settings
 from applypilot.models import (
     ApplicationAnswerDraft,
     CandidateProfile,
@@ -29,6 +32,7 @@ from applypilot.models import (
     TailoredExperience,
     TailoredResume,
 )
+from applypilot.store import ProfileStore
 
 
 class FakeResponse:
@@ -89,6 +93,33 @@ def test_form_agent_plans_structured_grounded_actions(monkeypatch) -> None:
     assert "action-planning task, not an" in captured["prompt"]
     assert "Change the source to LinkedIn" in captured["prompt"]
     assert "How did you find this position?" in captured["prompt"]
+
+
+def test_hybrid_form_reasoning_falls_back_to_ollama(monkeypatch, tmp_path) -> None:
+    manager = AIProviderManager(
+        ProfileStore(tmp_path / "hybrid-fallback.sqlite3"),
+        Settings(database_path=tmp_path / "hybrid-fallback.sqlite3", gemini_api_key="key"),
+    )
+    expected = FormAgentDecision(handled=True, question="Which Linux level should I use?")
+
+    class Preferred:
+        def plan_form_actions(self, *_args):
+            raise AIProviderError("Gemini free-tier limit reached")
+
+    class Fallback:
+        def plan_form_actions(self, *_args):
+            return expected
+
+    monkeypatch.setattr(manager, "_reasoning_providers", lambda: (Preferred(), Fallback()))
+
+    result = manager.plan_form_actions(
+        FormAgentRequest(
+            user_message="Fill the form",
+            fields=[FormField(id="linux", label="Linux level", field_type="radio")],
+        )
+    )
+
+    assert result == expected
 
 def test_evidence_extractor_removes_non_verbatim_claims(monkeypatch) -> None:
     provider = GeminiProvider("test-key", "test-model")

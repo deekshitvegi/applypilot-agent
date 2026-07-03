@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.11.1 - 2026-07-03
+
+- Added semantic grounding validation so model confidence can never override a
+  conflicting canonical profile value such as email, title, authorization, or
+  sponsorship.
+- Added expected field-label/type fingerprints to every fill action, preventing
+  stale numeric field IDs from writing an answer into a different question
+  after an ATS re-renders the form.
+- Reapplied canonical profile actions after résumé/cover-letter uploads, which
+  can cause Ashby and other reactive forms to reset selected controls.
+- Removed contaminated canonical page answers on startup and made the editable
+  candidate profile the single source of truth for those fields.
+- Added conversational field focus so `change it to ...` and `it was ...`
+  execute against the last explicitly referenced question.
+- Added selective Ollama + Gemini routing: local Ollama handles unlimited chat
+  and fallback work, while Gemini is reserved for résumé tailoring and
+  unfamiliar page/form decisions. Gemini failures fall back to Ollama.
+
 ## 0.11.0 - 2026-07-03
 
 - Added a genuine model-driven form agent: Gemini, Ollama, OpenAI, or Anthropic

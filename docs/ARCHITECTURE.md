@@ -43,6 +43,11 @@ payment, file-upload, destructive, low-confidence, and unavailable actions are
 rejected before execution. If the provider is unavailable or rate-limited, the
 deterministic mapper remains operational.
 
+When local Ollama is active and a Gemini key exists in the local environment,
+the manager selectively routes résumé tailoring and unfamiliar page/form
+reasoning to Gemini. Routine chat remains local, deterministic fields use no
+model, and any Gemini provider failure falls back to Ollama.
+
 ## Company-site-first routing
 
 The source listing is not assumed to be the application destination. For every

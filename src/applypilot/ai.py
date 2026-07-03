@@ -751,6 +751,28 @@ class AIProviderManager:
             config = config.model_copy(update={"api_key": ""})
         return create_provider(config)
 
+    def _reasoning_providers(self) -> tuple[BaseAIProvider, BaseAIProvider | None]:
+        """Return the selective reasoning provider and its local fallback."""
+        active_config, _ = self._configuration()
+        active = create_provider(active_config)
+        saved_reasoning = self.store.get_reasoning_provider_config()
+        if active_config.provider == "ollama" and saved_reasoning is not None:
+            return create_provider(saved_reasoning), active
+        if active_config.provider == "ollama" and self.settings.gemini_api_key:
+            cloud = GeminiProvider(
+                self.settings.gemini_api_key,
+                DEFAULT_MODELS["gemini"],
+            )
+            return cloud, active
+        return active, None
+
+    @property
+    def hybrid_reasoning_enabled(self) -> bool:
+        config, _ = self._configuration()
+        return config.provider == "ollama" and bool(
+            self.store.get_reasoning_provider_config() or self.settings.gemini_api_key
+        )
+
     @property
     def configured(self) -> bool:
         _, source = self._configuration()
@@ -758,12 +780,53 @@ class AIProviderManager:
 
     def status(self) -> ProviderStatus:
         config, source = self._configuration()
+        reasoning = self.store.get_reasoning_provider_config()
+        hybrid = config.provider == "ollama" and bool(
+            reasoning or self.settings.gemini_api_key
+        )
         return ProviderStatus(
             provider=config.provider,
             model=config.model,
             configured=source != "none",
             source=source,
+            reasoning_provider=(reasoning.provider if reasoning else "gemini") if hybrid else "",
+            reasoning_model=(reasoning.model if reasoning else DEFAULT_MODELS["gemini"])
+            if hybrid
+            else "",
         )
+
+    def reasoning_status(self) -> ProviderStatus:
+        config = self.store.get_reasoning_provider_config()
+        if config is not None:
+            return ProviderStatus(
+                provider=config.provider,
+                model=config.model,
+                configured=True,
+                source="encrypted_local",
+            )
+        if self.settings.gemini_api_key:
+            return ProviderStatus(
+                provider="gemini",
+                model=DEFAULT_MODELS["gemini"],
+                configured=True,
+                source="environment",
+            )
+        return ProviderStatus(
+            provider="gemini",
+            model=DEFAULT_MODELS["gemini"],
+            configured=False,
+            source="none",
+        )
+
+    def configure_reasoning(self, config: ProviderConfigRequest) -> ProviderStatus:
+        if config.provider == "ollama":
+            raise ValueError("The optional reasoning provider must be a cloud model")
+        self.store.save_reasoning_provider_config(config)
+        return self.reasoning_status()
+
+    def disconnect_reasoning(self) -> ProviderStatus:
+        self.store.delete_reasoning_provider_config()
+        return self.reasoning_status()
 
     def configure(self, config: ProviderConfigRequest) -> ProviderStatus:
         self.store.save_provider_config(config)
@@ -779,7 +842,13 @@ class AIProviderManager:
     def tailor_resume(
         self, resume: ResumeDocument, job: JobContext, evidence: ResumeEvidence | None = None
     ) -> TailoredResume:
-        return self._provider().tailor_resume(resume, job, evidence)
+        preferred, fallback = self._reasoning_providers()
+        try:
+            return preferred.tailor_resume(resume, job, evidence)
+        except AIProviderError:
+            if fallback is None:
+                raise
+            return fallback.tailor_resume(resume, job, evidence)
 
     def analyze_job(
         self, resume: ResumeDocument, job: JobContext, evidence: ResumeEvidence | None = None
@@ -827,12 +896,22 @@ class AIProviderManager:
         return self._provider().draft_cover_letter(profile, resume, job)
 
     def plan_page_action(self, request: PageActionRequest) -> PageActionDecision:
-        return self._provider().plan_page_action(request)
+        preferred, fallback = self._reasoning_providers()
+        try:
+            return preferred.plan_page_action(request)
+        except AIProviderError:
+            if fallback is None:
+                raise
+            return fallback.plan_page_action(request)
 
     def plan_form_actions(self, request: FormAgentRequest) -> FormAgentDecision:
-        return self._provider().plan_form_actions(
-            request,
-            self.store.load(),
-            self.store.list_answers(),
-            self.store.get_active_resume(),
-        )
+        profile = self.store.load()
+        answers = self.store.list_answers()
+        resume = self.store.get_active_resume()
+        preferred, fallback = self._reasoning_providers()
+        try:
+            return preferred.plan_form_actions(request, profile, answers, resume)
+        except AIProviderError:
+            if fallback is None:
+                raise
+            return fallback.plan_form_actions(request, profile, answers, resume)

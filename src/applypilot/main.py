@@ -43,6 +43,7 @@ from .models import (
     ChatResponse,
     FormAgentDecision,
     FormAgentRequest,
+    FormField,
     FormFillPlan,
     FormPlanRequest,
     JobApplicationOptions,
@@ -63,7 +64,15 @@ from .models import (
     TailorRequest,
 )
 from .onboarding import get_onboarding_state
-from .form_mapper import coerce_option, normalize, plan_form_fill
+from .form_mapper import (
+    coerce_option,
+    map_exact_reusable_answer,
+    map_profile_field,
+    map_source_field,
+    normalize,
+    plan_form_fill,
+    resume_mentions_option,
+)
 from .resume import ResumeExtractionError, extract_resume
 from .routing import choose_application_route
 from .store import ProfileStore
@@ -77,6 +86,7 @@ web_directory = Path(__file__).parent / "web"
 async def lifespan(_: FastAPI):
     if not settings.demo_mode:
         store.initialize()
+        prune_canonical_reusable_answers(store)
     yield
 
 
@@ -97,6 +107,30 @@ def require_local_data_mode() -> None:
             status_code=403,
             detail="The public demo does not store candidate data. Use the local agent.",
         )
+
+
+def prune_canonical_reusable_answers(profile_store: ProfileStore) -> int:
+    """Remove page-answer copies of canonical profile fields.
+
+    Canonical facts are edited in the candidate profile. Keeping a second copy
+    in reusable answers creates two competing truths and made one bad model
+    mapping persist across later applications.
+    """
+    profile = profile_store.load()
+    removed = 0
+    for answer in profile_store.list_answers():
+        label = normalize(answer.question)
+        field_type = (
+            "checkbox"
+            if "background check" in label
+            else "radio"
+            if any(token in label for token in ("authorized to work", "sponsor", "relocate", "travel"))
+            else "text"
+        )
+        field = FormField(id=answer.id, label=answer.question, field_type=field_type)
+        if map_profile_field(label, field, profile) is not None:
+            removed += int(profile_store.delete_answer(answer.id))
+    return removed
 
 
 @app.get("/", include_in_schema=False)
@@ -130,6 +164,7 @@ def capabilities() -> dict[str, object]:
         "resume_tailoring": ai_provider.configured and not settings.demo_mode,
         "job_fit_analysis": ai_provider.configured and not settings.demo_mode,
         "model_form_agent": ai_provider.configured and not settings.demo_mode,
+        "hybrid_reasoning": ai_provider.hybrid_reasoning_enabled and not settings.demo_mode,
         "deterministic_autofill": not settings.demo_mode,
         "editable_reusable_profile": not settings.demo_mode,
         "automation_policies": ["review_each", "always_allow"],
@@ -153,6 +188,26 @@ def configure_provider(config: ProviderConfigRequest) -> ProviderStatus:
 def disconnect_provider() -> ProviderStatus:
     require_local_data_mode()
     return ai_provider.disconnect()
+
+
+@app.get("/api/provider/reasoning", response_model=ProviderStatus)
+def reasoning_provider_status() -> ProviderStatus:
+    return ai_provider.reasoning_status()
+
+
+@app.put("/api/provider/reasoning", response_model=ProviderStatus)
+def configure_reasoning_provider(config: ProviderConfigRequest) -> ProviderStatus:
+    require_local_data_mode()
+    try:
+        return ai_provider.configure_reasoning(config)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.delete("/api/provider/reasoning", response_model=ProviderStatus)
+def disconnect_reasoning_provider() -> ProviderStatus:
+    require_local_data_mode()
+    return ai_provider.disconnect_reasoning()
 
 
 @app.get("/api/profile", response_model=CandidateProfile)
@@ -549,6 +604,9 @@ def form_agent_plan(request: FormAgentRequest) -> FormAgentDecision:
     except AIProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    profile = store.load()
+    answers = store.list_answers()
+    resume = store.get_active_resume()
     fields = {field.id: field for field in request.fields}
     safe_actions = []
     for action in decision.actions:
@@ -592,6 +650,48 @@ def form_agent_plan(request: FormAgentRequest) -> FormAgentDecision:
                 if option.value and normalize(option.value) != "on"
             }
             if allowed and normalize(value) not in allowed:
+                continue
+        canonical = map_profile_field(label, field, profile)
+        if canonical is not None:
+            expected = coerce_option(canonical[0], field)
+            if normalize(value) != normalize(expected):
+                continue
+        elif action.grounding == "profile":
+            continue
+        elif action.grounding == "saved_answer":
+            saved = map_exact_reusable_answer(label, field, answers)
+            if saved is None or normalize(value) != normalize(coerce_option(saved[0], field)):
+                continue
+        elif action.grounding == "source_context":
+            sourced = map_source_field(label, field, request.source_url)
+            if sourced is None or normalize(value) != normalize(coerce_option(sourced[0], field)):
+                continue
+        elif action.grounding == "resume":
+            if resume is None:
+                continue
+            if field.field_type == "checkbox":
+                if not resume_mentions_option(field.option_label, resume.extracted_text):
+                    continue
+            elif normalize(value) not in normalize(resume.extracted_text):
+                continue
+        elif request.origin == "automation":
+            # The automatic instruction supplies no new candidate facts. A
+            # visible option alone is not evidence and must never be guessed.
+            continue
+        elif action.grounding in {"user_message", "visible_option"}:
+            message = normalize(request.user_message)
+            pending = normalize(request.pending_question)
+            value_named = normalize(value) in message
+            label_tokens = {
+                token
+                for token in normalize(field.group_label or field.label).split()
+                if len(token) >= 4
+                and token
+                not in {"what", "your", "this", "that", "with", "have", "will", "does"}
+            }
+            field_named = bool(label_tokens.intersection(message.split()))
+            pending_matches = bool(pending) and (pending in label or label in pending)
+            if not value_named or not (field_named or pending_matches):
                 continue
         safe_actions.append(
             action.model_copy(

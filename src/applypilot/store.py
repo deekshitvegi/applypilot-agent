@@ -124,6 +124,15 @@ class ProfileStore:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS reasoning_provider_config (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    payload TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
 
     def get_provider_config(self) -> ProviderConfigRequest | None:
         self.initialize()
@@ -154,6 +163,39 @@ class ProfileStore:
         self.initialize()
         with self._connect() as connection:
             cursor = connection.execute("DELETE FROM provider_config WHERE id = 1")
+        return cursor.rowcount > 0
+
+    def get_reasoning_provider_config(self) -> ProviderConfigRequest | None:
+        self.initialize()
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT payload FROM reasoning_provider_config WHERE id = 1"
+            ).fetchone()
+        if row is None:
+            return None
+        return ProviderConfigRequest.model_validate_json(self.cipher.decrypt(row[0]))
+
+    def save_reasoning_provider_config(self, config: ProviderConfigRequest) -> None:
+        self.initialize()
+        payload = self.cipher.encrypt(config.model_dump_json())
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO reasoning_provider_config (id, payload, updated_at)
+                VALUES (1, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET
+                    payload = excluded.payload,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (payload,),
+            )
+
+    def delete_reasoning_provider_config(self) -> bool:
+        self.initialize()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM reasoning_provider_config WHERE id = 1"
+            )
         return cursor.rowcount > 0
 
     def load(self) -> CandidateProfile:

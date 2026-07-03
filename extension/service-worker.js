@@ -754,6 +754,12 @@ async function extractFormFields() {
         ? `${baseLabel} ${instructions}`
         : baseLabel,
     );
+    control.dataset.applypilotFieldLabel = label;
+    control.dataset.applypilotFieldType = fieldType;
+    radioGroupControls.forEach((candidate) => {
+      candidate.dataset.applypilotFieldLabel = label;
+      candidate.dataset.applypilotFieldType = fieldType;
+    });
     let options = tag === "select"
       ? [...control.options]
           .filter((option) => option.value || option.textContent.trim())
@@ -857,6 +863,18 @@ async function applyFormFillPlan(actions) {
     const control = findControl(action.field_id);
     if (!control || control.disabled) {
       errors.push({ field_id: action.field_id, message: "The field is no longer available." });
+      continue;
+    }
+
+    const expectedLabel = normalizeChoice(action.expected_label);
+    const actualLabel = normalizeChoice(control.dataset.applypilotFieldLabel);
+    const expectedType = normalizeChoice(action.expected_type);
+    const actualType = normalizeChoice(control.dataset.applypilotFieldType);
+    if ((expectedLabel && expectedLabel !== actualLabel) || (expectedType && expectedType !== actualType)) {
+      errors.push({
+        field_id: action.field_id,
+        message: "The page changed and this field no longer matches the planned question.",
+      });
       continue;
     }
 
