@@ -529,6 +529,26 @@ async function extractFormFields() {
   });
 
   const cleanText = (value) => String(value || "").replace(/\s+/g, " ").replace(/\s*\*+\s*$/, "").trim();
+  const individualChoiceLabel = (control) => {
+    const explicit = control.id
+      ? control.getRootNode()?.querySelector?.(`label[for="${CSS.escape(control.id)}"]`)?.textContent
+        || document.querySelector(`label[for="${CSS.escape(control.id)}"]`)?.textContent
+      : "";
+    const siblingText = [control.nextElementSibling, control.previousElementSibling]
+      .map((candidate) => cleanText(candidate?.textContent))
+      .find((value) => value && value.length <= 100) || "";
+    const parentText = cleanText(control.parentElement?.textContent);
+    return cleanText(
+      [...(control.labels || [])].map((item) => item.textContent).join(" ")
+      || control.closest("label")?.textContent
+      || explicit
+      || control.getAttribute("aria-label")
+      || control.textContent
+      || siblingText
+      || (parentText.length <= 100 ? parentText : "")
+      || control.value,
+    );
+  };
   const labelledByText = (control) => cleanText(
     (control.getAttribute("aria-labelledby") || "")
       .split(/\s+/)
@@ -693,9 +713,7 @@ async function extractFormFields() {
       ? groupQuestion(control)
       : { label: "", required: false };
     const groupedQuestion = grouped.label;
-    const optionLabel = cleanText(
-      explicitLabel || nativeLabels || wrappingLabel || control.getAttribute("aria-label") || control.value,
-    );
+    const optionLabel = individualChoiceLabel(control);
     const normalizedGroupQuestion = cleanText(groupedQuestion).toLowerCase();
     const radioGroupControls = fieldType === "radio"
       ? queryAll('input[type="radio"], [role="radio"], button[aria-pressed], button').filter((candidate) => {
@@ -715,12 +733,7 @@ async function extractFormFields() {
     radioGroupControls.forEach((candidate) => {
       candidate.dataset.applypilotId = applypilotId;
       candidate.dataset.applypilotChoiceKind = "radio";
-      candidate.dataset.applypilotOptionLabel = cleanText(
-        [...(candidate.labels || [])].map((item) => item.textContent).join(" ")
-        || candidate.closest("label")?.textContent
-        || candidate.getAttribute("aria-label")
-        || candidate.value,
-      );
+      candidate.dataset.applypilotOptionLabel = individualChoiceLabel(candidate);
     });
     const baseLabel = cleanText(fieldType === "radio"
       ? groupedQuestion || legend || nearbyLabel(control) || fallbackLabel
@@ -755,12 +768,7 @@ async function extractFormFields() {
           && groupQuestion(candidate).label === groupedQuestion
         ))
         .map((candidate) => {
-          const candidateLabel = cleanText(
-            [...(candidate.labels || [])].map((item) => item.textContent).join(" ")
-            || candidate.closest("label")?.textContent
-            || candidate.getAttribute("aria-label")
-            || candidate.value,
-          );
+          const candidateLabel = individualChoiceLabel(candidate);
           return { value: candidate.value || candidateLabel, label: candidateLabel };
         })
         .filter((option) => option.value || option.label);
@@ -886,7 +894,7 @@ async function applyFormFillPlan(actions) {
           }
           const selector = popupRoots.length
             ? "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], li"
-            : "[role='option']";
+            : "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], [class*='option'], li";
           const options = (popupRoots.length
             ? popupRoots.flatMap((popup) => [...popup.querySelectorAll(selector)])
             : [...document.querySelectorAll(selector)]
@@ -949,6 +957,11 @@ async function applyFormFillPlan(actions) {
           candidate.dataset.applypilotOptionLabel || "",
           candidate.labels?.[0]?.textContent || "",
           candidate.getAttribute("aria-label") || "",
+          candidate.textContent || "",
+          candidate.closest("label")?.textContent || "",
+          candidate.id ? candidate.getRootNode()?.querySelector?.(`label[for="${CSS.escape(candidate.id)}"]`)?.textContent || "" : "",
+          candidate.nextElementSibling?.textContent || "",
+          candidate.previousElementSibling?.textContent || "",
         ].some((value) => {
           const normalized = normalizeChoice(value);
           return normalized === normalizeChoice(action.value) || semanticChoice(value) === target;
