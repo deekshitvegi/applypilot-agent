@@ -47,7 +47,7 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "frameRetry: true" in script
     assert "I couldn't continue the form scan" in script
     assert "executeExplicitPageAnswers(message)" in script
-    assert "Applied and remembered" in script
+    assert "and verified ${verified.length} on the page" in script
     assert "Preview generated cover letter" in script
     assert 'elements.chatInput.addEventListener("keydown"' in script
     assert "elements.chatForm.requestSubmit()" in script
@@ -65,4 +65,7 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "applypilotChoiceKind" in worker
     assert "individualChoiceLabel" in worker
     assert "candidate.textContent || \"\"" in worker
+    assert "isYesNoBackingInput" in worker
+    assert 'rawValue.toLowerCase() === "on"' in worker
+    assert "filled_ids: filledIds" in worker
 

@@ -2207,6 +2207,10 @@ function escapeRegularExpression(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function normalizeChoicePhrase(value) {
+  return normalizeQuestion(value).replace(/\bexpereinced\b/g, "experienced");
+}
+
 async function savePageAnswer(question, answer, fieldType = "choice") {
   const existing = state.answers.find(
     (item) => normalizeQuestion(item.question) === normalizeQuestion(question),
@@ -2223,16 +2227,19 @@ async function savePageAnswer(question, answer, fieldType = "choice") {
 async function executeExplicitPageAnswers(message) {
   const normalizedMessage = normalizeQuestion(message);
   const knownOptions = (state.formScan?.fields || []).flatMap((field) => field.options || []);
+  const normalizedChoiceMessage = normalizeChoicePhrase(message);
   const knownVisibleOption = knownOptions.some((option) => (
-    normalizeQuestion(option.label || option.value) === normalizedMessage
+    normalizeChoicePhrase(option.label || option.value) === normalizedChoiceMessage
   ));
   const namedVisibleOption = knownOptions.some((option) => {
-    const optionText = normalizeQuestion(option.label || option.value);
-    return optionText.length >= 2 && normalizedMessage.includes(optionText);
+    const optionText = normalizeChoicePhrase(option.label || option.value);
+    return optionText.length >= 2 && normalizedChoiceMessage.includes(optionText);
   });
   const answerOptionInstruction = /\banswer\b/i.test(message) && namedVisibleOption;
-  const actionable = /\b(add|select|check|choose|include|set|authorized|authorization|sponsor|sponsorship|relocate|relocation|for this one)\b/i.test(message)
-    || answerOptionInstruction;
+  const valueStatementInstruction = /\bit\s+is\b/i.test(message) && namedVisibleOption;
+  const actionable = /\b(add|select|check|choose|include|set|change|update|reviewed|authorized|authorization|sponsor|sponsorship|relocate|relocation|for this one)\b/i.test(message)
+    || answerOptionInstruction
+    || valueStatementInstruction;
   const possibleOptionReply = normalizedMessage.split(" ").length <= 5
     && knownVisibleOption
     && !looksLikeChatQuestion(message);
@@ -2241,7 +2248,7 @@ async function executeExplicitPageAnswers(message) {
   const fields = state.formScan?.fields || [];
   const updates = new Map();
   const selectedCheckboxes = new Map();
-  if (/\b(?:add|apply|fill|put)\s+(?:that|it)\s+(?:in|to|on)\s+(?:the\s+)?(?:application|form|page)\b/i.test(message) && state.lastPageAnswer) {
+  if (/\b(?:add|apply|fill|put)\s+(?:that|it)\s+(?:in|to|on)\s+(?:the\s+)?(?:job\s+)?(?:application|form|page)\b/i.test(message) && state.lastPageAnswer) {
     await replanForm();
     const result = await fillForm({ throwOnError: true });
     appendMessage(
@@ -2271,7 +2278,7 @@ async function executeExplicitPageAnswers(message) {
   }
 
   const sourceField = fields.find((field) => /how did you (?:find|hear)|source of application/i.test(field.label));
-  if (sourceField && /(?:for this one|source)[^.!?\n]{0,60}(?:it'?s|is)\s+linkedin/i.test(message)) {
+  if (sourceField && /(?:(?:for this one|source)[^.!?\n]{0,60}(?:it'?s|is)\s+linkedin|change[^.!?\n]{0,60}(?:answer\s+)?to\s+linkedin|answer[^.!?\n]{0,30}linkedin)/i.test(message)) {
     updates.set(sourceField.id, { field: sourceField, value: "LinkedIn", question: sourceField.label });
   }
   const authorization = fields.find((field) => /authorized to work|work authorization/i.test(field.label));
@@ -2303,8 +2310,21 @@ async function executeExplicitPageAnswers(message) {
     }
   }
 
+  const reviewedPolicy = fields.find((field) => (
+    /background check policy/i.test(`${field.group_label || ""} ${field.label || ""}`)
+    && /reviewed/i.test(`${field.option_label || ""} ${(field.options || []).map((option) => option.label).join(" ")}`)
+  ));
+  if (reviewedPolicy && /(?:i\s+have\s+reviewed|reviewed)\s+(?:the\s+)?background check policy/i.test(message)) {
+    const reviewedOption = (reviewedPolicy.options || []).find((option) => /reviewed/i.test(option.label || option.value));
+    updates.set(reviewedPolicy.id, {
+      field: reviewedPolicy,
+      value: reviewedPolicy.field_type === "checkbox" ? "true" : reviewedOption?.label || "I have reviewed the Background Check Policy",
+      question: reviewedPolicy.group_label || reviewedPolicy.label,
+    });
+  }
+
   const directOptionMatches = [];
-  const shortReply = normalizeQuestion(message).split(" ").length <= 5;
+  const shortReply = normalizedChoiceMessage.split(" ").length <= 5;
   for (const field of fields.filter((candidate) => ["radio", "select"].includes(candidate.field_type))) {
     for (const option of field.options || []) {
       const visibleOption = String(option.label || option.value || "").trim();
@@ -2315,7 +2335,13 @@ async function executeExplicitPageAnswers(message) {
         "i",
       ).test(message);
       const exactShortReply = shortReply && normalizeQuestion(message) === normalizeQuestion(visibleOption);
-      if (explicitlyNamed || exactShortReply) {
+      const normalizedVisibleOption = normalizeChoicePhrase(visibleOption);
+      const correctedShortReply = shortReply && normalizedChoiceMessage === normalizedVisibleOption;
+      const valueStatement = new RegExp(
+        `\\b(?:it|answer)\\s+is\\s+${escapeRegularExpression(normalizedVisibleOption)}\\b`,
+        "i",
+      ).test(normalizedChoiceMessage);
+      if (explicitlyNamed || exactShortReply || correctedShortReply || valueStatement) {
         directOptionMatches.push({ field, value: visibleOption });
       }
     }
@@ -2351,8 +2377,11 @@ async function executeExplicitPageAnswers(message) {
   state.answers = await api("/api/answers");
   await replanForm();
   const result = await fillForm({ throwOnError: true });
+  const filledIds = new Set(result?.filled_ids || []);
+  const verified = [...updates.keys()].filter((fieldId) => filledIds.has(fieldId));
+  const unverified = [...updates.values()].filter((update) => !filledIds.has(update.field.id));
   appendMessage(
-    `Applied and remembered ${updates.size} explicit page answer${updates.size === 1 ? "" : "s"}. ${result?.filled || 0} mapped fields were refreshed.`,
+    `Saved ${updates.size} explicit page answer${updates.size === 1 ? "" : "s"} and verified ${verified.length} on the page.${unverified.length ? ` Still not applied: ${unverified.map((update) => update.question).join("; ")}.` : ""}`,
     "agent-message",
   );
   return true;
@@ -2426,6 +2455,8 @@ async function handlePageActionCommand(message) {
     return true;
   }
   const explicitFillRequest = /(fill(?:\s+out)?|complete|apply).*(everything|whole thing|all fields|fields|form|page)/i.test(message)
+    || /^\s*(?:do|apply|fill)\s+(?:it|that)\s*[.!]*$/i.test(message)
+    || /\banswer\s+(?:these|them)\b/i.test(message)
     || /^(?:then\s+)?(?:please\s+)?(?:fill(?:\s+out)?|complete)\s+(?:the\s+)?(?:rest|next|remaining fields?|whole thing)\b/i.test(message)
     || /^(?:then\s+)?(?:please\s+)?(?:fill(?:\s+out)?|complete|apply)\s+(?:it|that|this|those|that\s+part|this\s+part|the\s+field|the\s+fields)\b/i.test(message);
   if (!explicitFillRequest) return false;
