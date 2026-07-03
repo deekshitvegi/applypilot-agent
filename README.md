@@ -41,16 +41,24 @@ validates the field IDs and choices, executes them, verifies the page, and gives
 the model one repair attempt when a requested action does not stick. Only
 verified actions enter reusable memory. Deterministic autofill remains the free
 fallback and final submission still follows the separate user approval policy.
-The same reasoning pass is part of **Start applying**: after fast profile
-autofill, the model resolves remaining fields from grounded evidence and asks
-one chat question only when a required fact is genuinely unknown.
+The same reasoning loop is part of **Start applying**. It follows one fast
+path: detect the form, fill profile and résumé-backed fields without AI, draft
+evidence-supported job-specific responses, then give only the unresolved
+controls to the model for up to three observe/action/verification passes. It
+asks one chat question only when the profile, résumé, saved answers, source URL,
+and visible options genuinely do not establish the answer.
 When Ollama is selected and `GEMINI_API_KEY` is available locally, ApplyPilot
 uses a low-quota hybrid automatically: Ollama handles unlimited chat and acts
-as fallback, while Gemini is reserved for résumé tailoring and unfamiliar
-page/form decisions. Routine profile autofill never consumes a Gemini request.
+as fallback, while Gemini is reserved for résumé tailoring, unfamiliar
+page/form decisions, unique application responses, and generated cover
+letters. Routine profile autofill never consumes a Gemini request.
 You can also configure this without editing `.env`: open **Settings → AI
 provider**, keep **Ollama** selected, and save the key under **Optional Gemini
 assist**. The secondary key is encrypted separately in the local database.
+ApplyPilot verifies the key with a small structured-action probe before showing
+it as connected. When a page choice is ambiguous, chat mirrors the employer's
+exact options as clickable single- or multi-select cards; applying a card
+updates the live form and remembers the verified selection.
 Provider
 choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.

@@ -1241,7 +1241,8 @@ function uniqueQuestionOptions(scanned) {
 
 function isNarrativeUnknown(unknown) {
   const scanned = state.formScan?.fields.find((field) => field.id === unknown.field_id);
-  return scanned?.field_type === "textarea" && /why|interest|motivat|describe|tell us|cover letter/i.test(unknown.label);
+  return ["text", "textarea"].includes(scanned?.field_type)
+    && /why|interest|motivat|describe|tell us|explain|project you|experience with|additional information|cover letter/i.test(unknown.label);
 }
 
 async function requestApplicationAnswer(question) {
@@ -1269,25 +1270,39 @@ async function draftUnknownAnswer() {
 }
 
 async function resolveNarrativeUnknowns() {
-  if (!state.provider?.configured) return;
-  const narrative = unresolvedRequiredUnknowns().filter(isNarrativeUnknown).slice(0, 3);
+  if (!state.provider?.configured) return 0;
+  const narrative = (state.formPlan?.unknown_fields || [])
+    .filter((unknown) => !state.skippedFieldIds.has(unknown.field_id))
+    .filter(isNarrativeUnknown)
+    .slice(0, 3);
+  let filled = 0;
   for (const unknown of narrative) {
-    const draft = await requestApplicationAnswer(unknown.label);
-    const result = await chrome.runtime.sendMessage({
-      action: "fillForm",
-      frameId: state.formScan?.frame_id ?? 0,
-      actions: [
-        {
-          field_id: unknown.field_id,
-          value: draft.answer,
-          source: "ai.job_specific",
-          confidence: 0.9,
-        },
-      ],
-    });
-    if (result.error) throw new Error(result.error);
+    try {
+      const draft = await requestApplicationAnswer(unknown.label);
+      if (!draft.answer || /^(?:n\/?a|unknown|not provided|insufficient information)$/i.test(draft.answer.trim())) continue;
+      const result = await chrome.runtime.sendMessage({
+        action: "fillForm",
+        frameId: state.formScan?.frame_id ?? 0,
+        actions: [
+          {
+            field_id: unknown.field_id,
+            value: draft.answer,
+            source: "ai.job_specific",
+            confidence: 0.9,
+          },
+        ],
+      });
+      if (result.error) continue;
+      if ((result.filled_ids || []).includes(unknown.field_id)) filled += 1;
+    } catch {
+      // The structured form planner and user-question fallback still run below.
+    }
   }
-  if (narrative.length) await scanForm({ throwOnError: true });
+  if (filled) {
+    reportActivity(`AI drafted and verified ${filled} job-specific response${filled === 1 ? "" : "s"}.`);
+    await scanForm({ throwOnError: true });
+  }
+  return filled;
 }
 
 function unresolvedRequiredUnknowns() {
@@ -2158,8 +2173,8 @@ async function sendChat(event) {
   elements.chatButton.disabled = true;
 
   try {
-    if (message && !images.length && await handleModelFormCommand(message)) return;
     if (await handlePageActionCommand(message)) return;
+    if (message && !images.length && await handleModelFormCommand(message)) return;
     if (message && !images.length && await handleAnswerConversation(message)) return;
     if (!state.provider?.configured) {
       appendMessage(
@@ -2405,7 +2420,18 @@ async function persistVerifiedAgentActions(actions, filledIds, fields) {
   return verified;
 }
 
-async function requestFormAgentDecision(message, previousErrors = [], origin = "chat") {
+function unresolvedFieldsForAgent() {
+  const unknown = unresolvedUnknowns();
+  if (!unknown.length) return [];
+  const unknownIds = new Set(unknown.map((field) => field.field_id));
+  const unknownLabels = new Set(unknown.map((field) => normalizeQuestion(field.label)));
+  return (state.formScan?.fields || []).filter((field) => (
+    unknownIds.has(field.id)
+    || unknownLabels.has(normalizeQuestion(field.group_label || field.label))
+  ));
+}
+
+async function requestFormAgentDecision(message, previousErrors = [], origin = "chat", fields = null) {
   return api("/api/forms/agent-plan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -2414,7 +2440,7 @@ async function requestFormAgentDecision(message, previousErrors = [], origin = "
       origin,
       page_url: state.formScan?.page_url || "",
       source_url: state.job?.source_url || "",
-      fields: state.formScan?.fields || [],
+      fields: fields || state.formScan?.fields || [],
       adapter: state.formScan?.adapter || "generic",
       job: state.job,
       pending_question: state.pendingAgentQuestion,
@@ -2425,6 +2451,10 @@ async function requestFormAgentDecision(message, previousErrors = [], origin = "
 
 async function executeFormAgentDecision(message, decision, repairAttempt = 0, origin = "chat") {
   if (decision.question && !decision.actions.length) {
+    if (renderChoiceCardsForMessage(message, decision.question)) {
+      state.pendingAgentQuestion = decision.question;
+      return true;
+    }
     state.pendingAgentQuestion = decision.question;
     appendMessage(decision.question, "agent-message");
     return true;
@@ -2456,7 +2486,10 @@ async function executeFormAgentDecision(message, decision, repairAttempt = 0, or
       const error = (result.errors || []).find((candidate) => candidate.field_id === action.field_id);
       return `${field?.label || action.field_id}: requested ${action.value}; ${error?.message || "not verified"}`;
     });
-    const repair = await requestFormAgentDecision(message, repairErrors, origin);
+    const repairFields = (state.formScan?.fields || []).filter((field) => (
+      failed.some((action) => action.field_id === field.id)
+    ));
+    const repair = await requestFormAgentDecision(message, repairErrors, origin, repairFields);
     if (repair.actions?.length) return executeFormAgentDecision(message, repair, 1, origin);
   }
   state.pendingAgentQuestion = "";
@@ -2470,10 +2503,16 @@ async function executeFormAgentDecision(message, decision, repairAttempt = 0, or
     || fields.find((candidate) => candidate.id === action.field_id)?.label
     || action.field_id
   ));
-  appendMessage(
-    `${decision.explanation || "I interpreted the current form and applied the requested answers."}\n\nVerified:\n${verifiedLabels.length ? verifiedLabels.map((label) => `- ${label}`).join("\n") : "- None"}${failedLabels.length ? `\n\nStill unresolved:\n${failedLabels.map((label) => `- ${label}`).join("\n")}` : ""}`,
-    "agent-message",
-  );
+  if (origin === "automation") {
+    reportActivity(
+      `AI resolved and verified ${verifiedLabels.length} field${verifiedLabels.length === 1 ? "" : "s"}${failedLabels.length ? `; ${failedLabels.length} still need another pass` : ""}.`,
+    );
+  } else {
+    appendMessage(
+      `${decision.explanation || "I interpreted the current form and applied the requested answers."}\n\nVerified:\n${verifiedLabels.length ? verifiedLabels.map((label) => `- ${label}`).join("\n") : "- None"}${failedLabels.length ? `\n\nStill unresolved:\n${failedLabels.map((label) => `- ${label}`).join("\n")}` : ""}`,
+      "agent-message",
+    );
+  }
   return true;
 }
 
@@ -2521,6 +2560,7 @@ async function handleModelFormCommand(message) {
     }
     const decision = await requestFormAgentDecision(message);
     const handled = await executeFormAgentDecision(message, decision);
+    if (!handled && renderChoiceCardsForMessage(message)) return true;
     if (!handled && deterministicFilled) {
       appendMessage(
         `Filled and verified ${deterministicFilled} known fields from your saved profile. I found no additional model-grounded changes to make.`,
@@ -2539,24 +2579,50 @@ async function runModelAutomationPass() {
   if (!state.localMode || !state.provider?.configured || !state.formScan?.fields?.length) {
     return false;
   }
-  reportActivity("Using the AI model to reason over the remaining visible fields\u2026");
+  const drafted = await resolveNarrativeUnknowns();
+  if (!unresolvedFieldsForAgent().length) return drafted > 0;
+  reportActivity("Resolving the remaining questions from your verified profile, résumé, and job context…");
   const instruction = [
-    "Complete the current visible job-application fields using only grounded facts from the",
+    "Complete every supplied unresolved job-application field using only grounded facts from the",
     "saved profile, reusable answers, resume, captured source URL, and current visible options.",
-    "Do not change a field that already has the correct value. If a required answer is genuinely",
-    "unknown, ask exactly one focused question in chat instead of guessing.",
+    "Draft truthful concise responses for open-ended questions when the evidence is sufficient.",
+    "Do not change a correct value. After resolving everything supported by evidence, ask exactly",
+    "one focused question only if a required answer is genuinely unknown.",
   ].join(" ");
-  const decision = await requestFormAgentDecision(instruction, [], "automation");
-  if (decision.actions?.length) {
-    await executeFormAgentDecision(instruction, decision, 0, "automation");
-    return true;
+  let madeProgress = drafted > 0;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const fields = unresolvedFieldsForAgent();
+    if (!fields.length) return madeProgress;
+    const before = unresolvedUnknowns().length;
+    const decision = await requestFormAgentDecision(instruction, [], "automation", fields);
+    if (decision.actions?.length) {
+      await executeFormAgentDecision(instruction, decision, 0, "automation");
+      const after = unresolvedUnknowns().length;
+      madeProgress = madeProgress || after < before;
+      if (after >= before) break;
+      continue;
+    }
+    if (decision.question) {
+      state.pendingAgentQuestion = decision.question;
+      if (!renderChoiceCardsForMessage(decision.question, fields[0]?.group_label || fields[0]?.label || "")) {
+        appendMessage(`${decision.question}\n\nReply with your answer, or ask me what the question means.`, "agent-message");
+      }
+      return true;
+    }
+    break;
   }
-  if (decision.question) {
-    state.pendingAgentQuestion = decision.question;
-    appendMessage(decision.question, "agent-message");
-    return true;
+  const remaining = unresolvedFieldsForAgent();
+  if (!remaining.length) return madeProgress;
+  const first = remaining[0];
+  const question = first.group_label || first.label;
+  state.pendingAgentQuestion = question;
+  if (!renderChoiceCardsForMessage(question, question)) {
+    appendMessage(
+      `I couldn't verify an answer for **${question}** from your profile or résumé. What should I enter?\n\nYou can also ask me what this question means.`,
+      "agent-message",
+    );
   }
-  return false;
+  return true;
 }
 
 async function executeExplicitPageAnswers(message) {
@@ -2840,6 +2906,172 @@ function appendMessage(text, className, images = []) {
   message.append(copy);
   elements.messages.append(message);
   message.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+function visibleChoiceGroups() {
+  const groups = new Map();
+  for (const field of state.formScan?.fields || []) {
+    if (field.field_type === "checkbox") {
+      const label = field.group_label || field.label;
+      const key = `checkbox:${normalizeQuestion(label)}`;
+      if (!groups.has(key)) groups.set(key, { key, label, multiple: true, choices: [] });
+      groups.get(key).choices.push({
+        label: field.option_label || field.label,
+        selected: Boolean(field.value),
+      });
+    } else if (["radio", "select"].includes(field.field_type) && field.options?.length) {
+      const label = field.group_label || field.label;
+      const key = `${field.field_type}:${normalizeQuestion(label)}`;
+      groups.set(key, {
+        key,
+        label,
+        multiple: false,
+        choices: field.options.map((option) => ({
+          label: option.label || option.value,
+          selected: normalizeChoicePhrase(field.value)
+            === normalizeChoicePhrase(option.label || option.value),
+        })),
+      });
+    }
+  }
+  return [...groups.values()].filter((group) => group.choices.length);
+}
+
+function relevantChoiceGroups(message, hint = "") {
+  const text = normalizeQuestion(`${message} ${hint}`);
+  const words = new Set(text.split(" ").filter((word) => word.length >= 4));
+  return visibleChoiceGroups()
+    .map((group) => {
+      const label = normalizeQuestion(group.label);
+      const labelWords = new Set(label.split(" ").filter((word) => word.length >= 4));
+      let score = [...labelWords].filter((word) => words.has(word)).length;
+      score += group.choices.filter((choice) => (
+        text.includes(normalizeQuestion(choice.label))
+      )).length * 3;
+      if (
+        state.lastReferencedFieldLabel
+        && normalizeQuestion(state.lastReferencedFieldLabel) === label
+      ) score += 5;
+      return { group, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 4)
+    .map((item) => item.group);
+}
+
+async function applyChoiceGroup(group, selectedLabels, card) {
+  await scanForm({ throwOnError: true });
+  const normalizedGroup = normalizeQuestion(group.label);
+  const current = (state.formScan?.fields || []).filter((field) => (
+    normalizeQuestion(field.group_label || field.label) === normalizedGroup
+  ));
+  let actions = [];
+  if (group.multiple) {
+    const selected = new Set(selectedLabels.map(normalizeQuestion));
+    actions = current.map((field) => ({
+      field_id: field.id,
+      value: selected.has(normalizeQuestion(field.option_label || field.label)) ? "true" : "false",
+      grounding: "user_message",
+      confidence: 1,
+      remember: true,
+    }));
+  } else {
+    const field = current[0];
+    if (field && selectedLabels[0]) {
+      actions = [{
+        field_id: field.id,
+        value: selectedLabels[0],
+        grounding: "user_message",
+        confidence: 1,
+        remember: true,
+      }];
+    }
+  }
+  if (!actions.length) throw new Error("The question is no longer visible on the page.");
+  card.classList.add("choice-card-complete");
+  card.querySelectorAll("button, input").forEach((control) => { control.disabled = true; });
+  await executeFormAgentDecision(
+    `Selected ${selectedLabels.join(", ")} for ${group.label}`,
+    {
+      handled: true,
+      actions,
+      question: "",
+      explanation: `Applied your selection for ${group.label}.`,
+    },
+  );
+}
+
+function renderChoiceCard(group) {
+  const card = document.createElement("div");
+  card.className = "message agent-message choice-card";
+  const question = document.createElement("p");
+  question.className = "choice-card-question";
+  question.textContent = group.label;
+  card.append(question);
+  const options = document.createElement("div");
+  options.className = "choice-card-options";
+  if (group.multiple) {
+    for (const choice of group.choices) {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = choice.label;
+      input.checked = choice.selected;
+      label.append(input, document.createTextNode(choice.label));
+      options.append(label);
+    }
+    const actions = document.createElement("div");
+    actions.className = "choice-card-actions";
+    const selectAll = document.createElement("button");
+    selectAll.type = "button";
+    selectAll.className = "secondary-button";
+    selectAll.textContent = "Select all";
+    selectAll.addEventListener("click", () => {
+      options.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+        input.checked = true;
+      });
+    });
+    const apply = document.createElement("button");
+    apply.type = "button";
+    apply.textContent = "Apply selected";
+    apply.addEventListener("click", async () => {
+      const selected = [...options.querySelectorAll('input[type="checkbox"]:checked')]
+        .map((input) => input.value);
+      try {
+        await applyChoiceGroup(group, selected, card);
+      } catch (error) {
+        appendMessage(error.message, "agent-message");
+      }
+    });
+    actions.append(selectAll, apply);
+    card.append(options, actions);
+  } else {
+    for (const choice of group.choices) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = choice.selected ? "choice-option selected" : "choice-option";
+      button.textContent = choice.label;
+      button.addEventListener("click", async () => {
+        try {
+          await applyChoiceGroup(group, [choice.label], card);
+        } catch (error) {
+          appendMessage(error.message, "agent-message");
+        }
+      });
+      options.append(button);
+    }
+    card.append(options);
+  }
+  elements.messages.append(card);
+  card.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+function renderChoiceCardsForMessage(message, hint = "") {
+  const groups = relevantChoiceGroups(message, hint);
+  if (!groups.length) return false;
+  groups.forEach(renderChoiceCard);
+  return true;
 }
 
 function renderFormattedMessage(container, text) {

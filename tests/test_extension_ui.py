@@ -58,9 +58,16 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "executeFormAgentDecision" in script
     assert "pendingAgentQuestion" in script
     assert "runModelAutomationPass" in script
-    assert "Using the AI model to reason over the remaining visible fields" in script
+    assert "Resolving the remaining questions from your verified profile" in script
     assert "saveReasoningProvider" in script
     assert 'api("/api/provider/reasoning"' in script
+    assert "renderChoiceCardsForMessage" in script
+    assert "unresolvedFieldsForAgent" in script
+    assert "resolveNarrativeUnknowns" in script
+    assert "for (let pass = 0; pass < 3; pass += 1)" in script
+    assert script.index("handlePageActionCommand(message)") < script.index("handleModelFormCommand(message)")
+    assert "applyChoiceGroup" in script
+    assert "Select all" in script
     assert script.index('/api/questions/refine') < script.index('SIEM: 0 months')
 
     worker = (root / "extension" / "service-worker.js").read_text(encoding="utf-8")

@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.11.2 - 2026-07-03
+
+- Added in-chat choice cards that mirror visible ATS radio, select, and
+  checkbox questions, including multi-select and Select all controls.
+- Choice-card answers are executed, verified against the live page, and stored
+  as reusable answers for equivalent future questions.
+- Added an evidence-first application loop: deterministic profile fields fill
+  immediately, the model receives only unresolved controls, and up to three
+  observe/action/verification passes run before asking the user.
+- Added truthful job-specific drafting for unresolved narrative questions from
+  the saved profile, résumé, and captured job description.
+- Live fields now appear before compact profile, résumé, answer-memory, and job
+  context so small local models retain both the browser tools and evidence.
+- Explicit page commands now run through the verified action executor before
+  general chat, preventing a prose response from swallowing a requested click.
+- Added general multi-select reasoning for broad preferences such as
+  "anywhere" or "all of these".
+- Gemini assist now runs a real structured-action probe before a key is saved;
+  rejected keys or inaccessible models can no longer appear Connected.
+- Checkbox plans may safely return the explicitly named option label as well as
+  `true`, improving compatibility with small local models.
+- Optional Gemini assist now handles résumé tailoring, unfamiliar page/form
+  decisions, job-specific application answers, and generated cover letters;
+  local Ollama remains the automatic fallback.
+
 ## 0.11.1 - 2026-07-03
 
 - Added semantic grounding validation so model confidence can never override a

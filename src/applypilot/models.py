@@ -358,6 +358,7 @@ class FormAgentAction(BaseModel):
         "resume",
         "source_context",
         "visible_option",
+        "derived_answer",
     ]
     confidence: float = Field(ge=0, le=1)
     reason: str = Field(default="", max_length=300)
