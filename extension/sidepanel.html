@@ -88,6 +88,19 @@
             <button id="disconnect-provider" class="secondary-button" type="button">Disconnect</button>
           </div>
         </form>
+        <div id="reasoning-provider-settings" class="reasoning-provider-box hidden">
+          <p class="section-label">Optional Gemini assist</p>
+          <p class="muted">Keep Ollama for free local chat. Gemini is used only for résumé tailoring and unfamiliar page/form decisions.</p>
+          <label for="reasoning-provider-key">Gemini API key</label>
+          <input id="reasoning-provider-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a Gemini key" />
+          <label for="reasoning-provider-model">Gemini model</label>
+          <input id="reasoning-provider-model" type="text" autocomplete="off" spellcheck="false" value="gemini-2.5-flash" />
+          <p id="reasoning-provider-help" class="field-help"></p>
+          <div class="button-row">
+            <button id="save-reasoning-provider" type="button">Save Gemini assist</button>
+            <button id="disconnect-reasoning-provider" class="secondary-button" type="button">Remove assist</button>
+          </div>
+        </div>
       </section>
 
       <section class="panel automation-panel">

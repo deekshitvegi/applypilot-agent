@@ -59,6 +59,8 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "pendingAgentQuestion" in script
     assert "runModelAutomationPass" in script
     assert "Using the AI model to reason over the remaining visible fields" in script
+    assert "saveReasoningProvider" in script
+    assert 'api("/api/provider/reasoning"' in script
     assert script.index('/api/questions/refine') < script.index('SIEM: 0 months')
 
     worker = (root / "extension" / "service-worker.js").read_text(encoding="utf-8")

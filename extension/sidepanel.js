@@ -30,6 +30,12 @@ const elements = {
   providerBadge: document.querySelector("#provider-badge"),
   disconnectProvider: document.querySelector("#disconnect-provider"),
   toggleKey: document.querySelector("#toggle-key"),
+  reasoningProviderSettings: document.querySelector("#reasoning-provider-settings"),
+  reasoningProviderKey: document.querySelector("#reasoning-provider-key"),
+  reasoningProviderModel: document.querySelector("#reasoning-provider-model"),
+  reasoningProviderHelp: document.querySelector("#reasoning-provider-help"),
+  saveReasoningProvider: document.querySelector("#save-reasoning-provider"),
+  disconnectReasoningProvider: document.querySelector("#disconnect-reasoning-provider"),
   siteAccessBadge: document.querySelector("#site-access-badge"),
   enableSiteAccess: document.querySelector("#enable-site-access"),
   automationPolicy: document.querySelector("#automation-policy"),
@@ -99,6 +105,7 @@ const state = {
   answers: [],
   onboarding: null,
   provider: null,
+  reasoningProvider: null,
   job: null,
   route: null,
   application: null,
@@ -135,6 +142,7 @@ const state = {
   lastSavedAnswer: null,
   lastPageAnswer: null,
   pendingAgentQuestion: "",
+  lastReferencedFieldLabel: "",
 };
 
 const SITE_ORIGINS = ["https://*/*", "http://*/*"];
@@ -321,8 +329,12 @@ async function loadState() {
     elements.connection.textContent = `${health.mode === "local" ? "Local" : "Demo"} agent connected`;
     elements.connection.classList.add("connected");
 
-    state.provider = await api("/api/provider");
+    [state.provider, state.reasoningProvider] = await Promise.all([
+      api("/api/provider"),
+      api("/api/provider/reasoning"),
+    ]);
     renderProvider();
+    renderReasoningProvider();
     updateChatAvailability();
 
     if (!state.localMode) {
@@ -487,17 +499,69 @@ function renderProvider() {
   elements.providerKey.placeholder = provider.configured
     ? "Saved key is active — paste only to replace it"
     : "Paste a newly generated key";
+  const hybridReasoning = provider.provider === "ollama" && provider.reasoning_provider === "gemini";
   elements.providerTitle.textContent = provider.configured
-    ? providerDefinition.label
+    ? hybridReasoning ? "Ollama + Gemini assist" : providerDefinition.label
     : "Connect a model";
   elements.providerBadge.textContent = provider.configured ? "Connected" : "Not configured";
   elements.providerBadge.classList.toggle("connected", provider.configured);
   elements.disconnectProvider.disabled = !provider.configured || provider.source === "environment";
   elements.providerHelp.textContent = provider.configured
     ? provider.provider === "ollama"
-      ? `AI features run locally with ${provider.model}. No API key or cloud quota is used.`
+      ? hybridReasoning
+        ? `Routine chat runs locally with ${provider.model}. ${provider.reasoning_model} is used selectively for résumé tailoring and unfamiliar page decisions, with Ollama fallback.`
+        : `AI features run locally with ${provider.model}. No API key or cloud quota is used.`
       : `AI features are active with ${provider.model}. ${provider.source === "environment" ? "Loaded from the local environment." : "The saved key is encrypted in your local ApplyPilot database."}`
     : providerDefinition.help;
+}
+
+function renderReasoningProvider() {
+  const ollamaSelected = elements.providerSelect.value === "ollama";
+  elements.reasoningProviderSettings.classList.toggle("hidden", !ollamaSelected);
+  if (!ollamaSelected) return;
+  const configured = Boolean(state.reasoningProvider?.configured);
+  elements.reasoningProviderModel.value = state.reasoningProvider?.model || "gemini-2.5-flash";
+  elements.reasoningProviderKey.value = "";
+  elements.reasoningProviderKey.placeholder = configured
+    ? "Saved Gemini key is active — paste only to replace it"
+    : "Paste a Gemini API key";
+  elements.reasoningProviderHelp.textContent = configured
+    ? "Gemini assist is connected. If it is rate-limited or unavailable, ApplyPilot falls back to Ollama."
+    : "Optional. Routine autofill and chat remain free and local.";
+  elements.disconnectReasoningProvider.disabled = !configured
+    || state.reasoningProvider?.source === "environment";
+}
+
+async function saveReasoningProvider() {
+  const apiKey = elements.reasoningProviderKey.value.trim();
+  const model = elements.reasoningProviderModel.value.trim();
+  if (!apiKey || !model) {
+    elements.reasoningProviderHelp.textContent = "Enter a Gemini key and model name.";
+    return;
+  }
+  elements.reasoningProviderHelp.textContent = "Encrypting and connecting Gemini assist…";
+  try {
+    state.reasoningProvider = await api("/api/provider/reasoning", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "gemini", api_key: apiKey, model }),
+    });
+    state.provider = await api("/api/provider");
+    renderProvider();
+    renderReasoningProvider();
+    appendMessage("Gemini assist is connected. Ollama remains the local primary and fallback.", "agent-message");
+  } catch (error) {
+    elements.reasoningProviderHelp.textContent = error.message;
+  } finally {
+    elements.reasoningProviderKey.value = "";
+  }
+}
+
+async function disconnectReasoningProvider() {
+  state.reasoningProvider = await api("/api/provider/reasoning", { method: "DELETE" });
+  state.provider = await api("/api/provider");
+  renderProvider();
+  renderReasoningProvider();
 }
 
 async function saveProvider(event) {
@@ -525,6 +589,7 @@ async function saveProvider(event) {
       body: JSON.stringify({ provider, api_key: apiKey, model }),
     });
     renderProvider();
+    renderReasoningProvider();
     updateChatAvailability();
     appendMessage(`${PROVIDERS[provider].label} is connected.`, "agent-message");
   } catch (error) {
@@ -539,6 +604,7 @@ async function disconnectProvider() {
   try {
     state.provider = await api("/api/provider", { method: "DELETE" });
     renderProvider();
+    renderReasoningProvider();
     updateChatAvailability();
   } catch (error) {
     elements.providerHelp.textContent = error.message;
@@ -554,6 +620,7 @@ function changeProvider() {
   elements.providerPrivacy.textContent = PROVIDERS[provider].keyRequired
     ? "Your key is encrypted by the local agent and never saved in the extension."
     : "Runs on this computer with no API key or cloud quota.";
+  renderReasoningProvider();
 }
 
 function showDemoMode() {
@@ -1540,7 +1607,14 @@ async function fillForm(options = {}) {
     const result = await chrome.runtime.sendMessage({
       action: "fillForm",
       frameId: state.formScan?.frame_id ?? 0,
-      actions: state.formPlan.actions,
+      actions: state.formPlan.actions.map((action) => {
+        const field = state.formScan?.fields.find((candidate) => candidate.id === action.field_id);
+        return {
+          ...action,
+          expected_label: field?.label || "",
+          expected_type: field?.field_type || "",
+        };
+      }),
     });
     if (result.error) throw new Error(result.error);
     elements.formStatus.textContent = `${result.filled} fields filled for your review.`;
@@ -1846,6 +1920,10 @@ async function runCurrentApplicationPage() {
   await attachConfiguredApplicationFiles();
   if (findResumeFileField() || findCoverLetterField()) {
     plan = await scanForm({ throwOnError: true });
+    if (plan.actions.length) {
+      await fillForm({ throwOnError: true });
+      plan = await scanForm({ throwOnError: true });
+    }
   }
   plan = state.formPlan;
   let unknown = unresolvedUnknowns();
@@ -2236,10 +2314,48 @@ async function savePageAnswer(question, answer, fieldType = "choice") {
   state.lastPageAnswer = { question, answer, fieldType };
 }
 
+async function saveCanonicalProfileAnswer(field, value) {
+  if (!state.profile) return false;
+  const label = normalizeQuestion(field.group_label || field.label);
+  const booleanValue = ["true", "yes", "1", "on"].includes(normalizeQuestion(value));
+  let key = "";
+  let savedValue = value;
+  if (/\b(?:full|legal) name\b/.test(label)) key = "legal_name";
+  else if (/\bemail\b/.test(label)) key = "email";
+  else if (/\b(?:phone|mobile)\b/.test(label) && !/country code/.test(label)) key = "phone";
+  else if (/\blinkedin\b/.test(label)) key = "linkedin_url";
+  else if (/\bgithub\b/.test(label)) key = "github_url";
+  else if (/\b(?:portfolio|personal website)\b/.test(label)) key = "portfolio_url";
+  else if (/\bcurrent (?:job )?(?:title|position)\b/.test(label)) key = "current_title";
+  else if (/\byears of experience\b/.test(label)) key = "years_of_experience";
+  else if (/authorized to work|work authorization/.test(label)) key = "work_authorization";
+  else if (/sponsor|sponsorship/.test(label)) {
+    key = "requires_sponsorship";
+    savedValue = booleanValue;
+  } else if (/background check/.test(label)) {
+    key = "background_check_consent";
+    savedValue = booleanValue;
+  } else if (/relocat/.test(label) && !field.option_label) {
+    key = "willing_to_relocate";
+    savedValue = booleanValue;
+  } else if (/\btravel\b/.test(label)) {
+    key = "willing_to_travel";
+    savedValue = booleanValue;
+  }
+  if (!key) return false;
+  state.profile = { ...state.profile, [key]: savedValue };
+  state.profile = await api("/api/profile", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(state.profile),
+  });
+  return true;
+}
+
 function shouldUseFormAgent(message) {
   if (!state.localMode || !state.provider?.configured) return false;
   if (state.pendingAgentQuestion) return true;
-  return /\b(fill|complete|apply|add|select|check|choose|include|set|change|update|answer|do it|put|reviewed|relocate|authorized|authorization|sponsor|sponsorship|this field|this part|in the form|in the application|it is)\b/i.test(message);
+  return /\b(fill|complete|apply|add|select|check|choose|include|set|change|update|answer|do it|put|reviewed|relocate|authorized|authorization|sponsor|sponsorship|this field|this part|in the form|in the application|it is|it was)\b/i.test(message);
 }
 
 async function persistVerifiedAgentActions(actions, filledIds, fields) {
@@ -2255,6 +2371,7 @@ async function persistVerifiedAgentActions(actions, filledIds, fields) {
     if (action.remember === false) continue;
     const field = fields.find((candidate) => candidate.id === action.field_id);
     if (!field) continue;
+    if (await saveCanonicalProfileAnswer(field, action.value)) continue;
     const question = field.group_label || field.label;
     if (field.field_type === "checkbox") {
       const choices = checkboxGroups.get(question) || new Set();
@@ -2313,8 +2430,7 @@ async function executeFormAgentDecision(message, decision, repairAttempt = 0, or
     return true;
   }
   if (!decision.actions.length) {
-    if (decision.handled && decision.explanation) appendMessage(decision.explanation, "agent-message");
-    return Boolean(decision.handled);
+    return false;
   }
   const fields = [...(state.formScan?.fields || [])];
   const result = await chrome.runtime.sendMessage({
@@ -2325,6 +2441,8 @@ async function executeFormAgentDecision(message, decision, repairAttempt = 0, or
       value: action.value,
       source: `agent.${action.grounding}`,
       confidence: action.confidence,
+      expected_label: fields.find((field) => field.id === action.field_id)?.label || "",
+      expected_type: fields.find((field) => field.id === action.field_id)?.field_type || "",
     })),
   });
   if (result.error) throw new Error(result.error);
@@ -2363,6 +2481,37 @@ async function handleModelFormCommand(message) {
   if (!shouldUseFormAgent(message)) return false;
   try {
     await scanForm({ throwOnError: true });
+    const normalizedMessage = normalizeQuestion(message);
+    const referenced = (state.formScan?.fields || []).filter((field) => {
+      const label = normalizeQuestion(field.group_label || field.label);
+      return label.length >= 5 && normalizedMessage.includes(label);
+    });
+    if (referenced.length === 1) {
+      state.lastReferencedFieldLabel = referenced[0].group_label || referenced[0].label;
+    }
+    const focusedValue = message.trim().match(
+      /^(?:please\s+)?(?:change|correct|update|set)\s+(?:it|this|that|the answer)\s+(?:to|as)\s+(.+)$/i,
+    )?.[1]?.trim() || message.trim().match(/^(?:it|the answer)\s+(?:is|was)\s+(.+)$/i)?.[1]?.trim();
+    if (focusedValue && state.lastReferencedFieldLabel) {
+      const field = state.formScan?.fields.find(
+        (candidate) => normalizeQuestion(candidate.group_label || candidate.label)
+          === normalizeQuestion(state.lastReferencedFieldLabel),
+      );
+      if (field) {
+        return executeFormAgentDecision(message, {
+          handled: true,
+          actions: [{
+            field_id: field.id,
+            value: focusedValue,
+            grounding: "user_message",
+            confidence: 1,
+            remember: true,
+          }],
+          question: "",
+          explanation: `Updated ${field.group_label || field.label} from your explicit correction.`,
+        });
+      }
+    }
     const broadFill = /\bfill(?:\s+out)?\b.*\b(?:everything|whole thing|all fields|form|page)\b/i.test(message);
     let deterministicFilled = 0;
     if (broadFill && state.formPlan?.actions?.length) {
@@ -2851,6 +3000,8 @@ elements.chatImages.addEventListener("change", addChatImages);
 elements.providerForm.addEventListener("submit", saveProvider);
 elements.disconnectProvider.addEventListener("click", disconnectProvider);
 elements.providerSelect.addEventListener("change", changeProvider);
+elements.saveReasoningProvider.addEventListener("click", saveReasoningProvider);
+elements.disconnectReasoningProvider.addEventListener("click", disconnectReasoningProvider);
 elements.enableSiteAccess.addEventListener("click", async () => {
   try {
     await requestSiteAccess();

@@ -69,11 +69,12 @@ def plan_form_fill(
         # The captured job-board URL is authoritative for referral source.
         mapped = map_source_field(label, field, source_url)
         if mapped is None:
-            # A direct correction made against this exact page question should
-            # override an older profile default.
-            mapped = map_exact_reusable_answer(label, field, answers)
-        if mapped is None:
             mapped = map_profile_field(label, field, profile)
+        if mapped is None:
+            # Reusable answers handle employer-specific questions. Canonical
+            # profile fields remain the source of truth so a bad page mapping
+            # cannot poison identity, contact, or work-policy data.
+            mapped = map_exact_reusable_answer(label, field, answers)
         if mapped is None:
             mapped = map_reusable_answer(label, field, answers)
         if (
@@ -162,7 +163,11 @@ def map_profile_field(
         (("linkedin",), profile.linkedin_url, "profile.linkedin_url"),
         (("github",), profile.github_url, "profile.github_url"),
         (("portfolio", "personal website", "website"), profile.portfolio_url, "profile.portfolio_url"),
-        (("current title", "current position"), profile.current_title, "profile.current_title"),
+        (
+            ("current title", "current job title", "current position", "current role"),
+            profile.current_title,
+            "profile.current_title",
+        ),
         (("years of experience",), profile.years_of_experience, "profile.years_of_experience"),
         (("authorized to work", "work authorization"), profile.work_authorization, "profile.work_authorization"),
         (("sponsorship", "sponsor"), profile.requires_sponsorship, "profile.requires_sponsorship"),

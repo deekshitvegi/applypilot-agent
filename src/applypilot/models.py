@@ -246,6 +246,8 @@ class ProviderStatus(BaseModel):
     model: str
     configured: bool
     source: Literal["encrypted_local", "environment", "none"] = "none"
+    reasoning_provider: str = ""
+    reasoning_model: str = ""
 
 
 class ProviderConfigRequest(BaseModel):

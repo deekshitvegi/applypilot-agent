@@ -13,6 +13,7 @@ from applypilot.models import (
     JobFitAnalysis,
     ResumeDocument,
     ResumeEvidence,
+    ReusableAnswer,
     TailoredResume,
 )
 from applypilot.store import ProfileStore
@@ -38,6 +39,13 @@ def test_synthetic_ats_is_served() -> None:
 
 def test_form_agent_plan_validates_model_tool_actions(monkeypatch, tmp_path: Path) -> None:
     local_store = ProfileStore(tmp_path / "agent-plan.sqlite3")
+    local_store.save(
+        CandidateProfile(
+            email="candidate@example.com",
+            current_title="AI Engineer",
+            background_check_consent=True,
+        )
+    )
     monkeypatch.setattr(main_module, "store", local_store)
     monkeypatch.setattr(
         main_module.ai_provider,
@@ -45,18 +53,24 @@ def test_form_agent_plan_validates_model_tool_actions(monkeypatch, tmp_path: Pat
         lambda _request: FormAgentDecision(
             handled=True,
             actions=[
+                    FormAgentAction(
+                        field_id="source",
+                        value="LinkedIn",
+                        grounding="source_context",
+                        confidence=0.98,
+                    ),
                 FormAgentAction(
-                    field_id="source",
-                    value="LinkedIn",
-                    grounding="user_message",
-                    confidence=0.98,
-                ),
-                FormAgentAction(
-                    field_id="consent",
-                    value="yes",
-                    grounding="user_message",
-                    confidence=0.97,
-                ),
+                        field_id="consent",
+                        value="yes",
+                        grounding="profile",
+                        confidence=0.97,
+                    ),
+                    FormAgentAction(
+                        field_id="email",
+                        value="AI Engineer",
+                        grounding="profile",
+                        confidence=1,
+                    ),
                 FormAgentAction(
                     field_id="missing",
                     value="invented",
@@ -72,6 +86,7 @@ def test_form_agent_plan_validates_model_tool_actions(monkeypatch, tmp_path: Pat
         json={
             "user_message": "Use LinkedIn and confirm consent",
             "origin": "automation",
+            "source_url": "https://www.linkedin.com/jobs/view/123",
             "fields": [
                 {
                     "id": "source",
@@ -84,8 +99,13 @@ def test_form_agent_plan_validates_model_tool_actions(monkeypatch, tmp_path: Pat
                 },
                 {
                     "id": "consent",
-                    "label": "I reviewed the policy",
+                    "label": "I reviewed the background check policy",
                     "field_type": "checkbox",
+                },
+                {
+                    "id": "email",
+                    "label": "Email",
+                    "field_type": "email",
                 },
             ],
         },
@@ -97,6 +117,21 @@ def test_form_agent_plan_validates_model_tool_actions(monkeypatch, tmp_path: Pat
         ("consent", "true"),
     ]
     assert all(item["remember"] is False for item in response.json()["actions"])
+
+
+def test_prunes_conflicting_canonical_reusable_answers(tmp_path: Path) -> None:
+    local_store = ProfileStore(tmp_path / "canonical-cleanup.sqlite3")
+    local_store.save(CandidateProfile(email="candidate@example.com", current_title="AI Engineer"))
+    bad_title = ReusableAnswer(question="What is your current job title?", answer="Terraform")
+    bad_email = ReusableAnswer(question="Email", answer="AI Engineer")
+    custom = ReusableAnswer(question="What is your Linux experience?", answer="Experienced")
+    for answer in (bad_title, bad_email, custom):
+        local_store.save_answer(answer)
+
+    assert main_module.prune_canonical_reusable_answers(local_store) == 2
+    assert [(item.question, item.answer) for item in local_store.list_answers()] == [
+        (custom.question, custom.answer)
+    ]
 
 
 def test_local_capabilities_report_implemented_features() -> None:
@@ -205,7 +240,11 @@ def test_local_cover_letter_upload_and_download(monkeypatch, tmp_path: Path) -> 
 
 
 def test_provider_can_be_configured_without_returning_key(monkeypatch, tmp_path: Path) -> None:
-    local_settings = Settings(database_path=tmp_path / "provider.sqlite3", demo_mode=False)
+    local_settings = Settings(
+        database_path=tmp_path / "provider.sqlite3",
+        demo_mode=False,
+        gemini_api_key="",
+    )
     local_store = ProfileStore(local_settings.database_path)
     monkeypatch.setattr(main_module, "settings", local_settings)
     monkeypatch.setattr(main_module, "store", local_store)
@@ -230,13 +269,19 @@ def test_provider_can_be_configured_without_returning_key(monkeypatch, tmp_path:
         "model": "gpt-5-mini",
         "configured": True,
         "source": "encrypted_local",
+        "reasoning_provider": "",
+        "reasoning_model": "",
     }
     assert "private-openai-test-key" not in saved.text
     assert client.delete("/api/provider").json()["configured"] is False
 
 
 def test_local_ollama_provider_requires_no_api_key(monkeypatch, tmp_path: Path) -> None:
-    local_settings = Settings(database_path=tmp_path / "ollama.sqlite3", demo_mode=False)
+    local_settings = Settings(
+        database_path=tmp_path / "ollama.sqlite3",
+        demo_mode=False,
+        gemini_api_key="",
+    )
     local_store = ProfileStore(local_settings.database_path)
     monkeypatch.setattr(main_module, "settings", local_settings)
     monkeypatch.setattr(main_module, "store", local_store)
@@ -257,7 +302,62 @@ def test_local_ollama_provider_requires_no_api_key(monkeypatch, tmp_path: Path) 
         "model": "qwen3:8b",
         "configured": True,
         "source": "encrypted_local",
+        "reasoning_provider": "",
+        "reasoning_model": "",
     }
+
+
+def test_ollama_reports_selective_gemini_reasoning(tmp_path: Path) -> None:
+    local_settings = Settings(
+        database_path=tmp_path / "hybrid.sqlite3",
+        demo_mode=False,
+        gemini_api_key="test-gemini-key",
+    )
+    local_store = ProfileStore(local_settings.database_path)
+    local_store.save_provider_config(
+        main_module.ProviderConfigRequest(
+            provider="ollama",
+            api_key="",
+            model="qwen3:4b",
+        )
+    )
+    manager = AIProviderManager(local_store, local_settings)
+
+    status = manager.status()
+
+    assert status.provider == "ollama"
+    assert status.reasoning_provider == "gemini"
+    assert status.reasoning_model == "gemini-2.5-flash"
+    assert manager.hybrid_reasoning_enabled is True
+
+
+def test_reasoning_provider_key_is_stored_separately(monkeypatch, tmp_path: Path) -> None:
+    local_settings = Settings(
+        database_path=tmp_path / "reasoning-provider.sqlite3",
+        demo_mode=False,
+        gemini_api_key="",
+    )
+    local_store = ProfileStore(local_settings.database_path)
+    manager = AIProviderManager(local_store, local_settings)
+    monkeypatch.setattr(main_module, "settings", local_settings)
+    monkeypatch.setattr(main_module, "store", local_store)
+    monkeypatch.setattr(main_module, "ai_provider", manager)
+
+    saved = client.put(
+        "/api/provider/reasoning",
+        json={
+            "provider": "gemini",
+            "api_key": "private-gemini-test-key",
+            "model": "gemini-2.5-flash",
+        },
+    )
+
+    assert saved.status_code == 200
+    assert saved.json()["configured"] is True
+    assert saved.json()["provider"] == "gemini"
+    assert "private-gemini-test-key" not in saved.text
+    assert client.get("/api/provider/reasoning").json()["configured"] is True
+    assert client.delete("/api/provider/reasoning").json()["configured"] is False
 
 
 def test_chat_rejects_oversized_or_invalid_images() -> None:

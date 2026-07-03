@@ -340,7 +340,7 @@ def test_correctly_spelled_answer_matches_misspelled_visible_option() -> None:
     assert plan.actions[0].value == "Expereinced"
 
 
-def test_exact_page_answer_overrides_stale_profile_default() -> None:
+def test_canonical_profile_value_rejects_corrupt_exact_page_answer() -> None:
     question = "Are you legally authorized to work in the United States?"
     field = FormField(
         id="authorized",
@@ -359,8 +359,8 @@ def test_exact_page_answer_overrides_stale_profile_default() -> None:
         [correction],
     )
 
-    assert plan.actions[0].value == "Yes"
-    assert plan.actions[0].source == f"answer.{correction.id}"
+    assert plan.actions[0].value == "No"
+    assert plan.actions[0].source == "profile.work_authorization"
 
 
 def test_selects_only_resume_supported_skill_checkboxes() -> None:

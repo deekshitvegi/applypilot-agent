@@ -44,6 +44,13 @@ fallback and final submission still follows the separate user approval policy.
 The same reasoning pass is part of **Start applying**: after fast profile
 autofill, the model resolves remaining fields from grounded evidence and asks
 one chat question only when a required fact is genuinely unknown.
+When Ollama is selected and `GEMINI_API_KEY` is available locally, ApplyPilot
+uses a low-quota hybrid automatically: Ollama handles unlimited chat and acts
+as fallback, while Gemini is reserved for résumé tailoring and unfamiliar
+page/form decisions. Routine profile autofill never consumes a Gemini request.
+You can also configure this without editing `.env`: open **Settings → AI
+provider**, keep **Ollama** selected, and save the key under **Optional Gemini
+assist**. The secondary key is encrypted separately in the local database.
 Provider
 choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.
