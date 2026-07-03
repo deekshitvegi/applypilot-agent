@@ -93,6 +93,7 @@ def test_form_agent_plans_structured_grounded_actions(monkeypatch) -> None:
     assert "action-planning task, not an" in captured["prompt"]
     assert "Change the source to LinkedIn" in captured["prompt"]
     assert "How did you find this position?" in captured["prompt"]
+    assert captured["prompt"].index("CURRENT VISIBLE FIELDS") < captured["prompt"].index("RESUME EVIDENCE TEXT")
 
 
 def test_hybrid_form_reasoning_falls_back_to_ollama(monkeypatch, tmp_path) -> None:
@@ -117,6 +118,30 @@ def test_hybrid_form_reasoning_falls_back_to_ollama(monkeypatch, tmp_path) -> No
             user_message="Fill the form",
             fields=[FormField(id="linux", label="Linux level", field_type="radio")],
         )
+    )
+
+    assert result == expected
+
+
+def test_hybrid_application_answer_uses_reasoning_provider(monkeypatch, tmp_path) -> None:
+    manager = AIProviderManager(
+        ProfileStore(tmp_path / "hybrid-answer.sqlite3"),
+        Settings(database_path=tmp_path / "hybrid-answer.sqlite3", gemini_api_key="key"),
+    )
+    expected = ApplicationAnswerDraft(answer="A grounded job-specific response.")
+
+    class Preferred:
+        def draft_application_answer(self, *_args):
+            return expected
+
+    class Fallback:
+        def draft_application_answer(self, *_args):
+            raise AssertionError("fallback should not run")
+
+    monkeypatch.setattr(manager, "_reasoning_providers", lambda: (Preferred(), Fallback()))
+
+    result = manager.draft_application_answer(
+        "Why this role?", CandidateProfile(), None, JobContext(description="Build AI.")
     )
 
     assert result == expected

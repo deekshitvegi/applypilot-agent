@@ -119,6 +119,66 @@ def test_form_agent_plan_validates_model_tool_actions(monkeypatch, tmp_path: Pat
     assert all(item["remember"] is False for item in response.json()["actions"])
 
 
+def test_form_agent_accepts_truthful_derived_open_ended_answer(monkeypatch, tmp_path: Path) -> None:
+    local_store = ProfileStore(tmp_path / "derived-answer.sqlite3")
+    local_store.save_resume(
+        ResumeDocument(
+            filename="resume.txt",
+            media_type="text/plain",
+            sha256="derived",
+            extracted_text="Built Python automation and production AI systems.",
+        )
+    )
+    monkeypatch.setattr(main_module, "store", local_store)
+    monkeypatch.setattr(
+        main_module.ai_provider,
+        "plan_form_actions",
+        lambda _request: FormAgentDecision(
+            handled=True,
+            actions=[
+                FormAgentAction(
+                    field_id="interest",
+                    value="I am interested in applying my Python automation experience to this role.",
+                    grounding="derived_answer",
+                    confidence=0.9,
+                    remember=False,
+                ),
+                FormAgentAction(
+                    field_id="salary",
+                    value="150000",
+                    grounding="derived_answer",
+                    confidence=0.9,
+                    remember=False,
+                ),
+            ],
+        ),
+    )
+
+    response = client.post(
+        "/api/forms/agent-plan",
+        json={
+            "user_message": "Complete every evidence-supported unresolved field.",
+            "origin": "automation",
+            "fields": [
+                {
+                    "id": "interest",
+                    "label": "Why are you interested in this role?",
+                    "field_type": "textarea",
+                },
+                {
+                    "id": "salary",
+                    "label": "What are your salary expectations?",
+                    "field_type": "text",
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert [item["field_id"] for item in response.json()["actions"]] == ["interest"]
+    assert response.json()["actions"][0]["remember"] is False
+
+
 def test_prunes_conflicting_canonical_reusable_answers(tmp_path: Path) -> None:
     local_store = ProfileStore(tmp_path / "canonical-cleanup.sqlite3")
     local_store.save(CandidateProfile(email="candidate@example.com", current_title="AI Engineer"))
@@ -343,6 +403,22 @@ def test_reasoning_provider_key_is_stored_separately(monkeypatch, tmp_path: Path
     monkeypatch.setattr(main_module, "store", local_store)
     monkeypatch.setattr(main_module, "ai_provider", manager)
 
+    class ProbeProvider:
+        def plan_form_actions(self, request, *_args):
+            return FormAgentDecision(
+                handled=True,
+                actions=[
+                    FormAgentAction(
+                        field_id=request.fields[0].id,
+                        value="Connected",
+                        grounding="user_message",
+                        confidence=1,
+                    )
+                ],
+            )
+
+    monkeypatch.setattr("applypilot.ai.create_provider", lambda _config: ProbeProvider())
+
     saved = client.put(
         "/api/provider/reasoning",
         json={
@@ -358,6 +434,46 @@ def test_reasoning_provider_key_is_stored_separately(monkeypatch, tmp_path: Path
     assert "private-gemini-test-key" not in saved.text
     assert client.get("/api/provider/reasoning").json()["configured"] is True
     assert client.delete("/api/provider/reasoning").json()["configured"] is False
+
+
+def test_form_agent_accepts_explicit_checkbox_option_language(monkeypatch, tmp_path: Path) -> None:
+    local_store = ProfileStore(tmp_path / "explicit-checkbox.sqlite3")
+    monkeypatch.setattr(main_module, "store", local_store)
+    monkeypatch.setattr(
+        main_module.ai_provider,
+        "plan_form_actions",
+        lambda _request: FormAgentDecision(
+            handled=True,
+            actions=[
+                FormAgentAction(
+                    field_id="github-ci",
+                    value="true",
+                    grounding="user_message",
+                    confidence=1,
+                )
+            ],
+        ),
+    )
+
+    response = client.post(
+        "/api/forms/agent-plan",
+        json={
+            "user_message": "For hands-on tools, add GitHub CI",
+            "origin": "chat",
+            "fields": [
+                {
+                    "id": "github-ci",
+                    "label": "Please select all tools you have hands on experience with GitHub CI",
+                    "group_label": "Please select all tools you have hands on experience with",
+                    "option_label": "GitHub CI",
+                    "field_type": "checkbox",
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["actions"][0]["field_id"] == "github-ci"
 
 
 def test_chat_rejects_oversized_or_invalid_images() -> None:

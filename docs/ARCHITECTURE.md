@@ -32,10 +32,18 @@ planner never receives an unrestricted browser tool. It can select only field
 IDs and visible choices supplied by the extension.
 
 ```text
-observe live fields -> model returns typed actions -> validate IDs/options
-        ^                                             |
-        |                                             v
-  rescan/repair once <- verify changed page state <- execute controls
+detect form
+    |
+    +--> deterministic profile/source/résumé fill (no model)
+    |
+    +--> draft evidence-supported narrative answers
+    |
+    `--> unresolved fields only -> model typed actions -> validate/execute
+                                   ^                         |
+                                   `---- rescan/verify ------+
+                                         (up to 3 passes)
+                                              |
+                                 genuinely unknown -> native chat question
 ```
 
 Only verified actions are written to reusable memory. Password, CAPTCHA, MFA,
@@ -44,9 +52,15 @@ rejected before execution. If the provider is unavailable or rate-limited, the
 deterministic mapper remains operational.
 
 When local Ollama is active and a Gemini key exists in the local environment,
-the manager selectively routes résumé tailoring and unfamiliar page/form
-reasoning to Gemini. Routine chat remains local, deterministic fields use no
-model, and any Gemini provider failure falls back to Ollama.
+the manager selectively routes résumé tailoring, unfamiliar page/form
+reasoning, unique application-answer drafting, and generated cover letters to
+Gemini. Routine chat remains local, deterministic fields use no model, and any
+Gemini provider failure falls back to Ollama.
+
+Ambiguous choice fields are rendered from the current page scan as chat choice
+cards. The user selects the employer's exact options, and the same constrained
+executor, page verification, and reusable-memory path handles the result. The
+model never invents the option list.
 
 ## Company-site-first routing
 

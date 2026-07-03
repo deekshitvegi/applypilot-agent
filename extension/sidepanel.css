@@ -284,6 +284,16 @@ button:disabled, textarea:disabled, input:disabled, select:disabled, .attach-but
 .message-copy p:last-child { margin-bottom: 0; }
 .message-copy ul { margin: 6px 0; padding-left: 19px; }
 .message-copy li { margin-bottom: 4px; }
+.choice-card { display: grid; width: min(92%, 390px); gap: 9px; }
+.choice-card-question { margin: 0; font-weight: 650; }
+.choice-card-options { display: grid; gap: 6px; }
+.choice-card-options label { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 12px; }
+.choice-card-options input { width: 16px; height: 16px; flex: none; margin: 1px 0 0; }
+.choice-option { min-height: 34px; padding: 7px 9px; border: 1px solid #d0d5dd; border-radius: 8px; background: white; color: #344054; text-align: left; }
+.choice-option.selected { border-color: #667085; background: #f2f4f7; font-weight: 650; }
+.choice-card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.choice-card-actions button { min-height: 34px; margin: 0; }
+.choice-card-complete { opacity: 0.7; }
 .chat-card .section-heading h2 { white-space: nowrap; }
 #chat-context { max-width: 58%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-form textarea { min-height: 74px; resize: vertical; }

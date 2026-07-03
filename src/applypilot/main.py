@@ -202,6 +202,8 @@ def configure_reasoning_provider(config: ProviderConfigRequest) -> ProviderStatu
         return ai_provider.configure_reasoning(config)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.delete("/api/provider/reasoning", response_model=ProviderStatus)
@@ -636,6 +638,11 @@ def form_agent_plan(request: FormAgentRequest) -> FormAgentDecision:
                 value = "true"
             elif semantic in {"false", "no", "0", "off"}:
                 value = "false"
+            elif semantic in {
+                normalize(field.option_label),
+                normalize(field.label),
+            }:
+                value = "true"
             else:
                 continue
         elif field.field_type in {"radio", "select"}:
@@ -651,10 +658,56 @@ def form_agent_plan(request: FormAgentRequest) -> FormAgentDecision:
             }
             if allowed and normalize(value) not in allowed:
                 continue
+        message = normalize(request.user_message)
+        pending = normalize(request.pending_question)
+        normalized_value = normalize(value).replace("expereinced", "experienced")
+        normalized_message = message.replace("expereinced", "experienced")
+        label_tokens = {
+            token
+            for token in normalize(field.group_label or field.label).split()
+            if len(token) >= 4
+            and token
+            not in {"what", "your", "this", "that", "with", "have", "will", "does"}
+        }
+        field_named = bool(label_tokens.intersection(message.split()))
+        pending_matches = bool(pending) and (pending in label or label in pending)
+        value_named = normalized_value in normalized_message
+        if field.field_type == "checkbox" and normalized_value in {"true", "false"}:
+            option = normalize(field.option_label or field.label)
+            option_named = bool(option) and option in message
+            consent_named = (
+                "background check" in label
+                and any(
+                    phrase in message
+                    for phrase in ("fine with", "ok with", "okay with", "reviewed", "consent")
+                )
+            )
+            broad_multi_select = (
+                normalized_value == "true"
+                and field_named
+                and any(
+                    phrase in message
+                    for phrase in (
+                        "anywhere",
+                        "any of these",
+                        "all of them",
+                        "all options",
+                        "select all",
+                    )
+                )
+            )
+            value_named = option_named or consent_named or broad_multi_select
+        explicit_user_supported = (
+            request.origin == "chat"
+            and action.grounding in {"user_message", "visible_option"}
+            and value_named
+            and (field_named or pending_matches)
+        )
+
         canonical = map_profile_field(label, field, profile)
         if canonical is not None:
             expected = coerce_option(canonical[0], field)
-            if normalize(value) != normalize(expected):
+            if normalize(value) != normalize(expected) and not explicit_user_supported:
                 continue
         elif action.grounding == "profile":
             continue
@@ -674,24 +727,53 @@ def form_agent_plan(request: FormAgentRequest) -> FormAgentDecision:
                     continue
             elif normalize(value) not in normalize(resume.extracted_text):
                 continue
+        elif action.grounding == "derived_answer":
+            open_ended = field.field_type in {"text", "textarea"} and any(
+                marker in label
+                for marker in (
+                    "why ",
+                    "describe",
+                    "tell us",
+                    "explain",
+                    "interest in",
+                    "interested in",
+                    "motivation",
+                    "project you",
+                    "experience with",
+                    "additional information",
+                )
+            )
+            protected = any(
+                marker in label
+                for marker in (
+                    "gender",
+                    "race",
+                    "ethnicity",
+                    "veteran",
+                    "disability",
+                    "date of birth",
+                    "age",
+                    "salary",
+                    "compensation",
+                    "authorized",
+                    "sponsor",
+                    "background check",
+                )
+            )
+            if (
+                request.origin != "automation"
+                or not open_ended
+                or protected
+                or action.confidence < 0.75
+                or len(value) < 2
+            ):
+                continue
         elif request.origin == "automation":
             # The automatic instruction supplies no new candidate facts. A
             # visible option alone is not evidence and must never be guessed.
             continue
         elif action.grounding in {"user_message", "visible_option"}:
-            message = normalize(request.user_message)
-            pending = normalize(request.pending_question)
-            value_named = normalize(value) in message
-            label_tokens = {
-                token
-                for token in normalize(field.group_label or field.label).split()
-                if len(token) >= 4
-                and token
-                not in {"what", "your", "this", "that", "with", "have", "will", "does"}
-            }
-            field_named = bool(label_tokens.intersection(message.split()))
-            pending_matches = bool(pending) and (pending in label or label in pending)
-            if not value_named or not (field_named or pending_matches):
+            if not explicit_user_supported:
                 continue
         safe_actions.append(
             action.model_copy(
