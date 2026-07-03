@@ -35,6 +35,15 @@ line break.
 On Ashby, ApplyPilot uses visible option labels rather than the platform's
 generic internal `on` value, verifies each requested selection, and treats the
 two Yes/No buttons plus their hidden backing input as one logical field.
+Action-oriented chat now uses the configured model as a real form agent. The
+model sees structured live fields and returns typed actions; ApplyPilot
+validates the field IDs and choices, executes them, verifies the page, and gives
+the model one repair attempt when a requested action does not stick. Only
+verified actions enter reusable memory. Deterministic autofill remains the free
+fallback and final submission still follows the separate user approval policy.
+The same reasoning pass is part of **Start applying**: after fast profile
+autofill, the model resolves remaining fields from grounded evidence and asks
+one chat question only when a required fact is genuinely unknown.
 Provider
 choices, automation preferences, profile editing,
 résumé replacement, and troubleshooting tools stay behind the Settings button.
@@ -150,6 +159,8 @@ This repository currently contains:
   the current form and future applications;
 - a guarded AI page planner for unfamiliar application sequences, with final
   submission always governed separately by the user's approval policy;
+- a structured model form agent with validated field tools, clarification
+  questions, page-state verification, and one-step repair after failed actions;
 - encrypted original-résumé storage with original, tailored, and ask-each-time
   attachment preferences;
 - guided blocked-question recovery that captures page options, remembers each

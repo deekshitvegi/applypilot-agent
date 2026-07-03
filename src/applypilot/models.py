@@ -346,6 +346,43 @@ class FormFillPlan(BaseModel):
     submit_allowed: bool = False
 
 
+class FormAgentAction(BaseModel):
+    field_id: str
+    value: str
+    grounding: Literal[
+        "user_message",
+        "profile",
+        "saved_answer",
+        "resume",
+        "source_context",
+        "visible_option",
+    ]
+    confidence: float = Field(ge=0, le=1)
+    reason: str = Field(default="", max_length=300)
+    remember: bool = True
+
+
+class FormAgentRequest(BaseModel):
+    user_message: str = Field(min_length=1, max_length=6000)
+    origin: Literal["chat", "automation"] = "chat"
+    page_url: str = ""
+    source_url: str = ""
+    fields: list[FormField] = Field(default_factory=list, max_length=200)
+    adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = (
+        "generic"
+    )
+    job: JobContext | None = None
+    pending_question: str = Field(default="", max_length=1000)
+    previous_errors: list[str] = Field(default_factory=list, max_length=30)
+
+
+class FormAgentDecision(BaseModel):
+    handled: bool = False
+    actions: list[FormAgentAction] = Field(default_factory=list, max_length=100)
+    question: str = Field(default="", max_length=1000)
+    explanation: str = Field(default="", max_length=1200)
+
+
 ApplicationStatus = Literal[
     "discovered",
     "analyzed",

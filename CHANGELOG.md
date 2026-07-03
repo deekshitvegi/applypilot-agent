@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.11.0 - 2026-07-03
+
+- Added a genuine model-driven form agent: Gemini, Ollama, OpenAI, or Anthropic
+  receives the current structured fields, user instruction, profile, saved
+  answers, résumé evidence, and active job, then returns typed field actions.
+- Added a guarded observe → reason → act → verify → repair loop. Model actions
+  are validated against live field IDs and visible options, executed by the
+  extension, verified on-page, and repaired once using the latest page state.
+- Persisted only verified model actions; hallucinated, unavailable, sensitive,
+  authentication, file, and low-confidence actions are rejected before use.
+- Added conversational clarification memory so a model can ask one focused
+  question and correctly interpret the user's next reply as the answer.
+- Wired the structured planner into the autonomous Start applying runner after
+  the fast deterministic pass, so unfamiliar remaining controls are reasoned
+  over instead of being handed directly to the old questionnaire.
+- Kept deterministic profile autofill as the fast, free fallback when no model
+  is configured, a provider is rate-limited, or structured planning fails.
+- Verified the structured action schema against local `qwen3:4b` in addition to
+  automated provider and API tests.
+
 ## 0.10.2 - 2026-07-03
 
 - Added an Ashby-safe control model based on the live TENEX application: visible
