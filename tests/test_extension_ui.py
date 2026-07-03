@@ -83,4 +83,9 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "isYesNoBackingInput" in worker
     assert 'rawValue.toLowerCase() === "on"' in worker
     assert "filled_ids: filledIds" in worker
+    assert "controls.sort((left, right) => right.priority - left.priority)" in worker
+    assert "applicationEntryLabel" in worker
+    assert '"button, a, [role=\'button\']' in worker
+    assert "Re-inspect the live page on every start or resume" in script
+    assert "state.applicationStarted = false;" in script
 

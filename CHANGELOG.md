@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.11.3 - 2026-07-03
+
+- Ranked application-entry controls before truncating large page snapshots, so
+  a visible Apply button cannot be displaced by dozens of unrelated links.
+- Expanded Apply detection to custom anchors, accessible buttons, shadow DOM,
+  nested frames, and labels that include extra accessibility text.
+- Page-action frame selection now strongly prefers the frame containing the
+  application entry instead of the frame with the largest navigation menu.
+- Stop now preserves the captured job while clearing stale navigation state;
+  Start re-inspects the live page and can resume from an employer listing or
+  partially completed application without returning to LinkedIn.
+- Gemini assist validation now uses a minimal model-access request rather than
+  a complex form-action schema, preventing valid keys from failing setup due
+  to an unrelated structured-output grammar.
+- Gemini connection failures now report Google's safe error category and
+  detail for disabled APIs, project permissions, key restrictions, regional
+  free-tier availability, model access, and rate limits without exposing keys.
+
 ## 0.11.2 - 2026-07-03
 
 - Added in-chat choice cards that mirror visible ATS radio, select, and

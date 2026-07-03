@@ -174,6 +174,11 @@ This repository currently contains:
   the current form and future applications;
 - a guarded AI page planner for unfamiliar application sequences, with final
   submission always governed separately by the user's approval policy;
+- application-entry discovery that ranks visible Apply controls ahead of
+  unrelated navigation, including controls inside shadow roots and job-site
+  frames;
+- resumable Stop/Start behavior that keeps the captured job but re-inspects the
+  live employer page instead of trusting a stale workflow step;
 - a structured model form agent with validated field tools, clarification
   questions, page-state verification, and one-step repair after failed actions;
 - encrypted original-résumé storage with original, tailored, and ask-each-time
@@ -285,6 +290,12 @@ badge means AI features are using that encrypted key. **Disconnect** deletes it
 and turns off AI chat and AI drafting. Common-field scanning, mapping, and
 filling still work without any API key. Environment variables remain available
 for headless setups:
+
+Gemini assist is tested with a minimal live model request before it is saved.
+If Google rejects the request, ApplyPilot displays the safe reason returned by
+Google (for example a disabled Generative Language API, project permission,
+key restriction, unavailable regional free tier, inaccessible model, or
+quota) while redacting key-shaped values. A failed test does not save the key.
 
 ```dotenv
 GEMINI_API_KEY=your_new_key_here

@@ -191,9 +191,16 @@ async function inspectActivePageActions() {
   const ranked = frames
     .filter((frame) => frame.result?.controls?.length)
     .sort((left, right) => {
-      const score = (frame) => frame.result.controls.reduce((total, control) => (
-        total + (/apply|continue|next|review|start/i.test(control.label) ? 10 : 1)
-      ), 0);
+      const score = (frame) => {
+        const labels = frame.result.controls.map((control) => control.label);
+        const hasApplicationEntry = labels.some((label) => (
+          /^apply$|^apply\s+now\b|^apply\s+for\s+(?:this|the)\s+(?:job|position)\b/i.test(label)
+          || /^(?:start|continue)\s+(?:the\s+)?application\b/i.test(label)
+        ));
+        return (hasApplicationEntry ? 10000 : 0) + labels.reduce((total, label) => (
+          total + (/apply|continue|next|review|start/i.test(label) ? 10 : 1)
+        ), 0);
+      };
       return score(right) - score(left);
     });
   const best = ranked[0];
@@ -390,29 +397,40 @@ function extractPageActionControls() {
     });
   }
   const elements = roots.flatMap((root) => [...root.querySelectorAll(
-    "button, a[href], [role='button'], input[type='button'], input[type='submit']",
+    "button, a, [role='button'], input[type='button'], input[type='submit']",
   )]);
   const controls = [];
   elements.forEach((element, index) => {
     if (!visible(element)) return;
     const label = String(
-      element.textContent || element.value || element.getAttribute("aria-label") || element.getAttribute("title") || "",
+      element.innerText || element.value || element.getAttribute("aria-label")
+      || element.getAttribute("title") || element.textContent || "",
     ).replace(/\s+/g, " ").trim().slice(0, 240);
     if (!label) return;
     const id = `action-${index}`;
     element.dataset.applypilotActionId = id;
+    const normalized = label.toLowerCase();
+    const rect = element.getBoundingClientRect();
+    const onScreen = rect.bottom > 0 && rect.top < innerHeight
+      && rect.right > 0 && rect.left < innerWidth;
+    let priority = onScreen ? 100 : 0;
+    if (/^apply$|^apply\s+now\b|^apply\s+for\s+(?:this|the)\s+(?:job|position)\b/.test(normalized)) priority += 1000;
+    else if (/^(?:start|continue)\s+(?:the\s+)?application\b/.test(normalized)) priority += 900;
+    else if (/^(?:continue|next|review)\b/.test(normalized)) priority += 500;
     controls.push({
       id,
       label,
       kind: element.matches("a[href]") ? "link" : element.matches("button, input[type='button'], input[type='submit']") ? "button" : "control",
       disabled: Boolean(element.disabled || element.getAttribute("aria-disabled") === "true"),
+      priority,
     });
   });
+  controls.sort((left, right) => right.priority - left.priority);
   return {
     page_title: document.title,
     page_text: String(document.querySelector("main")?.innerText || document.body?.innerText || "")
       .replace(/\s+/g, " ").slice(0, 12000),
-    controls: controls.slice(0, 80),
+    controls: controls.slice(0, 80).map(({ priority: _priority, ...control }) => control),
   };
 }
 
@@ -425,7 +443,8 @@ function clickPlannedPageAction(actionId, expectedLabel, expectedKind) {
   };
   const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
   const labelOf = (element) => normalize(
-    element.textContent || element.value || element.getAttribute("aria-label") || element.getAttribute("title") || "",
+    element.innerText || element.value || element.getAttribute("aria-label")
+    || element.getAttribute("title") || element.textContent || "",
   );
   const kindOf = (element) => element.matches("a[href]")
     ? "link"
@@ -437,7 +456,7 @@ function clickPlannedPageAction(actionId, expectedLabel, expectedKind) {
     });
   }
   const elements = roots.flatMap((root) => [...root.querySelectorAll(
-    "button, a[href], [role='button'], input[type='button'], input[type='submit']",
+    "button, a, [role='button'], input[type='button'], input[type='submit']",
   )]);
   let control = roots
     .map((root) => root.querySelector(`[data-applypilot-action-id="${CSS.escape(actionId || "")}"]`))
@@ -1379,9 +1398,14 @@ function clickApplicationEntry(inspectOnly = false) {
     });
   }
   const queryAll = (selector) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
-  const labelOf = (element) => String(
-    element.textContent || element.value || element.getAttribute("aria-label") || element.getAttribute("title") || "",
-  ).replace(/\s+/g, " ").trim().toLowerCase();
+  const labelsOf = (element) => [...new Set([
+    element.innerText,
+    element.textContent,
+    element.value,
+    element.getAttribute("aria-label"),
+    element.getAttribute("title"),
+  ].filter(Boolean).map((value) => String(value).replace(/\s+/g, " ").trim().toLowerCase()))];
+  const labelOf = (element) => labelsOf(element)[0] || "";
   const formControls = queryAll("input, textarea, select, [role='combobox']").filter((control) => {
     const type = (control.type || "").toLowerCase();
     return visible(control) && !["hidden", "submit", "button", "reset", "search"].includes(type);
@@ -1408,12 +1432,15 @@ function clickApplicationEntry(inspectOnly = false) {
   ).length;
   const applicationSurface = applicationSignalCount(formControls) >= 2
     || (formControls.some((control) => (control.type || "").toLowerCase() === "file") && formControls.length >= 2);
-  const labels = ["apply now", "apply for this job", "apply for this position", "start application", "continue application"];
+  const applicationEntryLabel = (element) => labelsOf(element).some((label) => (
+    /^apply$|^apply\s+now\b|^apply\s+for\s+(?:this|the)\s+(?:job|position)\b/.test(label)
+    || /^(?:start|continue)\s+(?:the\s+)?application\b/.test(label)
+  ));
   const rawCandidates = queryAll(
-    "a[href], button, [role='button'], input[type='button'], input[type='submit']",
+    "a, button, [role='button'], input[type='button'], input[type='submit']",
   ).filter((element) => {
     if (!visible(element) || element.disabled || element.getAttribute("aria-disabled") === "true") return false;
-    return labels.includes(labelOf(element));
+    return applicationEntryLabel(element);
   });
   let candidates = rawCandidates.filter(
     (candidate) => !rawCandidates.some(

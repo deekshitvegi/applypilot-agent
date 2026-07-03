@@ -404,18 +404,8 @@ def test_reasoning_provider_key_is_stored_separately(monkeypatch, tmp_path: Path
     monkeypatch.setattr(main_module, "ai_provider", manager)
 
     class ProbeProvider:
-        def plan_form_actions(self, request, *_args):
-            return FormAgentDecision(
-                handled=True,
-                actions=[
-                    FormAgentAction(
-                        field_id=request.fields[0].id,
-                        value="Connected",
-                        grounding="user_message",
-                        confidence=1,
-                    )
-                ],
-            )
+        def probe_connection(self):
+            return None
 
     monkeypatch.setattr("applypilot.ai.create_provider", lambda _config: ProbeProvider())
 

@@ -450,6 +450,44 @@ def test_gemini_quota_error_is_explained_without_client_internals() -> None:
     assert "ClientError" not in message
 
 
+def test_gemini_invalid_request_keeps_safe_google_detail() -> None:
+    error = type(
+        "InvalidRequest",
+        (Exception,),
+        {
+            "code": 400,
+            "status": "INVALID_ARGUMENT",
+            "message": "Project location is not supported for the free tier",
+        },
+    )()
+
+    message = gemini_error_message(error)
+
+    assert "free tier" in message
+    assert "billing-enabled" in message
+
+
+def test_gemini_connection_probe_does_not_send_response_schema(monkeypatch) -> None:
+    captured = {}
+
+    class FakeModels:
+        def generate_content(self, **kwargs):
+            captured.update(kwargs)
+            return SimpleNamespace(text="CONNECTED")
+
+    monkeypatch.setattr(
+        ai_module.genai,
+        "Client",
+        lambda **_kwargs: SimpleNamespace(models=FakeModels()),
+    )
+
+    GeminiProvider("test-key", "gemini-2.5-flash").probe_connection()
+
+    assert captured["model"] == "gemini-2.5-flash"
+    assert captured["contents"] == "Reply only with CONNECTED."
+    assert captured["config"].response_schema is None
+
+
 def test_gemini_waits_for_a_short_reset_and_retries_once(monkeypatch) -> None:
     class QuotaError(Exception):
         code = 429
