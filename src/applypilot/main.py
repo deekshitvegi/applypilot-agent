@@ -41,6 +41,8 @@ from .models import (
     GeneratedCoverLetter,
     ChatRequest,
     ChatResponse,
+    FormAgentDecision,
+    FormAgentRequest,
     FormFillPlan,
     FormPlanRequest,
     JobApplicationOptions,
@@ -61,7 +63,7 @@ from .models import (
     TailorRequest,
 )
 from .onboarding import get_onboarding_state
-from .form_mapper import plan_form_fill
+from .form_mapper import coerce_option, normalize, plan_form_fill
 from .resume import ResumeExtractionError, extract_resume
 from .routing import choose_application_route
 from .store import ProfileStore
@@ -127,6 +129,7 @@ def capabilities() -> dict[str, object]:
         "live_site_automation": not settings.demo_mode,
         "resume_tailoring": ai_provider.configured and not settings.demo_mode,
         "job_fit_analysis": ai_provider.configured and not settings.demo_mode,
+        "model_form_agent": ai_provider.configured and not settings.demo_mode,
         "deterministic_autofill": not settings.demo_mode,
         "editable_reusable_profile": not settings.demo_mode,
         "automation_policies": ["review_each", "always_allow"],
@@ -535,6 +538,79 @@ def form_plan(request: FormPlanRequest) -> FormFillPlan:
         answers=store.list_answers(),
         resume_text=resume.extracted_text if resume else "",
         adapter=request.adapter,
+    )
+
+
+@app.post("/api/forms/agent-plan", response_model=FormAgentDecision)
+def form_agent_plan(request: FormAgentRequest) -> FormAgentDecision:
+    require_local_data_mode()
+    try:
+        decision = ai_provider.plan_form_actions(request)
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    fields = {field.id: field for field in request.fields}
+    safe_actions = []
+    for action in decision.actions:
+        field = fields.get(action.field_id)
+        if field is None or field.field_type in {"password", "file", "other"}:
+            continue
+        label = normalize(f"{field.label} {field.name}")
+        if any(
+            marker in label
+            for marker in (
+                "password",
+                "captcha",
+                "verification code",
+                "one time code",
+                "mfa",
+                "credit card",
+                "bank account",
+            )
+        ):
+            continue
+        if action.confidence < 0.55:
+            continue
+        value = action.value.strip()
+        if field.field_type == "checkbox":
+            semantic = normalize(value)
+            if semantic in {"true", "yes", "1", "on"}:
+                value = "true"
+            elif semantic in {"false", "no", "0", "off"}:
+                value = "false"
+            else:
+                continue
+        elif field.field_type in {"radio", "select"}:
+            value = coerce_option(value, field)
+            allowed = {
+                normalize(option.label)
+                for option in field.options
+                if option.label
+            } | {
+                normalize(option.value)
+                for option in field.options
+                if option.value and normalize(option.value) != "on"
+            }
+            if allowed and normalize(value) not in allowed:
+                continue
+        safe_actions.append(
+            action.model_copy(
+                update={
+                    "value": value,
+                    "remember": action.remember and request.origin == "chat",
+                }
+            )
+        )
+
+    question = decision.question
+    if decision.actions and not safe_actions and not question:
+        question = "I could not safely match that request to a visible field. Which visible option should I use?"
+    return decision.model_copy(
+        update={
+            "actions": safe_actions,
+            "question": question,
+            "handled": decision.handled or bool(safe_actions) or bool(question),
+        }
     )
 
 

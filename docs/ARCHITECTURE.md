@@ -26,8 +26,22 @@ requires no credential.
 
 Common application fields are mapped deterministically from the encrypted
 profile and reusable-answer store; this path does not call an AI model. The AI
-provider is reserved for job-fit analysis, free-text assistance, evidence
-extraction, and job-specific résumé tailoring.
+provider handles job-fit analysis, free-text assistance, evidence extraction,
+job-specific résumé tailoring, and structured form-action reasoning. The action
+planner never receives an unrestricted browser tool. It can select only field
+IDs and visible choices supplied by the extension.
+
+```text
+observe live fields -> model returns typed actions -> validate IDs/options
+        ^                                             |
+        |                                             v
+  rescan/repair once <- verify changed page state <- execute controls
+```
+
+Only verified actions are written to reusable memory. Password, CAPTCHA, MFA,
+payment, file-upload, destructive, low-confidence, and unavailable actions are
+rejected before execution. If the provider is unavailable or rate-limited, the
+deterministic mapper remains operational.
 
 ## Company-site-first routing
 

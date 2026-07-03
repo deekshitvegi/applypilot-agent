@@ -16,6 +16,11 @@ from applypilot.models import (
     ChatResponse,
     CoverLetterDraft,
     EvidenceItem,
+    FormAgentAction,
+    FormAgentDecision,
+    FormAgentRequest,
+    FormField,
+    FormOption,
     JobContext,
     JobFitAnalysis,
     ResumeDocument,
@@ -37,6 +42,53 @@ class FakeResponse:
     def json(self) -> dict:
         return self.body
 
+
+def test_form_agent_plans_structured_grounded_actions(monkeypatch) -> None:
+    provider = GeminiProvider("test-key", "test-model")
+    expected = FormAgentDecision(
+        handled=True,
+        actions=[
+            FormAgentAction(
+                field_id="source",
+                value="LinkedIn",
+                grounding="user_message",
+                confidence=0.99,
+            )
+        ],
+        explanation="Selected the requested referral source.",
+    )
+    captured = {}
+
+    def fake_structured(prompt, schema):
+        captured["prompt"] = prompt
+        captured["schema"] = schema
+        return expected
+
+    monkeypatch.setattr(provider, "_structured", fake_structured)
+    request = FormAgentRequest(
+        user_message="Change the source to LinkedIn",
+        fields=[
+            FormField(
+                id="source",
+                label="How did you find this position?",
+                field_type="radio",
+                options=[FormOption(value="on", label="LinkedIn")],
+            )
+        ],
+    )
+
+    result = provider.plan_form_actions(
+        request,
+        CandidateProfile(),
+        [],
+        None,
+    )
+
+    assert result == expected
+    assert captured["schema"] is FormAgentDecision
+    assert "action-planning task, not an" in captured["prompt"]
+    assert "Change the source to LinkedIn" in captured["prompt"]
+    assert "How did you find this position?" in captured["prompt"]
 
 def test_evidence_extractor_removes_non_verbatim_claims(monkeypatch) -> None:
     provider = GeminiProvider("test-key", "test-model")

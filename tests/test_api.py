@@ -8,6 +8,8 @@ from applypilot.ai import AIProviderManager
 from applypilot.main import app
 from applypilot.models import (
     CandidateProfile,
+    FormAgentAction,
+    FormAgentDecision,
     JobFitAnalysis,
     ResumeDocument,
     ResumeEvidence,
@@ -32,6 +34,69 @@ def test_synthetic_ats_is_served() -> None:
     assert response.status_code == 200
     assert "ApplyPilot Synthetic ATS" in response.text
     assert "application-form" in response.text
+
+
+def test_form_agent_plan_validates_model_tool_actions(monkeypatch, tmp_path: Path) -> None:
+    local_store = ProfileStore(tmp_path / "agent-plan.sqlite3")
+    monkeypatch.setattr(main_module, "store", local_store)
+    monkeypatch.setattr(
+        main_module.ai_provider,
+        "plan_form_actions",
+        lambda _request: FormAgentDecision(
+            handled=True,
+            actions=[
+                FormAgentAction(
+                    field_id="source",
+                    value="LinkedIn",
+                    grounding="user_message",
+                    confidence=0.98,
+                ),
+                FormAgentAction(
+                    field_id="consent",
+                    value="yes",
+                    grounding="user_message",
+                    confidence=0.97,
+                ),
+                FormAgentAction(
+                    field_id="missing",
+                    value="invented",
+                    grounding="user_message",
+                    confidence=1,
+                ),
+            ],
+        ),
+    )
+
+    response = client.post(
+        "/api/forms/agent-plan",
+        json={
+            "user_message": "Use LinkedIn and confirm consent",
+            "origin": "automation",
+            "fields": [
+                {
+                    "id": "source",
+                    "label": "How did you find this position?",
+                    "field_type": "radio",
+                    "options": [
+                        {"value": "on", "label": "Current Employee"},
+                        {"value": "on", "label": "LinkedIn"},
+                    ],
+                },
+                {
+                    "id": "consent",
+                    "label": "I reviewed the policy",
+                    "field_type": "checkbox",
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert [(item["field_id"], item["value"]) for item in response.json()["actions"]] == [
+        ("source", "LinkedIn"),
+        ("consent", "true"),
+    ]
+    assert all(item["remember"] is False for item in response.json()["actions"])
 
 
 def test_local_capabilities_report_implemented_features() -> None:
