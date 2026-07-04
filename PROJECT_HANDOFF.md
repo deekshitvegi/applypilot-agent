@@ -50,6 +50,136 @@ Never commit `.env` files, API keys, resumes, cover letters, personal profile
 data, SQLite databases, browser data, generated application documents, or
 screenshots containing personal information. This is a public repository.
 
+## Original Windows PC inventory
+
+The original development/test machine contains useful local state that is not
+in GitHub. Inspect it only as needed, preserve it, and never copy private files
+into the public repository.
+
+### Workspace and runtimes
+
+- Operating environment: Windows with PowerShell; the user reported 16 GB RAM.
+- Workspace:
+  `C:\Users\deeks\OneDrive\Desktop\DV\Python\Jobs Applying Agent`
+- The workspace is inside OneDrive. Avoid simultaneous bulk moves/deletes and
+  allow for sync delays or file-locking when editing generated/local files.
+- Python virtual environment: `.venv\`
+- Virtual-environment interpreter: `.venv\Scripts\python.exe`
+- Python runtime observed at handoff: Python 3.11.0
+- Node runtime observed at handoff: v23.11.0
+- Git observed at handoff: 2.49.0.windows.1
+- GitHub CLI observed at handoff: 2.95.0
+- Important Python packages observed at handoff:
+  - `google-genai` 1.75.0
+  - `fastapi` 0.138.2
+  - `uvicorn` 0.49.0
+- `pip show applypilot-agent` still reports old installed metadata `0.2.0`,
+  while the checked-out application and `/health` report `0.11.4`. Imports are
+  currently using the workspace code, but after packaging/version changes run
+  the setup or editable-install step so installed metadata is refreshed. Do
+  not “fix” this by downgrading the source version.
+
+### Local companion and startup
+
+- ApplyPilot local service: `http://127.0.0.1:8765`
+- Health endpoint: `http://127.0.0.1:8765/health`
+- Health observed while this inventory was written:
+  `{"status":"ok","service":"applypilot","mode":"local","version":"0.11.4","revision":"local"}`
+- Start foreground: `.\scripts\start.ps1`
+- Start hidden/background: `.\scripts\start-background.ps1`
+- Diagnose setup: `.\scripts\doctor.ps1`
+- Setup: `.\scripts\setup.ps1`
+- A Windows Startup shortcut already exists at the user's Startup folder as
+  `ApplyPilot.lnk`. It invokes `scripts\start-background.ps1` when the user
+  signs in. There is no ApplyPilot Scheduled Task; do not create a duplicate
+  startup mechanism unless the user asks.
+- The local process has stopped unexpectedly during testing, producing
+  `Failed to fetch` in the extension. If this recurs, inspect process lifetime,
+  startup behavior, and ignored logs before merely restarting it. Keep this
+  separate from page-action verification bugs.
+
+### Local AI/Ollama
+
+- Ollama executable:
+  `%LOCALAPPDATA%\Programs\Ollama\ollama.exe`
+- Ollama API: `http://127.0.0.1:11434`
+- Ollama version observed at handoff: 0.31.1
+- Models already downloaded locally:
+  - `qwen3:4b` — approximately 2.5 GB; current recommended text/reasoning model
+    for this 16 GB machine;
+  - `gemma3:4b` — approximately 3.3 GB; used for local image understanding;
+  - `qwen3:8b` — approximately 5.2 GB; available but slower and more
+    memory-intensive on this machine.
+- Do not redownload models unnecessarily. Do not commit model files. Account
+  for Ollama memory use when browser, Codex/Claude, and the local service are
+  running together.
+
+### Private local configuration and data
+
+- `.env` exists at the repository root and is ignored by Git. It may contain
+  local configuration or secrets. Do not print it, quote it, attach it, commit
+  it, or expose any value from it. Use `.env.example` for public documentation.
+- Local database: `data\applypilot.sqlite3` (about 1.9 MB at handoff).
+- Local encryption key: `data\applypilot.sqlite3.key`.
+- Preserve the database and its key together. They contain the user's local
+  profile/application/provider/document state. Do not inspect their contents,
+  migrate them destructively, replace them, or upload them without explicit
+  user approval and a backup/migration plan.
+- Provider keys entered through ApplyPilot are intended to be encrypted in the
+  local store. The extension must never receive the decrypted key.
+- The user's resume, generated resumes, cover letters, reusable answers,
+  application history, and personal profile belong only in ignored local
+  storage—not GitHub.
+- Ignored local directories/files include `.venv/`, `.env`, `data/`, `build/`,
+  `dist/`, `tmp/`, browser profiles, databases, resumes, and applications.
+- `tmp/` contains historical service/preview stdout and stderr logs. They may
+  help diagnose crashes, but treat them as potentially sensitive and never
+  commit them.
+- `dist/applypilot-extension.zip` is a locally generated extension package.
+  Rebuild it with `scripts\package-extension.ps1`; do not assume an old ZIP
+  contains the latest source.
+
+### Browser extension and browser-owned state
+
+- The unpacked extension source directory is:
+  `C:\Users\deeks\OneDrive\Desktop\DV\Python\Jobs Applying Agent\extension`
+- Chrome/Edge must load that **folder**, not the old ZIP. After extension code
+  changes, use Reload on `chrome://extensions`/`edge://extensions`, then refresh
+  the job/application page and reopen the side panel.
+- Site-access permission is optional host permission requested by the extension.
+  Verify it is enabled for the current job site and any cross-origin embedded
+  application frame.
+- Browser passwords, login sessions, cookies, extension local/session storage,
+  and site state live in the user's browser profile and are not in GitHub.
+  Never export, copy, or inspect passwords/cookies.
+- The browser password manager may populate login fields when the user enabled
+  browser-assisted login. ApplyPilot may detect filled state and click a unique
+  allowed login/continue control, but must not read or store credentials.
+
+### Hosted/public resources
+
+- GitHub repository: <https://github.com/deekshitvegi/applypilot-agent>
+- Render demo: <https://applypilot-agent.onrender.com>
+- Synthetic hosted ATS: <https://applypilot-agent.onrender.com/demo/ats>
+- Render is configured by `render.yaml` as a public `APPLYPILOT_DEMO_MODE=true`
+  service with temporary `/tmp` storage. It is for product/demo testing, not
+  personal profiles, real resumes, private provider keys, or real applications.
+- The Render free instance may spin down and start slowly. Do not confuse the
+  hosted demo with the private local companion used by the extension.
+
+### Useful repository scripts and generated areas
+
+- `scripts\setup.ps1` / `setup.sh`: install/setup local environment.
+- `scripts\start.ps1` / `start.sh`: run the local companion in foreground.
+- `scripts\start-background.ps1`: hidden Windows startup.
+- `scripts\enable-autostart.ps1` and `disable-autostart.ps1`: manage the
+  existing Windows Startup shortcut.
+- `scripts\doctor.ps1`: local readiness checks.
+- `scripts\package-extension.ps1`: generate the extension ZIP in `dist/`.
+- `scripts\render_sample_resume.py`: development document rendering helper.
+- `build/`, `dist/`, and `tmp/` are generated/ignored. Source changes belong in
+  `src/`, `extension/`, `tests/`, `docs/`, and public configuration files.
+
 ## Product vision
 
 The user does not want a chatbot wrapped around an autofill script. They want a
