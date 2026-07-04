@@ -523,6 +523,23 @@ async function extractFormFields() {
     }
     return false;
   };
+  const choiceLooksSelected = (control) => {
+    if (!control) return false;
+    const state = String(control.getAttribute("data-state") || "").toLowerCase();
+    const selected = String(control.getAttribute("data-selected") || "").toLowerCase();
+    const className = typeof control.className === "string" ? control.className : "";
+    return Boolean(
+      control.checked
+      || control.dataset.applypilotSelected === "true"
+      || control.getAttribute("aria-checked") === "true"
+      || control.getAttribute("aria-pressed") === "true"
+      || control.getAttribute("aria-selected") === "true"
+      || ["checked", "on", "selected", "active"].includes(state)
+      || ["true", "yes", "selected"].includes(selected)
+      || /(?:^|[\s_-])(?:selected|active|checked|chosen)(?:$|[\s_-])/i.test(className)
+      || (isPlainChoiceButton(control) && control.getRootNode()?.activeElement === control)
+    );
+  };
   const isYesNoBackingInput = (control) => {
     if (control.tagName !== "INPUT" || (control.type || "").toLowerCase() !== "checkbox") return false;
     const buttons = [...(control.parentElement?.querySelectorAll("button") || [])]
@@ -824,6 +841,9 @@ async function extractFormFields() {
           candidate.required || candidate.getAttribute("aria-required") === "true"
         ))
       : false;
+    const selectedRadio = fieldType === "radio"
+      ? radioGroupControls.find(choiceLooksSelected)
+      : null;
 
     fields.push({
       id: applypilotId,
@@ -833,10 +853,12 @@ async function extractFormFields() {
       name: control.name || "",
       field_type: fieldType,
       required: control.required || control.getAttribute("aria-required") === "true" || radioRequired || requiredHint,
-      value: fieldType === "checkbox" || fieldType === "radio"
-        ? ((control.checked || control.getAttribute("aria-checked") === "true" || control.getAttribute("aria-pressed") === "true")
-            ? control.value || optionLabel || "true"
+      value: fieldType === "radio"
+        ? (selectedRadio
+            ? selectedRadio.dataset.applypilotOptionLabel || individualChoiceLabel(selectedRadio) || selectedRadio.value || "true"
             : "")
+        : fieldType === "checkbox"
+          ? (choiceLooksSelected(control) ? control.value || optionLabel || "true" : "")
         : control.value || customValue,
       options,
     });
@@ -1024,10 +1046,25 @@ async function applyFormFillPlan(actions) {
         if (!desired) throw new Error(`No radio option matched "${action.value}".`);
         const isSelected = (candidate) => Boolean(
           candidate.checked
+          || candidate.dataset.applypilotSelected === "true"
           || candidate.getAttribute("aria-checked") === "true"
           || candidate.getAttribute("aria-pressed") === "true"
+          || candidate.getAttribute("aria-selected") === "true"
+          || ["checked", "on", "selected", "active"].includes(
+            String(candidate.getAttribute("data-state") || "").toLowerCase(),
+          )
+          || /(?:^|[\s_-])(?:selected|active|checked|chosen)(?:$|[\s_-])/i.test(
+            typeof candidate.className === "string" ? candidate.className : "",
+          )
         );
-        if (!isSelected(desired)) desired.click();
+        const wasSelected = isSelected(desired);
+        if (!wasSelected) {
+          desired.click();
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          group.forEach((candidate) => {
+            candidate.dataset.applypilotSelected = candidate === desired ? "true" : "false";
+          });
+        }
         if (!isSelected(desired) && desired.labels?.[0]) desired.labels[0].click();
         if (!isSelected(desired) && desired instanceof HTMLInputElement) {
           const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");

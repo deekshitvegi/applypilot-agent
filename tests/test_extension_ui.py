@@ -88,4 +88,10 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert '"button, a, [role=\'button\']' in worker
     assert "Re-inspect the live page on every start or resume" in script
     assert "state.applicationStarted = false;" in script
+    assert "A short answer such as \"Yes\", \"No\", or \"Experienced\"" in script
+    assert "exactReferencedGroups.length === 1" in script
+    assert ".slice(0, 1)" in script
+    assert "state.pendingAgentQuestion = groups[0].label" in script
+    assert "control.dataset.applypilotSelected" in worker
+    assert "radioGroupControls.find(choiceLooksSelected)" in worker
 

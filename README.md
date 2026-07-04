@@ -185,6 +185,9 @@ This repository currently contains:
   attachment preferences;
 - guided blocked-question recovery that captures page options, remembers each
   answer, replans, fills, and resumes the active application runner;
+- question-scoped chat answers: a short Yes/No reply is applied only to the
+  pending question, while custom segmented controls retain their verified
+  state across replans instead of being toggled twice;
 - an explicit two-step final-submit approval that pauses for CAPTCHA/MFA and
   records `submitted` only after the site displays a confirmation signal;
 - ATS-friendly DOCX and PDF generation from the evidence-grounded tailored

@@ -2654,6 +2654,51 @@ async function executeExplicitPageAnswers(message) {
   const fields = state.formScan?.fields || [];
   const updates = new Map();
   const selectedCheckboxes = new Map();
+
+  // A short answer such as "Yes", "No", or "Experienced" belongs only to
+  // the one question currently being asked. Never fan it out to every visible
+  // field that happens to expose the same option label.
+  const focusedLabel = state.pendingAgentQuestion || state.lastReferencedFieldLabel || "";
+  const exactReferencedGroups = [...new Set(fields
+    .map((field) => field.group_label || field.label)
+    .filter((label) => {
+      const normalized = normalizeQuestion(label);
+      return normalized.length >= 8 && normalizedMessage.includes(normalized);
+    }))];
+  const focusedQuestion = exactReferencedGroups.length === 1
+    ? exactReferencedGroups[0]
+    : focusedLabel;
+  if (focusedQuestion) {
+    const focusedFields = fields.filter((field) => (
+      normalizeQuestion(field.group_label || field.label)
+      === normalizeQuestion(focusedQuestion)
+    ));
+    const focusedField = focusedFields.find((field) => (
+      ["radio", "select"].includes(field.field_type) && field.options?.length
+    ));
+    if (focusedField) {
+      const answerTokens = [...message.matchAll(/\b(yes|no)\b/gi)].map((match) => match[1]);
+      const option = (focusedField.options || []).find((candidate) => {
+        const visible = normalizeChoicePhrase(candidate.label || candidate.value);
+        if (!visible) return false;
+        if (normalizedChoiceMessage === visible) return true;
+        if (["yes", "no"].includes(visible) && answerTokens.length) {
+          return visible === answerTokens.at(-1).toLowerCase();
+        }
+        return new RegExp(`\\b(?:answer\\s*(?:is|:|-)?\\s*|set\\s+(?:it\\s+to\\s+)?|select\\s+|choose\\s+)?${escapeRegularExpression(visible)}\\b`, "i")
+          .test(normalizedChoiceMessage);
+      });
+      if (option) {
+        const question = focusedField.group_label || focusedField.label;
+        updates.set(focusedField.id, {
+          field: focusedField,
+          value: option.label || option.value,
+          question,
+        });
+        state.lastReferencedFieldLabel = question;
+      }
+    }
+  }
   if (/\b(?:add|apply|fill|put)\s+(?:that|it)\s+(?:in|to|on)\s+(?:the\s+)?(?:job\s+)?(?:application|form|page)\b/i.test(message) && state.lastPageAnswer) {
     await replanForm();
     const result = await fillForm({ throwOnError: true });
@@ -2696,7 +2741,7 @@ async function executeExplicitPageAnswers(message) {
     updates.set(sponsorship.id, { field: sponsorship, value: "No", question: sponsorship.label });
   }
 
-  if (/\b(?:can|willing to)\s+relocate\s+(?:anywhere|anywhere in (?:the )?u\.?s\.?)\b/i.test(message)) {
+  if (/\b(?:can|willing to|open to)\s+relocat(?:e|ing)\s+(?:anywhere|anywhere in (?:the )?u\.?s\.?)\b/i.test(message)) {
     const relocationFields = fields.filter((field) => (
       field.field_type === "checkbox" && /relocat|assisted relocation package/i.test(field.group_label || field.label)
     ));
@@ -2943,15 +2988,41 @@ function visibleChoiceGroups() {
 }
 
 function relevantChoiceGroups(message, hint = "") {
-  const text = normalizeQuestion(`${message} ${hint}`);
-  const words = new Set(text.split(" ").filter((word) => word.length >= 4));
-  return visibleChoiceGroups()
+  const groups = visibleChoiceGroups();
+  const normalizedMessage = normalizeQuestion(message);
+  const normalizedHint = normalizeQuestion(hint);
+  const hintMatch = groups.find((group) => {
+    const label = normalizeQuestion(group.label);
+    return label && (label === normalizedHint || normalizedHint.includes(label));
+  });
+  if (hintMatch) return [hintMatch];
+
+  const pending = normalizeQuestion(state.pendingAgentQuestion || "");
+  const pendingMatch = groups.find((group) => normalizeQuestion(group.label) === pending);
+  if (pendingMatch && normalizedMessage.split(" ").length <= 8) return [pendingMatch];
+
+  const exact = groups.filter((group) => {
+    const label = normalizeQuestion(group.label);
+    return label.length >= 8 && normalizedMessage.includes(label);
+  });
+  if (exact.length) return exact.slice(0, 2);
+
+  const stopWords = new Set([
+    "answer", "application", "field", "question", "select", "this", "what", "with", "your",
+  ]);
+  const words = new Set(normalizedMessage.split(" ").filter(
+    (word) => word.length >= 4 && !stopWords.has(word),
+  ));
+  return groups
     .map((group) => {
       const label = normalizeQuestion(group.label);
-      const labelWords = new Set(label.split(" ").filter((word) => word.length >= 4));
+      const labelWords = new Set(label.split(" ").filter(
+        (word) => word.length >= 4 && !stopWords.has(word),
+      ));
       let score = [...labelWords].filter((word) => words.has(word)).length;
       score += group.choices.filter((choice) => (
-        text.includes(normalizeQuestion(choice.label))
+        normalizeQuestion(choice.label).length >= 4
+        && normalizedMessage.split(" ").includes(normalizeQuestion(choice.label))
       )).length * 3;
       if (
         state.lastReferencedFieldLabel
@@ -2961,7 +3032,7 @@ function relevantChoiceGroups(message, hint = "") {
     })
     .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score)
-    .slice(0, 4)
+    .slice(0, 1)
     .map((item) => item.group);
 }
 
@@ -3075,6 +3146,10 @@ function renderChoiceCard(group) {
 function renderChoiceCardsForMessage(message, hint = "") {
   const groups = relevantChoiceGroups(message, hint);
   if (!groups.length) return false;
+  if (groups.length === 1) {
+    state.pendingAgentQuestion = groups[0].label;
+    state.lastReferencedFieldLabel = groups[0].label;
+  }
   groups.forEach(renderChoiceCard);
   return true;
 }
