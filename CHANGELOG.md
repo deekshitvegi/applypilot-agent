@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.11.4 - 2026-07-04
+
+- Scoped short chat replies such as Yes, No, and Experienced to exactly one
+  pending or explicitly referenced application question.
+- Reworked choice-card relevance so short option names can no longer match
+  unrelated questions by substring (for example, `No` inside `now` or `Go`
+  inside ordinary prose).
+- Focused model clarification cards on one question instead of displaying up
+  to four loosely related groups at once.
+- Added selected-state tracking for custom segmented Yes/No buttons that do
+  not expose native radio or ARIA state.
+- Made repeated radio/button fills idempotent, preventing a verified answer
+  from being clicked again and toggled off during replan or file upload.
+- Added conversational support for "open to relocating anywhere in the US".
+
 ## 0.11.3 - 2026-07-03
 
 - Ranked application-entry controls before truncating large page snapshots, so
