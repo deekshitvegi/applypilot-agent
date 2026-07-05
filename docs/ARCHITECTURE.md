@@ -51,6 +51,54 @@ payment, file-upload, destructive, low-confidence, and unavailable actions are
 rejected before execution. If the provider is unavailable or rate-limited, the
 deterministic mapper remains operational.
 
+## Verified control layer
+
+One injected function (`runFormPass` in the extension service worker) owns
+both observation and execution, so the scan that verifies is exactly the scan
+that plans. Every field carries a stable **fingerprint** built from its
+normalized question label, control type, visible option labels, and name —
+never a numeric DOM index — so an action still resolves after a reactive
+re-render replaces the elements.
+
+Execution follows `pre-state → one scoped action → bounded wait → fresh
+rescan → compare`:
+
+1. The authoritative pre-state is read from page-owned signals only: native
+   `checked`/`value`, ARIA checked/pressed/selected, page `data-state` or
+   `data-selected`, page CSS state classes, or a hidden backing input behind
+   segmented Yes/No buttons. ApplyPilot never writes any of these signals, so
+   it cannot verify its own claim.
+2. If the target value is already authoritatively selected, nothing is
+   clicked (idempotence — a second click could toggle a custom control off).
+3. Otherwise exactly one scoped action runs, followed by a bounded observation
+   window for framework updates, re-resolving by fingerprint if the DOM was
+   replaced.
+4. A full fresh rescan then compares the page-owned semantic value with the
+   target and produces one of four explicit outcomes per action:
+   - `verified` — the fresh scan shows the requested value;
+   - `unverified` — the action ran but the control exposes no page-owned
+     state to confirm it (reported to the user, never persisted, never
+     auto-repeated);
+   - `failed` — the fresh scan shows a different value, with evidence;
+   - `skipped` — file/password controls that are handled elsewhere.
+
+`filled_ids` therefore means "a fresh scan observed the requested value", not
+"a click was issued". Only verified values become reusable answers or
+canonical profile facts. File uploads trigger a complete re-observation, and
+fields the page reset are restored through the same idempotent path.
+
+## Chat command routing
+
+Explicit user instructions are interpreted by a deterministic scoped-intent
+parser before any model call. Canonical statements (sponsorship,
+authorization, relocation — including "anywhere" over a multi-select), named
+options ("add GitHub CI"), source corrections, and short option replies are
+bound to specific visible questions and executed through the verified control
+layer. A bare reply that fits several questions produces a clarification
+question, not a guess. If neither the parser nor the model agent can act on an
+actionable form instruction, the panel asks a focused question — an explicit
+request about the visible form never falls through to generic chat prose.
+
 When local Ollama is active and a Gemini key exists in the local environment,
 the manager selectively routes résumé tailoring, unfamiliar page/form
 reasoning, unique application-answer drafting, and generated cover letters to

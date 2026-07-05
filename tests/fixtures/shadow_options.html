@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Options inside an open shadow root</title>
+    <style>
+      main { width: 640px; margin: 24px; font-family: sans-serif; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div id="host"></div>
+    </main>
+    <script>
+      const shadow = document.querySelector("#host").attachShadow({ mode: "open" });
+      shadow.innerHTML = `
+        <style>label { display: block; padding: 4px 0; }</style>
+        <fieldset>
+          <legend>Do you require visa sponsorship?</legend>
+          <label><input type="radio" name="visa" value="Yes" /> Yes</label>
+          <label><input type="radio" name="visa" value="No" /> No</label>
+        </fieldset>
+      `;
+    </script>
+  </body>
+</html>

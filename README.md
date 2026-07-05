@@ -35,6 +35,16 @@ line break.
 On Ashby, ApplyPilot uses visible option labels rather than the platform's
 generic internal `on` value, verifies each requested selection, and treats the
 two Yes/No buttons plus their hidden backing input as one logical field.
+"Verified" always means a fresh rescan observed the requested value in state
+the page itself owns (native checked state, ARIA, page data attributes, state
+classes, or a hidden backing input) — never that a click was merely issued.
+Fields are identified by stable fingerprints (question, control type, and
+option labels), so answers survive reactive re-renders that replace elements,
+and an already-selected option is never clicked again, which keeps repeated
+answers and file uploads from toggling a custom control back off. Controls
+that expose no page-owned state are reported as "attempted but not confirmed"
+so you can check them yourself; ApplyPilot never claims success it cannot
+observe.
 Action-oriented chat now uses the configured model as a real form agent. The
 model sees structured live fields and returns typed actions; ApplyPilot
 validates the field IDs and choices, executes them, verifies the page, and gives
@@ -193,7 +203,12 @@ This repository currently contains:
 - ATS-friendly DOCX and PDF generation from the evidence-grounded tailored
   draft, with download controls and local DOCX attachment to detected file
   inputs;
-- tests for encryption, resume extraction, evidence validation, routing, and APIs;
+- tests for encryption, resume extraction, evidence validation, routing, and
+  APIs, plus browser-level Playwright regression tests that run the real
+  injected extension code against fixture forms for segmented Yes/No buttons,
+  hidden backing state, toggle-off controls, React-style re-renders,
+  multi-select checkbox groups, shadow-root options, and uploads that reset
+  earlier answers;
 - architecture and delivery milestones in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 This is a working MVP, not a claim of universal ATS compatibility. Employer
@@ -346,6 +361,11 @@ pytest
 ruff check .
 .\scripts\package-extension.ps1
 ```
+
+The browser-level control tests use Playwright. Install a browser once with
+`python -m playwright install chromium` (they also fall back to an installed
+Edge or Chrome, and skip with a notice when no Chromium-based browser is
+available).
 
 Do not put real candidate information, API keys, session cookies, or generated
 resumes in GitHub. The repository can hold code and synthetic test fixtures

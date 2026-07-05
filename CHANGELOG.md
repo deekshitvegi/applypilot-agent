@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.12.0 - 2026-07-04
+
+- Replaced attempted-action verification with an authoritative post-action
+  rescan: the executor records the page-owned pre-state, performs one scoped
+  action, waits for the page to settle, rescans the live DOM, and reports
+  `verified` only when the requested visible option is actually selected.
+- Removed the self-written `data-applypilot-selected` marker entirely. Selected
+  state now comes only from signals the page owns: native `checked`, ARIA
+  checked/pressed/selected, page `data-state`/`data-selected`, page CSS state
+  classes, and hidden backing inputs behind segmented Yes/No buttons.
+- Controls that expose no page-owned state are now reported honestly as
+  "attempted but not confirmed" instead of "verified", are never persisted as
+  reusable answers, and are never auto-clicked a second time.
+- Added stable field fingerprints (normalized question, control type, option
+  labels, and name) so actions survive React-style re-renders that replace
+  elements and rotate numeric IDs; stale-ID actions re-resolve by fingerprint.
+- Made every fill idempotent: an option that a fresh scan already shows as
+  selected is never clicked again, so replans, repeated answers, and file
+  uploads can no longer toggle a segmented control off.
+- Merged the form scanner and executor into one injected `runFormPass` so the
+  scan that verifies is exactly the scan that plans, and fills return the
+  fresh post-action field state.
+- Routed relocation, sponsorship, authorization, and multi-select instructions
+  through a deterministic scoped-intent parser that binds each statement to
+  specific visible questions; "open to relocating anywhere" selects every
+  offered location and clears "unable to relocate".
+- Guaranteed that an explicit instruction about the visible form always ends
+  in a scoped browser action, a choice card, or a focused clarification —
+  never generic chat prose; bare replies that match several questions now ask
+  which question is meant instead of guessing.
+- The user's own canonical statements (sponsorship, authorization, relocation)
+  update the encrypted profile even when a page control cannot be confirmed.
+- Added browser-level regression tests (Playwright + the real injected
+  extension code) covering segmented Yes/No buttons with hidden backing state,
+  silent controls, toggle-off buttons, React-style re-renders, multi-select
+  checkbox groups, shadow-root options, and file uploads that reset answers.
+
 ## 0.11.4 - 2026-07-04
 
 - Scoped short chat replies such as Yes, No, and Experienced to exactly one

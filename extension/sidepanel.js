@@ -1525,7 +1525,15 @@ async function persistUnknownAnswer(answer, options = {}) {
     });
     if (result.error) throw new Error(result.error);
     if (appendUser) appendMessage(answer, "user-message");
-    appendMessage("Got it. I filled that answer on this page.", "agent-message");
+    const outcome = (result.results || [])[0];
+    appendMessage(
+      outcome?.status === "verified"
+        ? "Got it. I applied that answer and a fresh page scan confirmed it."
+        : outcome?.status === "unverified"
+          ? "I applied that answer, but the control exposes no page-owned state I can confirm — please check it on the page."
+          : `I could not apply that answer${outcome?.message ? ` (${outcome.message})` : ""}. Please set it on the page directly.`,
+      "agent-message",
+    );
     await scanForm();
     await continueQuestionnaire();
     return;
@@ -1619,26 +1627,39 @@ async function fillForm(options = {}) {
   elements.fillForm.disabled = true;
   elements.fillForm.textContent = "Filling…";
   try {
+    const fieldsAtFill = state.formScan?.fields || [];
     const result = await chrome.runtime.sendMessage({
       action: "fillForm",
       frameId: state.formScan?.frame_id ?? 0,
       actions: state.formPlan.actions.map((action) => {
-        const field = state.formScan?.fields.find((candidate) => candidate.id === action.field_id);
+        const field = fieldsAtFill.find((candidate) => candidate.id === action.field_id);
         return {
           ...action,
           expected_label: field?.label || "",
           expected_type: field?.field_type || "",
+          fingerprint: field?.fingerprint || "",
         };
       }),
     });
     if (result.error) throw new Error(result.error);
-    elements.formStatus.textContent = `${result.filled} fields filled for your review.`;
-    const fillErrors = humanizeFillErrors(result.errors || []);
+    if (Array.isArray(result.fields) && result.fields.length) {
+      state.formScan = { ...state.formScan, fields: result.fields };
+    }
+    const unverified = (result.results || []).filter((item) => item.status === "unverified");
+    elements.formStatus.textContent = `${result.filled} field${result.filled === 1 ? "" : "s"} verified on the page${unverified.length ? `; ${unverified.length} attempted but not confirmed` : ""}.`;
+    const fillErrors = humanizeFillErrors(result.errors || [], fieldsAtFill);
+    const unverifiedLabels = unverified.map((item) => {
+      const field = fieldsAtFill.find((candidate) => candidate.id === item.field_id);
+      return field?.group_label || field?.label || "A form field";
+    });
     elements.formResult.innerHTML = `
       <strong>Review the page carefully</strong>
       ${fillErrors.length
         ? `<ul class="error-list">${fillErrors.map((error) => `<li>${escapeHtml(error)}</li>`).join("")}</ul>`
-        : "<p>All mapped fields were filled successfully.</p>"}
+        : "<p>Every mapped field was verified against the live page.</p>"}
+      ${unverifiedLabels.length
+        ? `<p>Attempted but not confirmed by the page — please check: ${escapeHtml(unverifiedLabels.join("; "))}.</p>`
+        : ""}
       <p>ApplyPilot did not submit the application.</p>
     `;
     const requiredUnknown = unresolvedRequiredUnknowns().length > 0;
@@ -1670,15 +1691,16 @@ async function fillForm(options = {}) {
   }
 }
 
-function humanizeFillErrors(errors) {
+function humanizeFillErrors(errors, fields = null) {
+  const known = fields || state.formScan?.fields || [];
   return errors.map((error) => {
     if (typeof error === "string") {
       const match = error.match(/^(ap-\d+):\s*(.*)$/);
       if (!match) return error;
-      const field = state.formScan?.fields.find((candidate) => candidate.id === match[1]);
+      const field = known.find((candidate) => candidate.id === match[1]);
       return `${field?.label || "A form field"}: ${match[2]}`;
     }
-    const field = state.formScan?.fields.find((candidate) => candidate.id === error.field_id);
+    const field = known.find((candidate) => candidate.id === error.field_id);
     return `${field?.label || "A form field"}: ${error.message || "Could not fill this field."}`;
   });
 }
@@ -2181,6 +2203,21 @@ async function sendChat(event) {
     if (await handlePageActionCommand(message)) return;
     if (message && !images.length && await handleModelFormCommand(message)) return;
     if (message && !images.length && await handleAnswerConversation(message)) return;
+    // An explicit instruction about the visible form must end in a scoped
+    // browser action or a focused clarification — never generic chat prose.
+    if (
+      message && !images.length
+      && looksLikeFormActionRequest(message)
+      && !looksLikeChatQuestion(message)
+      && state.formScan?.fields?.length
+    ) {
+      if (renderChoiceCardsForMessage(message)) return;
+      appendMessage(
+        "I couldn't match that instruction to a visible application question, so I didn't change the page. Tell me the exact question or option name (for example: “select GitHub CI for the tools question”).",
+        "agent-message",
+      );
+      return;
+    }
     if (!state.provider?.configured) {
       appendMessage(
         "AI chat is off because no provider key is saved. Common-field scanning and filling still work without AI.",
@@ -2471,52 +2508,84 @@ async function executeFormAgentDecision(message, decision, repairAttempt = 0, or
   const result = await chrome.runtime.sendMessage({
     action: "fillForm",
     frameId: state.formScan?.frame_id ?? 0,
-    actions: decision.actions.map((action) => ({
-      field_id: action.field_id,
-      value: action.value,
-      source: `agent.${action.grounding}`,
-      confidence: action.confidence,
-      expected_label: fields.find((field) => field.id === action.field_id)?.label || "",
-      expected_type: fields.find((field) => field.id === action.field_id)?.field_type || "",
-    })),
+    actions: decision.actions.map((action) => {
+      const field = fields.find((candidate) => candidate.id === action.field_id);
+      return {
+        field_id: action.field_id,
+        value: action.value,
+        source: `agent.${action.grounding}`,
+        confidence: action.confidence,
+        expected_label: field?.label || "",
+        expected_type: field?.field_type || "",
+        fingerprint: field?.fingerprint || "",
+      };
+    }),
   });
   if (result.error) throw new Error(result.error);
-  const filledIds = new Set(result.filled_ids || []);
-  const verified = await persistVerifiedAgentActions(decision.actions, filledIds, fields);
-  const failed = decision.actions.filter((action) => !filledIds.has(action.field_id));
-  if (failed.length && repairAttempt === 0) {
+  if (Array.isArray(result.fields) && result.fields.length) {
+    state.formScan = { ...state.formScan, fields: result.fields };
+  }
+  const outcomes = new Map((result.results || []).map((item) => [item.field_id, item]));
+  const statusOf = (action) => outcomes.get(action.field_id)?.status
+    || ((result.filled_ids || []).includes(action.field_id) ? "verified" : "failed");
+  const verifiedActions = decision.actions.filter((action) => statusOf(action) === "verified");
+  const unverifiedActions = decision.actions.filter((action) => statusOf(action) === "unverified");
+  const failedActions = decision.actions.filter((action) => statusOf(action) === "failed");
+  // Only values a fresh page scan confirmed become reusable answers or
+  // canonical profile facts. Attempted-but-unconfirmed actions are reported
+  // to the user instead of being persisted, and are never auto-repeated
+  // because a second click could toggle a custom control back off.
+  const verified = await persistVerifiedAgentActions(
+    decision.actions,
+    new Set(verifiedActions.map((action) => action.field_id)),
+    fields,
+  );
+  if (failedActions.length && repairAttempt === 0 && state.provider?.configured) {
     await scanForm({ throwOnError: true });
-    const repairErrors = failed.map((action) => {
+    const repairErrors = failedActions.map((action) => {
       const field = fields.find((candidate) => candidate.id === action.field_id);
-      const error = (result.errors || []).find((candidate) => candidate.field_id === action.field_id);
-      return `${field?.label || action.field_id}: requested ${action.value}; ${error?.message || "not verified"}`;
+      const outcome = outcomes.get(action.field_id);
+      return `${field?.label || action.field_id}: requested ${action.value}; ${outcome?.message || "not verified"}`;
     });
     const repairFields = (state.formScan?.fields || []).filter((field) => (
-      failed.some((action) => action.field_id === field.id)
+      failedActions.some((action) => {
+        const planned = fields.find((candidate) => candidate.id === action.field_id);
+        return planned?.fingerprint
+          ? planned.fingerprint === field.fingerprint
+          : action.field_id === field.id;
+      })
     ));
     const repair = await requestFormAgentDecision(message, repairErrors, origin, repairFields);
     if (repair.actions?.length) return executeFormAgentDecision(message, repair, 1, origin);
   }
   state.pendingAgentQuestion = "";
   await scanForm({ throwOnError: true });
-  const verifiedLabels = verified.map((action) => {
+  const labelOf = (action) => {
     const field = fields.find((candidate) => candidate.id === action.field_id);
-    return `${field?.group_label || field?.label || action.field_id} → ${action.value}`;
+    return field?.group_label || field?.label || action.field_id;
+  };
+  const verifiedLabels = verified.map((action) => `${labelOf(action)} → ${action.value}`);
+  const unverifiedLabels = unverifiedActions.map((action) => `${labelOf(action)} → ${action.value}`);
+  const failedLabels = failedActions.map((action) => {
+    const outcome = outcomes.get(action.field_id);
+    return `${labelOf(action)}${outcome?.message ? ` (${outcome.message})` : ""}`;
   });
-  const failedLabels = failed.map((action) => (
-    fields.find((candidate) => candidate.id === action.field_id)?.group_label
-    || fields.find((candidate) => candidate.id === action.field_id)?.label
-    || action.field_id
-  ));
   if (origin === "automation") {
     reportActivity(
-      `AI resolved and verified ${verifiedLabels.length} field${verifiedLabels.length === 1 ? "" : "s"}${failedLabels.length ? `; ${failedLabels.length} still need another pass` : ""}.`,
+      `AI verified ${verifiedLabels.length} field${verifiedLabels.length === 1 ? "" : "s"} on the page`
+      + `${unverifiedLabels.length ? `; ${unverifiedLabels.length} attempted but not confirmed` : ""}`
+      + `${failedLabels.length ? `; ${failedLabels.length} failed and need another pass` : ""}.`,
     );
   } else {
-    appendMessage(
-      `${decision.explanation || "I interpreted the current form and applied the requested answers."}\n\nVerified:\n${verifiedLabels.length ? verifiedLabels.map((label) => `- ${label}`).join("\n") : "- None"}${failedLabels.length ? `\n\nStill unresolved:\n${failedLabels.map((label) => `- ${label}`).join("\n")}` : ""}`,
-      "agent-message",
-    );
+    const sections = [decision.explanation || "I applied the requested answers to the visible form."];
+    sections.push(`\nVerified on the page:\n${verifiedLabels.length ? verifiedLabels.map((label) => `- ${label}`).join("\n") : "- None"}`);
+    if (unverifiedLabels.length) {
+      sections.push(`\nAttempted, but not confirmed by the page — please check these visually:\n${unverifiedLabels.map((label) => `- ${label}`).join("\n")}`);
+    }
+    if (failedLabels.length) {
+      sections.push(`\nNot applied:\n${failedLabels.map((label) => `- ${label}`).join("\n")}`);
+    }
+    appendMessage(sections.join("\n"), "agent-message");
   }
   return true;
 }
@@ -2630,53 +2699,206 @@ async function runModelAutomationPass() {
   return true;
 }
 
-async function executeExplicitPageAnswers(message) {
+function looksLikeFormActionRequest(message) {
+  return /\b(?:add|select|check|uncheck|choose|include|set|change|update|fill|apply|clear|answer|relocat\w*|sponsor\w*|authoriz\w*|reviewed|for this one|it is|it was)\b/i.test(message);
+}
+
+function semanticAnswerChoice(value) {
+  const normalized = normalizeQuestion(value);
+  const tokens = new Set(normalized.split(" "));
+  if (normalized === "true" || normalized === "1" || tokens.has("yes")) return "yes";
+  if (normalized === "false" || normalized === "0" || tokens.has("no") || normalized.includes("do not")) return "no";
+  return normalized;
+}
+
+// Deterministic, page-scoped interpretation of an explicit chat instruction.
+// Every result is bound to specific visible fields; nothing here guesses from
+// prose. Pure function: reads only its arguments so it stays testable.
+function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {}) {
+  const pendingVisible = options.pendingVisible === true;
+  const assignments = new Map();
+  const canonical = [];
+  const ambiguous = [];
   const normalizedMessage = normalizeQuestion(message);
-  const knownOptions = (state.formScan?.fields || []).flatMap((field) => field.options || []);
   const normalizedChoiceMessage = normalizeChoicePhrase(message);
-  const knownVisibleOption = knownOptions.some((option) => (
-    normalizeChoicePhrase(option.label || option.value) === normalizedChoiceMessage
+  const padded = ` ${normalizedMessage} `;
+
+  const assign = (field, value, question) => {
+    if (!field) return;
+    assignments.set(field.id, { field, value, question });
+  };
+  const groupsMatching = (pattern) => {
+    const map = new Map();
+    for (const field of fields) {
+      const label = field.group_label || field.label;
+      if (!pattern.test(label)) continue;
+      const key = normalizeQuestion(label);
+      if (!map.has(key)) map.set(key, { label, fields: [] });
+      map.get(key).fields.push(field);
+    }
+    return [...map.values()];
+  };
+  const choiceFieldOf = (groupFields) => groupFields.find((field) => (
+    ["radio", "select"].includes(field.field_type) && field.options?.length
   ));
-  const namedVisibleOption = knownOptions.some((option) => {
-    const optionText = normalizeChoicePhrase(option.label || option.value);
-    return optionText.length >= 2 && normalizedChoiceMessage.includes(optionText);
-  });
-  const answerOptionInstruction = /\banswer\b/i.test(message) && namedVisibleOption;
-  const valueStatementInstruction = /\bit\s+is\b/i.test(message) && namedVisibleOption;
-  const actionable = /\b(add|select|check|choose|include|set|change|update|reviewed|authorized|authorization|sponsor|sponsorship|relocate|relocation|for this one)\b/i.test(message)
-    || answerOptionInstruction
-    || valueStatementInstruction;
-  const possibleOptionReply = normalizedMessage.split(" ").length <= 5
-    && knownVisibleOption
-    && !looksLikeChatQuestion(message);
-  if ((!actionable && !possibleOptionReply) || !state.localMode) return false;
-  await scanForm({ throwOnError: true });
-  const fields = state.formScan?.fields || [];
-  const updates = new Map();
-  const selectedCheckboxes = new Map();
+  const chooseOption = (field, semanticValue) => {
+    const optionsList = field.options || [];
+    const match = optionsList.find((option) => (
+      semanticAnswerChoice(option.label || option.value) === semanticValue
+    ));
+    if (match) return match.label || match.value;
+    return semanticValue === "yes" ? "Yes" : "No";
+  };
+  const assignBooleanGroup = (pattern, semanticValue) => {
+    for (const group of groupsMatching(pattern)) {
+      const choice = choiceFieldOf(group.fields);
+      if (choice) {
+        assign(choice, chooseOption(choice, semanticValue), group.label);
+      } else if (group.fields.length === 1 && group.fields[0].field_type === "checkbox") {
+        assign(group.fields[0], semanticValue === "yes" ? "true" : "false", group.label);
+      }
+    }
+  };
+
+  // A proximity window that cannot cross into another canonical topic, so
+  // "authorization yes and sponsorship no" binds each answer to its clause.
+  const topicGap = "(?:(?!sponsor|authoriz|relocat)[^.]){0,30}";
+
+  // Visa sponsorship statements such as "i dont require sponsorship".
+  if (/\bsponsor/.test(padded)) {
+    const negative = /\b(?:do not|don t|dont|won t|wont|will not|never|not)\b[^.]{0,40}\b(?:require|need)\b[^.]{0,40}\bsponsor/.test(padded)
+      || /\bno\s+sponsorship\b/.test(padded)
+      || /\bwithout\s+sponsorship\b/.test(padded)
+      || new RegExp(`\\bsponsor(?:ship)?\\b${topicGap}\\bno\\b`).test(padded)
+      || new RegExp(`\\bno\\s+for\\b${topicGap}\\bsponsor`).test(padded);
+    const positive = !negative && (
+      /\b(?:require|need|will need)\b[^.]{0,40}\bsponsor/.test(padded)
+      || new RegExp(`\\bsponsor(?:ship)?\\b${topicGap}\\byes\\b`).test(padded)
+      || new RegExp(`\\byes\\s+for\\b${topicGap}\\bsponsor`).test(padded)
+    );
+    if (negative || positive) {
+      assignBooleanGroup(/sponsor/i, negative ? "no" : "yes");
+      canonical.push({ key: "requires_sponsorship", value: !negative });
+    }
+  }
+
+  // Work-authorization statements such as "i am authorized to work in the US".
+  if (/\bauthoriz/.test(padded)) {
+    const negative = /\b(?:not|no longer)\s+(?:legally\s+)?authorized\b/.test(padded)
+      || new RegExp(`\\bauthoriz\\w*\\b${topicGap}\\bno\\b`).test(padded)
+      || new RegExp(`\\bno\\s+for\\b${topicGap}\\bauthoriz`).test(padded);
+    const positive = !negative && (
+      /\b(?:am|i m|im)\s+(?:legally\s+)?authorized\b/.test(padded)
+      || /\bauthorized\s+to\s+work\b/.test(padded)
+      || new RegExp(`\\bauthoriz\\w*\\b${topicGap}\\byes\\b`).test(padded)
+      || new RegExp(`\\byes\\s+for\\b${topicGap}\\bauthoriz`).test(padded)
+    );
+    if (negative || positive) {
+      assignBooleanGroup(/authorized to work|work authorization/i, negative ? "no" : "yes");
+      canonical.push({ key: "work_authorization", value: negative ? "No" : "Yes" });
+    }
+  }
+
+  // Relocation statements, including "open to relocating anywhere in the US".
+  if (/\brelocat/.test(padded)) {
+    const anywhere = /\banywhere\b/.test(padded)
+      || /\ball (?:of )?(?:the )?(?:locations|cities|states|them|these)\b/.test(padded)
+      || /\bany (?:location|city|state|of (?:them|these))\b/.test(padded);
+    const negative = /\b(?:not|cannot|can t|cant|unable to|won t|wont)\b[^.]{0,25}\brelocat/.test(padded);
+    const positive = !negative && (anywhere || /\b(?:open to|willing to|happy to|can|yes)\b[^.]{0,30}\brelocat/.test(padded));
+    for (const group of groupsMatching(/relocat/i)) {
+      const checkboxes = group.fields.filter((field) => field.field_type === "checkbox");
+      if (checkboxes.length > 1 && (anywhere || negative)) {
+        for (const field of checkboxes) {
+          const optionText = `${field.option_label || field.label}`;
+          const unable = /unable|cannot|can[’' ]?t|not able|only work remotely|no relocation/i.test(optionText);
+          assign(field, (anywhere && !negative ? !unable : unable) ? "true" : "false", group.label);
+        }
+      } else if (positive || negative) {
+        const choice = choiceFieldOf(group.fields);
+        if (choice) {
+          const optionsList = choice.options || [];
+          const negativeOption = optionsList.find((option) => (
+            /unable|cannot|can[’' ]?t|not (?:able|willing)|no relocation|only work remotely/i.test(`${option.label} ${option.value}`)
+          ));
+          const positiveOption = optionsList.find((option) => (
+            option !== negativeOption
+            && (semanticAnswerChoice(option.label || option.value) === "yes"
+              || /willing|able|open|yes/i.test(`${option.label} ${option.value}`))
+          ));
+          const selected = negative
+            ? negativeOption?.label || negativeOption?.value || chooseOption(choice, "no")
+            : positiveOption?.label || positiveOption?.value || chooseOption(choice, "yes");
+          assign(choice, selected, group.label);
+        } else if (checkboxes.length === 1) {
+          assign(checkboxes[0], negative ? "false" : "true", group.label);
+        }
+      }
+    }
+    if (positive || negative) canonical.push({ key: "willing_to_relocate", value: positive });
+  }
+
+  // Explicit add/remove of named visible options, e.g. "add github ci".
+  for (const field of fields.filter((candidate) => candidate.field_type === "checkbox")) {
+    const option = field.option_label || field.label;
+    if (!option) continue;
+    const escaped = escapeRegularExpression(option);
+    const escapedNormalized = escapeRegularExpression(normalizeChoicePhrase(option));
+    const requested = new RegExp(`\\b(?:add|select|check|choose|include|enable|tick)\\b[^.;\\n]{0,45}\\b${escaped}\\b`, "i").test(message)
+      || (escapedNormalized && new RegExp(`\\b(?:add|select|check|choose|include|enable|tick)\\b[^.;]{0,45}\\b${escapedNormalized}\\b`).test(normalizedChoiceMessage));
+    const removed = new RegExp(`\\b(?:remove|deselect|uncheck|clear|untick)\\b[^.;\\n]{0,45}\\b${escaped}\\b`, "i").test(message)
+      || (escapedNormalized && new RegExp(`\\b(?:remove|deselect|uncheck|clear|untick)\\b[^.;]{0,45}\\b${escapedNormalized}\\b`).test(normalizedChoiceMessage));
+    if (requested) assign(field, "true", field.group_label || field.label);
+    else if (removed) assign(field, "false", field.group_label || field.label);
+  }
+
+  // Captured-source corrections such as "for this one it's linkedin".
+  const sourceField = fields.find((field) => /how did you (?:find|hear)|source of application/i.test(field.label));
+  if (sourceField) {
+    for (const board of ["LinkedIn", "Indeed", "Dice"]) {
+      const pattern = new RegExp(
+        `(?:(?:for this one|source)[^.!?\\n]{0,60}(?:it'?s|is)\\s+${board}|change[^.!?\\n]{0,60}(?:answer\\s+)?to\\s+${board}|answer[^.!?\\n]{0,30}${board})`,
+        "i",
+      );
+      if (pattern.test(message)) {
+        assign(sourceField, board, sourceField.group_label || sourceField.label);
+        break;
+      }
+    }
+  }
+
+  // Background-check policy confirmations.
+  const reviewedPolicy = fields.find((field) => (
+    /background check policy/i.test(`${field.group_label || ""} ${field.label || ""}`)
+    && /reviewed/i.test(`${field.option_label || ""} ${(field.options || []).map((option) => option.label).join(" ")}`)
+  ));
+  if (reviewedPolicy && /(?:i\s+have\s+reviewed|reviewed)\s+(?:the\s+)?background check policy/i.test(message)) {
+    const reviewedOption = (reviewedPolicy.options || []).find((option) => /reviewed/i.test(option.label || option.value));
+    assign(
+      reviewedPolicy,
+      reviewedPolicy.field_type === "checkbox" ? "true" : reviewedOption?.label || "I have reviewed the Background Check Policy",
+      reviewedPolicy.group_label || reviewedPolicy.label,
+    );
+  }
 
   // A short answer such as "Yes", "No", or "Experienced" belongs only to
-  // the one question currently being asked. Never fan it out to every visible
-  // field that happens to expose the same option label.
-  const focusedLabel = state.pendingAgentQuestion || state.lastReferencedFieldLabel || "";
+  // the one question currently being asked or explicitly referenced. Never
+  // fan it out to every visible field that exposes the same option label.
   const exactReferencedGroups = [...new Set(fields
     .map((field) => field.group_label || field.label)
     .filter((label) => {
       const normalized = normalizeQuestion(label);
       return normalized.length >= 8 && normalizedMessage.includes(normalized);
     }))];
-  const focusedQuestion = exactReferencedGroups.length === 1
-    ? exactReferencedGroups[0]
-    : focusedLabel;
+  const focusedQuestion = exactReferencedGroups.length === 1 ? exactReferencedGroups[0] : focusedLabel;
   if (focusedQuestion) {
     const focusedFields = fields.filter((field) => (
-      normalizeQuestion(field.group_label || field.label)
-      === normalizeQuestion(focusedQuestion)
+      normalizeQuestion(field.group_label || field.label) === normalizeQuestion(focusedQuestion)
     ));
     const focusedField = focusedFields.find((field) => (
       ["radio", "select"].includes(field.field_type) && field.options?.length
     ));
-    if (focusedField) {
+    if (focusedField && !assignments.has(focusedField.id)) {
       const answerTokens = [...message.matchAll(/\b(yes|no)\b/gi)].map((match) => match[1]);
       const option = (focusedField.options || []).find((candidate) => {
         const visible = normalizeChoicePhrase(candidate.label || candidate.value);
@@ -2688,95 +2910,29 @@ async function executeExplicitPageAnswers(message) {
         return new RegExp(`\\b(?:answer\\s*(?:is|:|-)?\\s*|set\\s+(?:it\\s+to\\s+)?|select\\s+|choose\\s+)?${escapeRegularExpression(visible)}\\b`, "i")
           .test(normalizedChoiceMessage);
       });
-      if (option) {
-        const question = focusedField.group_label || focusedField.label;
-        updates.set(focusedField.id, {
-          field: focusedField,
-          value: option.label || option.value,
-          question,
-        });
-        state.lastReferencedFieldLabel = question;
-      }
+      if (option) assign(focusedField, option.label || option.value, focusedQuestion);
     }
-  }
-  if (/\b(?:add|apply|fill|put)\s+(?:that|it)\s+(?:in|to|on)\s+(?:the\s+)?(?:job\s+)?(?:application|form|page)\b/i.test(message) && state.lastPageAnswer) {
-    await replanForm();
-    const result = await fillForm({ throwOnError: true });
-    appendMessage(
-      `Reapplied “${state.lastPageAnswer.answer}” for “${state.lastPageAnswer.question}”. ${result?.filled || 0} mapped fields were refreshed.`,
-      "agent-message",
-    );
-    return true;
-  }
-  for (const field of fields.filter((candidate) => candidate.field_type === "checkbox")) {
-    const group = field.group_label || field.label.replace(field.option_label || "", "").trim();
-    if (field.value) {
-      const current = selectedCheckboxes.get(group) || new Set();
-      current.add(field.option_label || field.label);
-      selectedCheckboxes.set(group, current);
-    }
-    const option = field.option_label || field.label;
-    const requested = new RegExp(
-      `\\b(?:add|select|check|choose|include)\\b[^.;\\n]{0,45}\\b${escapeRegularExpression(option)}\\b`,
-      "i",
-    ).test(message);
-    if (requested) {
-      const current = selectedCheckboxes.get(group) || new Set();
-      current.add(option);
-      selectedCheckboxes.set(group, current);
-      updates.set(field.id, { field, value: "true", question: group });
-    }
-  }
-
-  const sourceField = fields.find((field) => /how did you (?:find|hear)|source of application/i.test(field.label));
-  if (sourceField && /(?:(?:for this one|source)[^.!?\n]{0,60}(?:it'?s|is)\s+linkedin|change[^.!?\n]{0,60}(?:answer\s+)?to\s+linkedin|answer[^.!?\n]{0,30}linkedin)/i.test(message)) {
-    updates.set(sourceField.id, { field: sourceField, value: "LinkedIn", question: sourceField.label });
-  }
-  const authorization = fields.find((field) => /authorized to work|work authorization/i.test(field.label));
-  if (authorization && /(?:yes\s+for\s+(?:authorized|authorization)|authorized[^.!?\n]{0,50}\byes\b)/i.test(message)) {
-    updates.set(authorization.id, { field: authorization, value: "Yes", question: authorization.label });
-  }
-  const sponsorship = fields.find((field) => /sponsor|sponsorship/i.test(field.label));
-  if (sponsorship && /(?:no\s+for\s+(?:future\s+)?sponsor|sponsor(?:ship)?[^.!?\n]{0,50}\bno\b)/i.test(message)) {
-    updates.set(sponsorship.id, { field: sponsorship, value: "No", question: sponsorship.label });
-  }
-
-  if (/\b(?:can|willing to|open to)\s+relocat(?:e|ing)\s+(?:anywhere|anywhere in (?:the )?u\.?s\.?)\b/i.test(message)) {
-    const relocationFields = fields.filter((field) => (
-      field.field_type === "checkbox" && /relocat|assisted relocation package/i.test(field.group_label || field.label)
-    ));
-    for (const field of relocationFields) {
-      const unable = /unable|cannot|only work remotely/i.test(field.option_label || field.label);
-      updates.set(field.id, {
-        field,
-        value: unable ? "false" : "true",
-        question: field.group_label || field.label,
-      });
-      if (!unable) {
-        const group = field.group_label || field.label;
-        const current = selectedCheckboxes.get(group) || new Set();
-        current.add(field.option_label || field.label);
-        selectedCheckboxes.set(group, current);
+    const focusedCheckboxes = focusedFields.filter((field) => field.field_type === "checkbox");
+    if (focusedCheckboxes.length > 1 && !focusedField) {
+      const selectAll = /\b(?:all of (?:them|these|the above)|select all|everything|all\b)/.test(padded);
+      for (const field of focusedCheckboxes) {
+        const optionText = normalizeChoicePhrase(field.option_label || field.label);
+        if (!optionText) continue;
+        const negativeOption = /\bnone\b|unable|no experience|not applicable/i.test(field.option_label || field.label);
+        if (selectAll) {
+          assign(field, negativeOption ? "false" : "true", focusedQuestion);
+        } else if (new RegExp(`\\b${escapeRegularExpression(optionText)}\\b`).test(normalizedChoiceMessage)) {
+          assign(field, "true", focusedQuestion);
+        }
       }
     }
   }
 
-  const reviewedPolicy = fields.find((field) => (
-    /background check policy/i.test(`${field.group_label || ""} ${field.label || ""}`)
-    && /reviewed/i.test(`${field.option_label || ""} ${(field.options || []).map((option) => option.label).join(" ")}`)
-  ));
-  if (reviewedPolicy && /(?:i\s+have\s+reviewed|reviewed)\s+(?:the\s+)?background check policy/i.test(message)) {
-    const reviewedOption = (reviewedPolicy.options || []).find((option) => /reviewed/i.test(option.label || option.value));
-    updates.set(reviewedPolicy.id, {
-      field: reviewedPolicy,
-      value: reviewedPolicy.field_type === "checkbox" ? "true" : reviewedOption?.label || "I have reviewed the Background Check Policy",
-      question: reviewedPolicy.group_label || reviewedPolicy.label,
-    });
-  }
-
+  // Explicitly named visible options for radio/select questions.
   const directOptionMatches = [];
   const shortReply = normalizedChoiceMessage.split(" ").length <= 5;
   for (const field of fields.filter((candidate) => ["radio", "select"].includes(candidate.field_type))) {
+    if (assignments.has(field.id)) continue;
     for (const option of field.options || []) {
       const visibleOption = String(option.label || option.value || "").trim();
       if (!visibleOption) continue;
@@ -2785,57 +2941,111 @@ async function executeExplicitPageAnswers(message) {
         `(?:\\banswer\\s*(?:is|:|-)?\\s*["']?${escaped}\\b|\\b${escaped}\\b\\s+is\\s+the\\s+answer\\b|\\b(?:set|select|choose|use)\\s+(?:it\\s+to\\s+)?${escaped}\\b)`,
         "i",
       ).test(message);
-      const exactShortReply = shortReply && normalizeQuestion(message) === normalizeQuestion(visibleOption);
+      // A bare option name may bind only when nothing else has matched;
+      // once a focused or canonical assignment exists it must not fan out.
+      const bareAllowed = shortReply && !assignments.size;
+      const exactShortReply = bareAllowed && normalizeQuestion(message) === normalizeQuestion(visibleOption);
       const normalizedVisibleOption = normalizeChoicePhrase(visibleOption);
-      const correctedShortReply = shortReply && normalizedChoiceMessage === normalizedVisibleOption;
+      const correctedShortReply = bareAllowed && normalizedChoiceMessage === normalizedVisibleOption;
       const valueStatement = new RegExp(
         `\\b(?:it|answer)\\s+is\\s+${escapeRegularExpression(normalizedVisibleOption)}\\b`,
         "i",
       ).test(normalizedChoiceMessage);
       if (explicitlyNamed || exactShortReply || correctedShortReply || valueStatement) {
-        directOptionMatches.push({ field, value: visibleOption });
+        directOptionMatches.push({ field, value: visibleOption, bare: exactShortReply || correctedShortReply });
       }
     }
   }
   const uniqueDirectFields = new Map();
   for (const match of directOptionMatches) {
     if (!uniqueDirectFields.has(match.field.id)) uniqueDirectFields.set(match.field.id, match);
-    else uniqueDirectFields.set(match.field.id, null);
   }
-  const unambiguousDirect = [...uniqueDirectFields.values()].filter(Boolean);
-  if (unambiguousDirect.length === 1) {
-    const { field, value } = unambiguousDirect[0];
-    updates.set(field.id, {
-      field,
-      value,
-      question: field.group_label || field.label,
-    });
-  }
-
-  if (!updates.size) return false;
-  const savedGroups = new Set();
-  for (const update of updates.values()) {
-    const { field, value, question } = update;
-    if (field.field_type === "checkbox") {
-      if (savedGroups.has(question)) continue;
-      savedGroups.add(question);
-      const choices = [...(selectedCheckboxes.get(question) || [])];
-      await savePageAnswer(question, choices.join(", "));
-    } else {
-      await savePageAnswer(question, value);
+  const distinctMatches = [...uniqueDirectFields.values()];
+  if (distinctMatches.length === 1) {
+    const { field, value } = distinctMatches[0];
+    assign(field, value, field.group_label || field.label);
+  } else if (distinctMatches.length > 1 && !assignments.size) {
+    // A bare reply that fits several questions must be disambiguated by the
+    // user, unless the guided questionnaire is already holding one question.
+    if (!(pendingVisible && distinctMatches.every((match) => match.bare))) {
+      ambiguous.push(...new Set(distinctMatches.map((match) => match.field.group_label || match.field.label)));
     }
   }
-  state.answers = await api("/api/answers");
-  await replanForm();
-  const result = await fillForm({ throwOnError: true });
-  const filledIds = new Set(result?.filled_ids || []);
-  const verified = [...updates.keys()].filter((fieldId) => filledIds.has(fieldId));
-  const unverified = [...updates.values()].filter((update) => !filledIds.has(update.field.id));
-  appendMessage(
-    `Saved ${updates.size} explicit page answer${updates.size === 1 ? "" : "s"} and verified ${verified.length} on the page.${unverified.length ? ` Still not applied: ${unverified.map((update) => update.question).join("; ")}.` : ""}`,
-    "agent-message",
-  );
-  return true;
+
+  return {
+    assignments: [...assignments.values()],
+    canonical,
+    ambiguous,
+    actionable: looksLikeFormActionRequest(message) || assignments.size > 0,
+  };
+}
+
+async function saveCanonicalProfileFact(key, value) {
+  if (!state.profile) return;
+  state.profile = { ...state.profile, [key]: value };
+  state.profile = await api("/api/profile", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(state.profile),
+  });
+}
+
+async function executeExplicitPageAnswers(message) {
+  if (!state.localMode) return false;
+  const scannedOptions = (state.formScan?.fields || []).flatMap((field) => field.options || []);
+  const normalizedChoiceMessage = normalizeChoicePhrase(message);
+  const knownVisibleOption = scannedOptions.some((option) => (
+    normalizeChoicePhrase(option.label || option.value) === normalizedChoiceMessage
+  ));
+  const possibleOptionReply = normalizeQuestion(message).split(" ").length <= 5
+    && knownVisibleOption
+    && !looksLikeChatQuestion(message);
+  if (!looksLikeFormActionRequest(message) && !possibleOptionReply) return false;
+  await scanForm({ throwOnError: true });
+  const fields = state.formScan?.fields || [];
+
+  if (/\b(?:add|apply|fill|put)\s+(?:that|it)\s+(?:in|to|on)\s+(?:the\s+)?(?:job\s+)?(?:application|form|page)\b/i.test(message) && state.lastPageAnswer) {
+    await replanForm();
+    const result = await fillForm({ throwOnError: true });
+    appendMessage(
+      `Reapplied “${state.lastPageAnswer.answer}” for “${state.lastPageAnswer.question}”. ${result?.filled || 0} mapped fields were verified on the page.`,
+      "agent-message",
+    );
+    return true;
+  }
+
+  const focusedLabel = state.pendingAgentQuestion || state.lastReferencedFieldLabel || "";
+  const parsed = parseScopedFieldIntents(message, fields, focusedLabel, {
+    pendingVisible: pendingQuestionVisible(),
+  });
+  if (parsed.ambiguous.length) {
+    appendMessage(
+      `That answer matches more than one visible question, so I did not change the page. Which question do you mean?\n${parsed.ambiguous.map((label) => `- ${label}`).join("\n")}`,
+      "agent-message",
+    );
+    return true;
+  }
+  if (!parsed.assignments.length) return false;
+  // The user's own statement is authoritative for canonical profile facts,
+  // even when the page control cannot confirm the visible change.
+  for (const fact of parsed.canonical) {
+    await saveCanonicalProfileFact(fact.key, fact.value);
+  }
+  if (parsed.assignments.length === 1) {
+    state.lastReferencedFieldLabel = parsed.assignments[0].question;
+  }
+  return executeFormAgentDecision(message, {
+    handled: true,
+    actions: parsed.assignments.map((assignment) => ({
+      field_id: assignment.field.id,
+      value: assignment.value,
+      grounding: "user_message",
+      confidence: 1,
+      remember: true,
+    })),
+    question: "",
+    explanation: "Applied your instruction to the matching visible question(s).",
+  });
 }
 
 async function handlePageActionCommand(message) {

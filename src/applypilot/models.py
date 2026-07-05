@@ -314,6 +314,10 @@ class FormField(BaseModel):
     ] = "text"
     required: bool = False
     value: str = ""
+    value_label: str = ""
+    value_evidence: str = ""
+    state_readable: bool = True
+    fingerprint: str = ""
     options: list[FormOption] = Field(default_factory=list)
 
 

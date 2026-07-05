@@ -47,7 +47,12 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "frameRetry: true" in script
     assert "I couldn't continue the form scan" in script
     assert "executeExplicitPageAnswers(message)" in script
-    assert "and verified ${verified.length} on the page" in script
+    assert "parseScopedFieldIntents" in script
+    assert "looksLikeFormActionRequest" in script
+    assert "saveCanonicalProfileFact" in script
+    assert "Attempted, but not confirmed by the page" in script
+    assert "matches more than one visible question" in script
+    assert "never generic chat prose" in script
     assert "Preview generated cover letter" in script
     assert 'elements.chatInput.addEventListener("keydown"' in script
     assert "elements.chatForm.requestSubmit()" in script
@@ -92,6 +97,17 @@ def test_simplified_sidepanel_has_unique_required_targets() -> None:
     assert "exactReferencedGroups.length === 1" in script
     assert ".slice(0, 1)" in script
     assert "state.pendingAgentQuestion = groups[0].label" in script
-    assert "control.dataset.applypilotSelected" in worker
-    assert "radioGroupControls.find(choiceLooksSelected)" in worker
+
+    # Verification must come from page-owned state observed by a fresh scan,
+    # never from a marker the extension wrote itself.
+    assert "applypilotSelected" not in worker
+    assert "async function runFormPass" in worker
+    assert "const selectionState" in worker
+    assert "state_readable" in worker
+    assert "value_evidence" in worker
+    assert "fingerprint" in worker
+    assert '"unverified"' in worker
+    assert "Already selected on the page; no click was needed." in worker
+    assert "A fresh scan shows" in worker
+    assert "results" in worker
 

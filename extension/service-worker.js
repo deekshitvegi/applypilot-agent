@@ -58,13 +58,13 @@ async function captureActiveJob() {
 
 async function scanActiveForm() {
   const tab = await getActiveHttpTab();
-  const frames = await runInAllFrames(tab.id, extractFormFields);
+  const frames = await runInAllFrames(tab.id, runFormPass, [null]);
   const best = frames
-    .filter((frame) => Array.isArray(frame.result))
-    .sort((left, right) => right.result.length - left.result.length)[0];
+    .filter((frame) => Array.isArray(frame.result?.fields))
+    .sort((left, right) => right.result.fields.length - left.result.fields.length)[0];
   return {
     page_url: tab.url,
-    fields: best?.result || [],
+    fields: best?.result?.fields || [],
     frame_id: best?.frame_id ?? 0,
     adapter: detectAdapterFromUrl(tab.url),
   };
@@ -72,7 +72,7 @@ async function scanActiveForm() {
 
 async function fillActiveForm(actions, frameId) {
   const tab = await getActiveHttpTab();
-  return runInFrame(tab.id, frameId, applyFormFillPlan, [actions]);
+  return runInFrame(tab.id, frameId, runFormPass, [actions || []]);
 }
 
 async function advanceActiveApplication(frameId) {
@@ -486,30 +486,59 @@ function clickPlannedPageAction(actionId, expectedLabel, expectedKind) {
   return { clicked: true, label };
 }
 
-async function extractFormFields() {
-  const host = location.hostname.toLowerCase();
-  let root;
-  if (host.includes("linkedin.com")) {
-    root = document.querySelector(
-      ".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal']",
-    );
-    if (!root) return [];
-  } else if (host.includes("greenhouse.io")) {
-    root = document.querySelector("#application_form, main") || document;
-  } else if (host.includes("lever.co")) {
-    root = document.querySelector(".application-form, main") || document;
-  } else if (host.includes("myworkdayjobs.com")) {
-    root = document.querySelector("[data-automation-id='applicationPage'], main") || document;
-  } else {
-    root = document.querySelector("main, [role='main']") || document;
-  }
-  const roots = [root];
-  for (let index = 0; index < roots.length; index += 1) {
-    [...roots[index].querySelectorAll("*")].forEach((element) => {
-      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
-    });
-  }
-  const queryAll = (selector) => roots.flatMap((candidate) => [...candidate.querySelectorAll(selector)]);
+async function runFormPass(actions) {
+  const fillMode = Array.isArray(actions);
+  const cleanText = (value) => String(value || "").replace(/\s+/g, " ").replace(/\s*\*+\s*$/, "").trim();
+  const normalizeText = (value) => String(value || "")
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const semanticChoice = (value) => {
+    const normalized = normalizeText(value);
+    const tokens = new Set(normalized.split(" "));
+    if (normalized === "true" || normalized === "1" || tokens.has("yes")) return "yes";
+    if (normalized === "false" || normalized === "0" || tokens.has("no") || normalized.includes("do not")) return "no";
+    return normalized;
+  };
+  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const dispatch = (control) => {
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+    control.dispatchEvent(new Event("blur", { bubbles: true }));
+  };
+
+  const collectRoots = () => {
+    const host = location.hostname.toLowerCase();
+    let scope;
+    if (host.includes("linkedin.com")) {
+      scope = document.querySelector(".jobs-easy-apply-modal, [data-test-modal-id='easy-apply-modal']");
+      if (!scope) return [];
+    } else if (host.includes("greenhouse.io")) {
+      scope = document.querySelector("#application_form, main") || document;
+    } else if (host.includes("lever.co")) {
+      scope = document.querySelector(".application-form, main") || document;
+    } else if (host.includes("myworkdayjobs.com")) {
+      scope = document.querySelector("[data-automation-id='applicationPage'], main") || document;
+    } else {
+      scope = document.querySelector("main, [role='main']") || document;
+    }
+    const roots = [scope];
+    for (let index = 0; index < roots.length; index += 1) {
+      [...roots[index].querySelectorAll("*")].forEach((element) => {
+        if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+      });
+    }
+    return roots;
+  };
+
+  const elementVisible = (element) => {
+    if (!element) return false;
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+  };
+
   const isPlainChoiceButton = (control) => {
     if (control.tagName !== "BUTTON") return false;
     const label = String(control.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -523,55 +552,49 @@ async function extractFormFields() {
     }
     return false;
   };
-  const choiceLooksSelected = (control) => {
-    if (!control) return false;
-    const state = String(control.getAttribute("data-state") || "").toLowerCase();
-    const selected = String(control.getAttribute("data-selected") || "").toLowerCase();
-    const className = typeof control.className === "string" ? control.className : "";
-    return Boolean(
-      control.checked
-      || control.dataset.applypilotSelected === "true"
-      || control.getAttribute("aria-checked") === "true"
-      || control.getAttribute("aria-pressed") === "true"
-      || control.getAttribute("aria-selected") === "true"
-      || ["checked", "on", "selected", "active"].includes(state)
-      || ["true", "yes", "selected"].includes(selected)
-      || /(?:^|[\s_-])(?:selected|active|checked|chosen)(?:$|[\s_-])/i.test(className)
-      || (isPlainChoiceButton(control) && control.getRootNode()?.activeElement === control)
-    );
-  };
+
   const isYesNoBackingInput = (control) => {
     if (control.tagName !== "INPUT" || (control.type || "").toLowerCase() !== "checkbox") return false;
     const buttons = [...(control.parentElement?.querySelectorAll("button") || [])]
       .map((candidate) => String(candidate.textContent || "").trim().toLowerCase());
     return buttons.includes("yes") && buttons.includes("no");
   };
-  const elementVisible = (element) => {
-    if (!element) return false;
-    const style = getComputedStyle(element);
-    const rect = element.getBoundingClientRect();
-    return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
-  };
-  const controls = queryAll(
-    "input, textarea, select, button, [role='combobox'], [role='radio'], [role='checkbox'], input[aria-haspopup='listbox']",
-  ).filter((control) => {
-    if (isYesNoBackingInput(control)) return false;
-    const type = (control.type || "").toLowerCase();
-    const customCombobox = control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox";
-    const customChoice = ["radio", "checkbox"].includes(control.getAttribute("role"))
-      || control.hasAttribute("aria-pressed")
-      || control.hasAttribute("aria-checked")
-      || isPlainChoiceButton(control);
-    const labelledControlVisible = ["checkbox", "radio"].includes(type)
-      && [...(control.labels || [])].some(elementVisible);
-    const visible = type === "file" || elementVisible(control) || labelledControlVisible;
-    const popupChild = control.closest("[role='listbox'], [role='menu'], [data-radix-popper-content-wrapper]");
-    return visible && !popupChild && !control.disabled && (
-      customCombobox || customChoice || !["hidden", "submit", "button", "reset", "image"].includes(type)
-    );
-  });
 
-  const cleanText = (value) => String(value || "").replace(/\s+/g, " ").replace(/\s*\*+\s*$/, "").trim();
+  // Selected state must come from signals the page itself owns. ApplyPilot
+  // never writes checked, ARIA, data-state, data-selected, or class values,
+  // so a positive signal here reflects state the page framework accepted.
+  const selectionState = (control) => {
+    const channels = [];
+    let positive = false;
+    if (control instanceof HTMLInputElement && ["checkbox", "radio"].includes((control.type || "").toLowerCase())) {
+      channels.push("native");
+      positive = positive || control.checked;
+    }
+    for (const attribute of ["aria-checked", "aria-pressed", "aria-selected"]) {
+      if (control.hasAttribute(attribute)) {
+        channels.push("aria");
+        positive = positive || control.getAttribute(attribute) === "true";
+      }
+    }
+    if (control.hasAttribute("data-state")) {
+      channels.push("data");
+      positive = positive || ["checked", "on", "selected", "active", "true"]
+        .includes(String(control.getAttribute("data-state")).toLowerCase());
+    }
+    if (control.hasAttribute("data-selected")) {
+      channels.push("data");
+      positive = positive || ["true", "yes", "selected", "on"]
+        .includes(String(control.getAttribute("data-selected")).toLowerCase());
+    }
+    const className = typeof control.className === "string" ? control.className : "";
+    if (/(?:^|[\s_-])(?:selected|active|checked|chosen)(?:$|[\s_-])/i.test(className)) {
+      channels.push("class");
+      positive = true;
+    }
+    if (!channels.length) return { channel: "", selected: null };
+    return { channel: channels[0], selected: positive };
+  };
+
   const individualChoiceLabel = (control) => {
     const explicit = control.id
       ? control.getRootNode()?.querySelector?.(`label[for="${CSS.escape(control.id)}"]`)?.textContent
@@ -592,6 +615,39 @@ async function extractFormFields() {
       || control.value,
     );
   };
+
+  const optionLabelOf = (member) => cleanText(
+    member.dataset?.applypilotOptionLabel || individualChoiceLabel(member) || member.value,
+  );
+
+  const backingYesNoFor = (groupControls) => {
+    for (const member of groupControls) {
+      let container = member.parentElement;
+      for (let depth = 0; container && depth < 4; depth += 1, container = container.parentElement) {
+        const backing = [...container.querySelectorAll('input[type="checkbox"]')].find((candidate) => (
+          !groupControls.includes(candidate) && !elementVisible(candidate) && isYesNoBackingInput(candidate)
+        ));
+        if (backing) return backing;
+      }
+    }
+    return null;
+  };
+
+  const groupSelection = (groupControls) => {
+    let readable = false;
+    for (const member of groupControls) {
+      const state = selectionState(member);
+      if (state.selected === true) return { member, evidence: state.channel, readable: true };
+      if (state.channel && state.channel !== "class") readable = true;
+    }
+    const backing = backingYesNoFor(groupControls);
+    if (backing?.checked) {
+      const yes = groupControls.find((member) => semanticChoice(optionLabelOf(member)) === "yes");
+      if (yes) return { member: yes, evidence: "backing-input", readable: true };
+    }
+    return { member: null, evidence: "", readable };
+  };
+
   const labelledByText = (control) => cleanText(
     (control.getAttribute("aria-labelledby") || "")
       .split(/\s+/)
@@ -712,245 +768,496 @@ async function extractFormFields() {
     });
   };
 
-  const fields = [];
-  const seenRadioGroups = new Set();
-  for (const [index, control] of controls.entries()) {
-    const applypilotId = `ap-${index}`;
-    const explicitLabel = control.id
-      ? control.getRootNode()?.querySelector?.(`label[for="${CSS.escape(control.id)}"]`)?.textContent
-        || document.querySelector(`label[for="${CSS.escape(control.id)}"]`)?.textContent
-      : "";
-    const nativeLabels = [...(control.labels || [])].map((label) => label.textContent).join(" ");
-    const wrappingLabel = control.closest("label")?.textContent || "";
-    const legend = control.closest("fieldset")?.querySelector("legend")?.textContent || "";
-    const rawLabelParts = [
-      legend,
-      labelledByText(control),
-      explicitLabel,
-      nativeLabels,
-      wrappingLabel,
-      nearbyLabel(control),
-    ];
-    const labelParts = rawLabelParts.map(cleanText).filter((part, partIndex, parts) => (
-      part && part.length <= 240 && parts.findIndex((value) => value.toLowerCase() === part.toLowerCase()) === partIndex
-    ));
-    const tag = control.tagName.toLowerCase();
-    const customRadio = control.getAttribute("role") === "radio"
-      || control.hasAttribute("aria-pressed")
-      || isPlainChoiceButton(control);
-    const customCheckbox = control.getAttribute("role") === "checkbox"
-      || (control.hasAttribute("aria-checked") && !customRadio);
-    let fieldType = customRadio
-      ? "radio"
-      : customCheckbox
-        ? "checkbox"
-      : tag === "textarea" ? "textarea" : tag === "select" || control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox" ? "select" : control.type || "text";
-    if (!["text", "email", "tel", "url", "number", "textarea", "select", "checkbox", "radio", "file", "password"].includes(fieldType)) {
-      fieldType = "other";
-    }
-    const fallbackLabel =
-      control.getAttribute("aria-label") ||
-      control.getAttribute("placeholder") ||
-      readableName(control);
-    const grouped = ["radio", "checkbox"].includes(fieldType)
-      ? groupQuestion(control)
-      : { label: "", required: false };
-    const groupedQuestion = grouped.label;
-    const optionLabel = individualChoiceLabel(control);
-    const normalizedGroupQuestion = cleanText(groupedQuestion).toLowerCase();
-    const radioGroupControls = fieldType === "radio"
-      ? queryAll('input[type="radio"], [role="radio"], button[aria-pressed], button').filter((candidate) => {
-          if (candidate.getRootNode() !== control.getRootNode()) return false;
-          if (candidate.tagName === "BUTTON" && !candidate.hasAttribute("aria-pressed") && !isPlainChoiceButton(candidate)) return false;
-          if (control.name) return candidate.name === control.name;
-          return normalizedGroupQuestion
-            && cleanText(groupQuestion(candidate).label).toLowerCase() === normalizedGroupQuestion;
-        })
-      : [];
-    const radioGroupKey = fieldType === "radio"
-      ? `${roots.indexOf(control.getRootNode())}:${control.name || normalizedGroupQuestion || applypilotId}`
-      : "";
-    if (radioGroupKey && seenRadioGroups.has(radioGroupKey)) continue;
-    if (radioGroupKey) seenRadioGroups.add(radioGroupKey);
-    control.dataset.applypilotId = applypilotId;
-    radioGroupControls.forEach((candidate) => {
-      candidate.dataset.applypilotId = applypilotId;
-      candidate.dataset.applypilotChoiceKind = "radio";
-      candidate.dataset.applypilotOptionLabel = individualChoiceLabel(candidate);
+  const discover = () => {
+    const roots = collectRoots();
+    if (!roots.length) return [];
+    const queryAll = (selector) => roots.flatMap((candidate) => [...candidate.querySelectorAll(selector)]);
+    const controls = queryAll(
+      "input, textarea, select, button, [role='combobox'], [role='radio'], [role='checkbox'], input[aria-haspopup='listbox']",
+    ).filter((control) => {
+      if (isYesNoBackingInput(control)) return false;
+      const type = (control.type || "").toLowerCase();
+      const customCombobox = control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox";
+      const customChoice = ["radio", "checkbox"].includes(control.getAttribute("role"))
+        || control.hasAttribute("aria-pressed")
+        || control.hasAttribute("aria-checked")
+        || isPlainChoiceButton(control);
+      const labelledControlVisible = ["checkbox", "radio"].includes(type)
+        && [...(control.labels || [])].some(elementVisible);
+      const visible = type === "file" || elementVisible(control) || labelledControlVisible;
+      const popupChild = control.closest("[role='listbox'], [role='menu'], [data-radix-popper-content-wrapper]");
+      return visible && !popupChild && !control.disabled && (
+        customCombobox || customChoice || !["hidden", "submit", "button", "reset", "image"].includes(type)
+      );
     });
-    const baseLabel = cleanText(fieldType === "radio"
-      ? groupedQuestion || legend || nearbyLabel(control) || fallbackLabel
-      : fieldType === "checkbox" && groupedQuestion
-        ? `${groupedQuestion} ${optionLabel}`
-        : labelledByText(control) || explicitLabel || nativeLabels ||
-          control.getAttribute("aria-label") || wrappingLabel || nearbyLabel(control) || fallbackLabel);
-    const instructions = fieldType === "textarea" ? nearbyInstructions(control) : "";
-    const label = cleanText(
-      instructions && !baseLabel.toLowerCase().includes(instructions.toLowerCase())
-        ? `${baseLabel} ${instructions}`
-        : baseLabel,
-    );
-    control.dataset.applypilotFieldLabel = label;
-    control.dataset.applypilotFieldType = fieldType;
-    radioGroupControls.forEach((candidate) => {
-      candidate.dataset.applypilotFieldLabel = label;
-      candidate.dataset.applypilotFieldType = fieldType;
-    });
-    let options = tag === "select"
-      ? [...control.options]
-          .filter((option) => option.value || option.textContent.trim())
-          .map((option) => ({ value: option.value, label: option.textContent.trim() }))
-      : [];
-    if (fieldType === "select" && tag !== "select") {
-      options = collectCustomOptions(control);
-    } else if (fieldType === "radio") {
-      options = radioGroupControls
-        .map((radio) => {
-          const option = radio.dataset.applypilotOptionLabel || individualChoiceLabel(radio);
-          const rawValue = cleanText(radio.value);
-          return {
-            value: !rawValue || rawValue.toLowerCase() === "on" ? option : rawValue,
-            label: option || rawValue,
-          };
-        })
-        .filter((option) => option.value || option.label);
-    } else if (fieldType === "checkbox" && groupedQuestion) {
-      options = queryAll('input[type="checkbox"], [role="checkbox"], button[aria-checked]')
-        .filter((candidate) => (
-          candidate.getRootNode() === control.getRootNode()
-          && groupQuestion(candidate).label === groupedQuestion
-        ))
-        .map((candidate) => {
-          const candidateLabel = individualChoiceLabel(candidate);
-          return { value: candidate.value || candidateLabel, label: candidateLabel };
-        })
-        .filter((option) => option.value || option.label);
-    }
 
-    const displayedValue = cleanText(
-      control.getAttribute("aria-valuetext") || control.getAttribute("data-value") ||
-      (fieldType === "select" && tag !== "select" ? control.textContent : ""),
-    );
-    const emptySelectValues = new Set(["select", "select...", "choose", "choose...", "please select"]);
-    const customValue = displayedValue.length <= 160 && !emptySelectValues.has(displayedValue.toLowerCase())
-      ? displayedValue
-      : "";
-    const requiredHint = grouped.required || rawLabelParts.some((part) => /\*/.test(String(part || "")));
-    const radioRequired = fieldType === "radio"
-      ? radioGroupControls.some((candidate) => (
-          candidate.required || candidate.getAttribute("aria-required") === "true"
-        ))
-      : false;
-    const selectedRadio = fieldType === "radio"
-      ? radioGroupControls.find(choiceLooksSelected)
-      : null;
-
-    fields.push({
-      id: applypilotId,
-      label: cleanText(label || fallbackLabel || `Unlabeled ${fieldType} field`),
-      group_label: groupedQuestion,
-      option_label: fieldType === "checkbox" ? optionLabel : "",
-      name: control.name || "",
-      field_type: fieldType,
-      required: control.required || control.getAttribute("aria-required") === "true" || radioRequired || requiredHint,
-      value: fieldType === "radio"
-        ? (selectedRadio
-            ? selectedRadio.dataset.applypilotOptionLabel || individualChoiceLabel(selectedRadio) || selectedRadio.value || "true"
-            : "")
-        : fieldType === "checkbox"
-          ? (choiceLooksSelected(control) ? control.value || optionLabel || "true" : "")
-        : control.value || customValue,
-      options,
-    });
-  }
-  return fields;
-}
-
-async function applyFormFillPlan(actions) {
-  let filled = 0;
-  const filledIds = [];
-  const errors = [];
-  const dispatch = (control) => {
-    control.dispatchEvent(new Event("input", { bubbles: true }));
-    control.dispatchEvent(new Event("change", { bubbles: true }));
-    control.dispatchEvent(new Event("blur", { bubbles: true }));
-  };
-
-  const roots = [document];
-  for (let index = 0; index < roots.length; index += 1) {
-    [...roots[index].querySelectorAll("*")].forEach((element) => {
-      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
-    });
-  }
-  const findControl = (fieldId) => roots
-    .map((root) => root.querySelector(`[data-applypilot-id="${CSS.escape(fieldId)}"]`))
-    .find(Boolean);
-  const queryAll = (selector) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
-  const normalizeChoice = (value) => String(value || "")
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-  const semanticChoice = (value) => {
-    const normalized = normalizeChoice(value);
-    const tokens = new Set(normalized.split(" "));
-    if (normalized === "true" || normalized === "1" || tokens.has("yes")) return "yes";
-    if (normalized === "false" || normalized === "0" || tokens.has("no") || normalized.includes("do not")) return "no";
-    return normalized;
-  };
-
-  for (const action of actions) {
-    const control = findControl(action.field_id);
-    if (!control || control.disabled) {
-      errors.push({ field_id: action.field_id, message: "The field is no longer available." });
-      continue;
-    }
-
-    const expectedLabel = normalizeChoice(action.expected_label);
-    const actualLabel = normalizeChoice(control.dataset.applypilotFieldLabel);
-    const expectedType = normalizeChoice(action.expected_type);
-    const actualType = normalizeChoice(control.dataset.applypilotFieldType);
-    if ((expectedLabel && expectedLabel !== actualLabel) || (expectedType && expectedType !== actualType)) {
-      errors.push({
-        field_id: action.field_id,
-        message: "The page changed and this field no longer matches the planned question.",
+    const records = [];
+    const seenRadioGroups = new Set();
+    const fingerprintCounts = new Map();
+    for (const [index, control] of controls.entries()) {
+      const applypilotId = `ap-${index}`;
+      const explicitLabel = control.id
+        ? control.getRootNode()?.querySelector?.(`label[for="${CSS.escape(control.id)}"]`)?.textContent
+          || document.querySelector(`label[for="${CSS.escape(control.id)}"]`)?.textContent
+        : "";
+      const nativeLabels = [...(control.labels || [])].map((label) => label.textContent).join(" ");
+      const wrappingLabel = control.closest("label")?.textContent || "";
+      const legend = control.closest("fieldset")?.querySelector("legend")?.textContent || "";
+      const rawLabelParts = [
+        legend,
+        labelledByText(control),
+        explicitLabel,
+        nativeLabels,
+        wrappingLabel,
+        nearbyLabel(control),
+      ];
+      const tag = control.tagName.toLowerCase();
+      const customRadio = control.getAttribute("role") === "radio"
+        || control.hasAttribute("aria-pressed")
+        || isPlainChoiceButton(control);
+      const customCheckbox = control.getAttribute("role") === "checkbox"
+        || (control.hasAttribute("aria-checked") && !customRadio);
+      let fieldType = customRadio
+        ? "radio"
+        : customCheckbox
+          ? "checkbox"
+        : tag === "textarea" ? "textarea" : tag === "select" || control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox" ? "select" : control.type || "text";
+      if (!["text", "email", "tel", "url", "number", "textarea", "select", "checkbox", "radio", "file", "password"].includes(fieldType)) {
+        fieldType = "other";
+      }
+      const fallbackLabel =
+        control.getAttribute("aria-label") ||
+        control.getAttribute("placeholder") ||
+        readableName(control);
+      const grouped = ["radio", "checkbox"].includes(fieldType)
+        ? groupQuestion(control)
+        : { label: "", required: false };
+      const groupedQuestion = grouped.label;
+      const optionLabel = individualChoiceLabel(control);
+      const normalizedGroupQuestion = cleanText(groupedQuestion).toLowerCase();
+      const radioGroupControls = fieldType === "radio"
+        ? queryAll('input[type="radio"], [role="radio"], button[aria-pressed], button').filter((candidate) => {
+            if (candidate.getRootNode() !== control.getRootNode()) return false;
+            if (candidate.tagName === "BUTTON" && !candidate.hasAttribute("aria-pressed") && !isPlainChoiceButton(candidate)) return false;
+            if (control.name) return candidate.name === control.name;
+            return normalizedGroupQuestion
+              && cleanText(groupQuestion(candidate).label).toLowerCase() === normalizedGroupQuestion;
+          })
+        : [];
+      const radioGroupKey = fieldType === "radio"
+        ? `${roots.indexOf(control.getRootNode())}:${control.name || normalizedGroupQuestion || applypilotId}`
+        : "";
+      if (radioGroupKey && seenRadioGroups.has(radioGroupKey)) continue;
+      if (radioGroupKey) seenRadioGroups.add(radioGroupKey);
+      control.dataset.applypilotId = applypilotId;
+      radioGroupControls.forEach((candidate) => {
+        candidate.dataset.applypilotId = applypilotId;
+        candidate.dataset.applypilotChoiceKind = "radio";
+        candidate.dataset.applypilotOptionLabel = individualChoiceLabel(candidate);
       });
+      const baseLabel = cleanText(fieldType === "radio"
+        ? groupedQuestion || legend || nearbyLabel(control) || fallbackLabel
+        : fieldType === "checkbox" && groupedQuestion
+          ? `${groupedQuestion} ${optionLabel}`
+          : labelledByText(control) || explicitLabel || nativeLabels ||
+            control.getAttribute("aria-label") || wrappingLabel || nearbyLabel(control) || fallbackLabel);
+      const instructions = fieldType === "textarea" ? nearbyInstructions(control) : "";
+      const label = cleanText(
+        instructions && !baseLabel.toLowerCase().includes(instructions.toLowerCase())
+          ? `${baseLabel} ${instructions}`
+          : baseLabel,
+      );
+      control.dataset.applypilotFieldLabel = label;
+      control.dataset.applypilotFieldType = fieldType;
+      radioGroupControls.forEach((candidate) => {
+        candidate.dataset.applypilotFieldLabel = label;
+        candidate.dataset.applypilotFieldType = fieldType;
+      });
+      let options = tag === "select"
+        ? [...control.options]
+            .filter((option) => option.value || option.textContent.trim())
+            .map((option) => ({ value: option.value, label: option.textContent.trim() }))
+        : [];
+      if (fieldType === "select" && tag !== "select") {
+        options = collectCustomOptions(control);
+      } else if (fieldType === "radio") {
+        options = radioGroupControls
+          .map((radio) => {
+            const option = radio.dataset.applypilotOptionLabel || individualChoiceLabel(radio);
+            const rawValue = cleanText(radio.value);
+            return {
+              value: !rawValue || rawValue.toLowerCase() === "on" ? option : rawValue,
+              label: option || rawValue,
+            };
+          })
+          .filter((option) => option.value || option.label);
+      } else if (fieldType === "checkbox" && groupedQuestion) {
+        options = queryAll('input[type="checkbox"], [role="checkbox"], button[aria-checked]')
+          .filter((candidate) => (
+            candidate.getRootNode() === control.getRootNode()
+            && groupQuestion(candidate).label === groupedQuestion
+          ))
+          .map((candidate) => {
+            const candidateLabel = individualChoiceLabel(candidate);
+            return { value: candidate.value || candidateLabel, label: candidateLabel };
+          })
+          .filter((option) => option.value || option.label);
+      }
+
+      const displayedValue = cleanText(
+        control.getAttribute("aria-valuetext") || control.getAttribute("data-value") ||
+        (fieldType === "select" && tag !== "select" ? control.textContent : ""),
+      );
+      const emptySelectValues = new Set(["select", "select...", "choose", "choose...", "please select"]);
+      const customValue = displayedValue.length <= 160 && !emptySelectValues.has(displayedValue.toLowerCase())
+        ? displayedValue
+        : "";
+      const requiredHint = grouped.required || rawLabelParts.some((part) => /\*/.test(String(part || "")));
+      const radioRequired = fieldType === "radio"
+        ? radioGroupControls.some((candidate) => (
+            candidate.required || candidate.getAttribute("aria-required") === "true"
+          ))
+        : false;
+
+      let value = "";
+      let valueLabel = "";
+      let valueEvidence = "";
+      let stateReadable = true;
+      if (fieldType === "radio") {
+        const groupMembers = radioGroupControls.length ? radioGroupControls : [control];
+        const selection = groupSelection(groupMembers);
+        stateReadable = selection.readable;
+        if (selection.member) {
+          value = optionLabelOf(selection.member) || selection.member.value || "true";
+          valueLabel = value;
+          valueEvidence = selection.evidence;
+        }
+      } else if (fieldType === "checkbox") {
+        const state = selectionState(control);
+        stateReadable = Boolean(state.channel && state.channel !== "class");
+        if (state.selected === true) {
+          value = control.value || optionLabel || "true";
+          valueLabel = optionLabel || value;
+          valueEvidence = state.channel;
+        }
+      } else if (fieldType === "select" && tag === "select") {
+        value = control.value;
+        valueLabel = control.selectedOptions?.[0]?.textContent?.trim() || "";
+        valueEvidence = "native";
+      } else if (fieldType === "select") {
+        value = control.value || customValue;
+        valueLabel = customValue;
+        valueEvidence = customValue || control.value ? "displayed" : "";
+      } else {
+        value = control.value || customValue;
+        valueLabel = value;
+        valueEvidence = "native";
+      }
+
+      const fingerprintBase = [
+        fieldType,
+        normalizeText(groupedQuestion || label),
+        fieldType === "checkbox" ? normalizeText(optionLabel) : "",
+        ["radio", "checkbox", "select"].includes(fieldType)
+          ? options.map((option) => normalizeText(option.label || option.value)).sort().join("|")
+          : "",
+        /^ap-\d+$/.test(control.name || "") ? "" : normalizeText(control.name || ""),
+      ].join("::");
+      const occurrence = fingerprintCounts.get(fingerprintBase) || 0;
+      fingerprintCounts.set(fingerprintBase, occurrence + 1);
+      const fingerprint = occurrence ? `${fingerprintBase}#${occurrence + 1}` : fingerprintBase;
+      control.dataset.applypilotFingerprint = fingerprint;
+
+      records.push({
+        control,
+        groupControls: radioGroupControls,
+        field: {
+          id: applypilotId,
+          label: cleanText(label || fallbackLabel || `Unlabeled ${fieldType} field`),
+          group_label: groupedQuestion,
+          option_label: fieldType === "checkbox" ? optionLabel : "",
+          name: control.name || "",
+          field_type: fieldType,
+          required: control.required || control.getAttribute("aria-required") === "true" || radioRequired || requiredHint,
+          value,
+          value_label: valueLabel,
+          value_evidence: valueEvidence,
+          state_readable: stateReadable,
+          fingerprint,
+          options,
+        },
+      });
+    }
+    return records;
+  };
+
+  const records = discover();
+  if (!fillMode) return { fields: records.map((record) => record.field) };
+
+  const resolveByFingerprint = (fingerprint) => (
+    fingerprint ? discover().find((record) => record.field.fingerprint === fingerprint) || null : null
+  );
+
+  const findRecord = (action) => {
+    const byId = records.find((record) => record.field.id === action.field_id);
+    if (byId) {
+      const fingerprintOk = !action.fingerprint || byId.field.fingerprint === action.fingerprint;
+      const expectedLabel = normalizeText(action.expected_label);
+      const expectedType = normalizeText(action.expected_type);
+      const expectedOk = (!expectedLabel || expectedLabel === normalizeText(byId.field.label))
+        && (!expectedType || expectedType === normalizeText(byId.field.field_type));
+      if (fingerprintOk && expectedOk && byId.control.isConnected) return byId;
+    }
+    return resolveByFingerprint(action.fingerprint);
+  };
+
+  const findMember = (groupControls, value) => {
+    const target = normalizeText(value);
+    const exact = groupControls.find((member) => (
+      [member.value, optionLabelOf(member), member.getAttribute("aria-label") || ""]
+        .some((text) => normalizeText(text) === target && target)
+    ));
+    if (exact) return exact;
+    const semanticTarget = semanticChoice(value);
+    return groupControls.find((member) => (
+      [member.value, optionLabelOf(member), member.getAttribute("aria-label") || ""]
+        .some((text) => normalizeText(text) && semanticChoice(text) === semanticTarget)
+    ));
+  };
+
+  const desiredCheckboxState = (value, field) => {
+    const normalized = normalizeText(value);
+    if (["true", "yes", "1", "on"].includes(normalized)) return true;
+    if (["false", "no", "0", "off", ""].includes(normalized)) return false;
+    const optionLabel = normalizeText(field.option_label || field.label);
+    return Boolean(optionLabel) && (
+      optionLabel === normalized || optionLabel.includes(normalized) || normalized.includes(optionLabel)
+    );
+  };
+
+  const valueMatches = (field, requested) => {
+    if (field.field_type === "checkbox") {
+      return Boolean(field.value) === desiredCheckboxState(requested, field);
+    }
+    if (["radio", "select"].includes(field.field_type)) {
+      const observedTexts = [field.value, field.value_label].filter(Boolean);
+      if (!observedTexts.length) return false;
+      const requestedOption = (field.options || []).find((option) => (
+        [option.value, option.label].some((text) => (
+          normalizeText(text) === normalizeText(requested)
+          || (normalizeText(text) && semanticChoice(text) === semanticChoice(requested))
+        ))
+      ));
+      return observedTexts.some((text) => (
+        normalizeText(text) === normalizeText(requested)
+        || semanticChoice(text) === semanticChoice(requested)
+        || (requestedOption && [requestedOption.value, requestedOption.label].some((optionText) => (
+          normalizeText(optionText) && normalizeText(optionText) === normalizeText(text)
+        )))
+      ));
+    }
+    if (field.field_type === "number") {
+      return Number.parseFloat(field.value) === Number.parseFloat(requested);
+    }
+    const observed = String(field.value || "");
+    const target = String(requested || "");
+    if (observed.trim() === target.trim()) return true;
+    if (normalizeText(observed) && normalizeText(observed) === normalizeText(target)) return true;
+    if (field.field_type === "tel") {
+      const digits = (text) => text.replace(/\D+/g, "");
+      return Boolean(digits(observed)) && digits(observed) === digits(target);
+    }
+    return false;
+  };
+
+  const observeGroupSelection = async (record, desiredLabel, timeoutMs = 1600) => {
+    let group = record.groupControls.length ? record.groupControls : [record.control];
+    const started = Date.now();
+    let selection = groupSelection(group);
+    while (Date.now() - started < timeoutMs) {
+      if (!group.every((member) => member.isConnected)) {
+        const fresh = resolveByFingerprint(record.field.fingerprint);
+        if (!fresh) break;
+        group = fresh.groupControls.length ? fresh.groupControls : [fresh.control];
+      }
+      selection = groupSelection(group);
+      if (selection.member && normalizeText(optionLabelOf(selection.member)) === desiredLabel) {
+        return { ...selection, group };
+      }
+      await wait(100);
+    }
+    return { ...selection, group };
+  };
+
+  const results = [];
+  for (const action of actions) {
+    const requested = String(action.value ?? "");
+    const result = {
+      field_id: action.field_id,
+      requested_value: requested,
+      status: "failed",
+      observed_value: "",
+      evidence: "",
+      fingerprint: action.fingerprint || "",
+      message: "",
+    };
+    results.push(result);
+    const record = findRecord(action);
+    if (!record || record.control.disabled) {
+      result.message = "The field is no longer available on the page.";
       continue;
     }
+    result.fingerprint = record.field.fingerprint;
+    const control = record.control;
+    const fieldType = record.field.field_type;
 
     try {
-      const type = control.getAttribute("role") === "radio" || control.hasAttribute("aria-pressed")
-        ? "radio"
-        : control.dataset.applypilotChoiceKind === "radio"
-          ? "radio"
-        : control.getAttribute("role") === "checkbox" || control.hasAttribute("aria-checked")
-          ? "checkbox"
-        : (control.type || control.tagName).toLowerCase();
-      if (type === "file" || type === "password") continue;
-      if (
-        (control.getAttribute("role") === "combobox" || control.getAttribute("aria-haspopup") === "listbox") &&
-        control.tagName !== "SELECT"
-      ) {
+      if (fieldType === "file" || fieldType === "password") {
+        result.status = "skipped";
+        result.message = fieldType === "file"
+          ? "File fields are attached separately."
+          : "Password fields are never filled.";
+        continue;
+      }
+      if (fieldType === "radio") {
+        const group = record.groupControls.length ? record.groupControls : [control];
+        const desired = findMember(group, requested);
+        if (!desired) {
+          result.message = `No visible option matched "${requested}".`;
+          continue;
+        }
+        const desiredLabel = normalizeText(optionLabelOf(desired));
+        const before = groupSelection(group);
+        if (before.member && normalizeText(optionLabelOf(before.member)) === desiredLabel) {
+          result.status = "verified";
+          result.evidence = before.evidence;
+          result.observed_value = optionLabelOf(before.member);
+          result.message = "Already selected on the page; no click was needed.";
+          continue;
+        }
+        desired.click();
+        const observed = await observeGroupSelection(record, desiredLabel);
+        if (observed.member && normalizeText(optionLabelOf(observed.member)) === desiredLabel) {
+          result.status = "verified";
+          result.evidence = observed.evidence;
+          result.observed_value = optionLabelOf(observed.member);
+        } else if (observed.readable && desired instanceof HTMLInputElement) {
+          const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
+          if (descriptor?.set) descriptor.set.call(desired, true);
+          else desired.checked = true;
+          dispatch(desired);
+          const retried = groupSelection(observed.group);
+          if (retried.member && normalizeText(optionLabelOf(retried.member)) === desiredLabel) {
+            result.status = "verified";
+            result.evidence = retried.evidence;
+            result.observed_value = optionLabelOf(retried.member);
+          } else {
+            result.message = `The page did not accept "${requested}" for this question.`;
+          }
+        } else if (observed.readable) {
+          result.message = observed.member
+            ? `The page selected "${optionLabelOf(observed.member)}" instead of "${requested}".`
+            : `The page did not mark "${requested}" as selected.`;
+        } else {
+          result.status = "unverified";
+          result.message = "The option was clicked, but this control exposes no page-owned selected state to confirm it.";
+        }
+        continue;
+      }
+      if (fieldType === "checkbox") {
+        const desired = desiredCheckboxState(requested, record.field);
+        const before = selectionState(control);
+        const readable = Boolean(before.channel && before.channel !== "class");
+        if (readable && before.selected === desired) {
+          result.status = "verified";
+          result.evidence = before.channel;
+          result.observed_value = desired ? (record.field.option_label || "true") : "";
+          result.message = "Already in the requested state; no click was needed.";
+          continue;
+        }
+        if (!readable && !desired) {
+          result.status = "unverified";
+          result.message = "This control exposes no page-owned state, so clearing it could not be confirmed safely.";
+          continue;
+        }
+        control.click();
+        const started = Date.now();
+        let after = selectionState(control);
+        while (Date.now() - started < 1600) {
+          if (!control.isConnected) break;
+          after = selectionState(control);
+          if (after.channel && after.selected === desired) break;
+          await wait(100);
+        }
+        if (after.channel && after.selected === desired) {
+          result.status = "verified";
+          result.evidence = after.channel;
+          result.observed_value = desired ? (record.field.option_label || "true") : "";
+          continue;
+        }
+        if (control instanceof HTMLInputElement) {
+          if (control.labels?.[0] && selectionState(control).selected !== desired) control.labels[0].click();
+          if (selectionState(control).selected !== desired) {
+            const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
+            if (descriptor?.set) descriptor.set.call(control, desired);
+            else control.checked = desired;
+            dispatch(control);
+          }
+          const retried = selectionState(control);
+          if (retried.channel && retried.selected === desired) {
+            result.status = "verified";
+            result.evidence = retried.channel;
+            result.observed_value = desired ? (record.field.option_label || "true") : "";
+            continue;
+          }
+        }
+        if (after.channel) {
+          result.message = `The checkbox did not remain ${desired ? "selected" : "cleared"}.`;
+        } else {
+          result.status = "unverified";
+          result.message = "The control was clicked, but it exposes no page-owned state to confirm the change.";
+        }
+        continue;
+      }
+      if (fieldType === "select" && control.tagName === "SELECT") {
+        const target = normalizeText(requested);
+        const option = [...control.options].find((candidate) => (
+          [candidate.value, candidate.textContent].some((text) => {
+            const candidateValue = normalizeText(text);
+            if (candidateValue === target) return true;
+            if (target.length < 3 || candidateValue.length < 3) return false;
+            return candidateValue.startsWith(`${target} `) || target.startsWith(`${candidateValue} `);
+          })
+        ));
+        if (!option) {
+          result.message = `No dropdown option matched "${requested}".`;
+          continue;
+        }
+        control.value = option.value;
+        dispatch(control);
+        if (control.value === option.value) {
+          result.status = "verified";
+          result.evidence = "native";
+          result.observed_value = option.textContent.trim();
+        } else {
+          result.message = `The page rejected the dropdown option "${requested}".`;
+        }
+        continue;
+      }
+      if (fieldType === "select") {
         if (control.tagName === "INPUT") {
           control.click();
           const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(control), "value");
-          if (descriptor?.set) descriptor.set.call(control, action.value);
-          else control.value = action.value;
+          if (descriptor?.set) descriptor.set.call(control, requested);
+          else control.value = requested;
           dispatch(control);
         } else {
           control.click();
         }
-        const normalize = (value) => String(value || "")
-          .normalize("NFKD")
-          .replace(/[^a-z0-9]+/gi, " ")
-          .replace(/\s+/g, " ")
-          .trim()
-          .toLowerCase();
-        const target = normalize(action.value);
+        const target = normalizeText(requested);
         let option = null;
         for (let attempt = 0; attempt < 10 && !option; attempt += 1) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
+          await wait(100);
           const ownedIds = `${control.getAttribute("aria-controls") || ""} ${control.getAttribute("aria-owns") || ""}`
             .trim()
             .split(/\s+/)
@@ -966,7 +1273,7 @@ async function applyFormFillPlan(actions) {
           const selector = popupRoots.length
             ? "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], li"
             : "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], [class*='option'], li";
-          const options = (popupRoots.length
+          const candidates = (popupRoots.length
             ? popupRoots.flatMap((popup) => [...popup.querySelectorAll(selector)])
             : [...document.querySelectorAll(selector)]
           ).filter((candidate) => {
@@ -974,11 +1281,11 @@ async function applyFormFillPlan(actions) {
             const rect = candidate.getBoundingClientRect();
             return style.display !== "none" && style.visibility !== "hidden" && rect.height > 0;
           });
-          option = options.find((candidate) =>
+          option = candidates.find((candidate) =>
             [candidate.textContent, candidate.getAttribute("data-value"), candidate.getAttribute("value")]
               .filter(Boolean)
-              .some((value) => {
-                const optionValue = normalize(value);
+              .some((text) => {
+                const optionValue = normalizeText(text);
                 if (optionValue === target) return true;
                 if (/^\d{1,3}$/.test(target) && optionValue.split(" ").includes(target)) return true;
                 if (target.length < 3 || optionValue.length < 3) return false;
@@ -986,135 +1293,109 @@ async function applyFormFillPlan(actions) {
               }),
           );
         }
-        if (!option) throw new Error(`No dropdown option matched "${action.value}".`);
+        if (!option) {
+          result.message = `No dropdown option matched "${requested}".`;
+          continue;
+        }
         option.click();
-        filled += 1;
-        filledIds.push(action.field_id);
+        await wait(150);
+        const displayed = cleanText(
+          control.getAttribute("aria-valuetext") || control.getAttribute("data-value")
+          || control.value || control.textContent,
+        );
+        if (normalizeText(displayed) && (
+          normalizeText(displayed) === target
+          || normalizeText(displayed).startsWith(`${target} `)
+          || target.startsWith(`${normalizeText(displayed)} `)
+        )) {
+          result.status = "verified";
+          result.evidence = "displayed";
+          result.observed_value = displayed;
+        } else {
+          result.status = "unverified";
+          result.observed_value = displayed;
+          result.message = "The option was clicked, but the displayed value could not be confirmed yet.";
+        }
         continue;
       }
-      if (type === "checkbox") {
-        const desired = ["true", "yes", "1", "on"].includes(String(action.value).toLowerCase());
-        const isSelected = () => Boolean(
-          control.checked
-          || control.getAttribute("aria-checked") === "true"
-          || control.getAttribute("aria-pressed") === "true"
-        );
-        if (isSelected() !== desired) control.click();
-        if (isSelected() !== desired && control.labels?.[0]) control.labels[0].click();
-        if (isSelected() !== desired && control instanceof HTMLInputElement) {
-          const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
-          if (descriptor?.set) descriptor.set.call(control, desired);
-          else control.checked = desired;
-          dispatch(control);
-        }
-        if (isSelected() !== desired) {
-          throw new Error(`The checkbox did not remain ${desired ? "selected" : "cleared"}.`);
-        }
-        filled += 1;
-        filledIds.push(action.field_id);
-        continue;
-      } else if (type === "radio") {
-        const taggedGroup = queryAll(
-          `[data-applypilot-id="${CSS.escape(action.field_id)}"]`,
-        ).filter((candidate) => (
-          (candidate.type || "").toLowerCase() === "radio"
-          || candidate.getAttribute("role") === "radio"
-          || candidate.hasAttribute("aria-pressed")
-          || candidate.dataset.applypilotChoiceKind === "radio"
-        ));
-        const group = taggedGroup.length
-          ? taggedGroup
-          : control.name
-            ? queryAll(`input[type="radio"][name="${CSS.escape(control.name)}"]`)
-                .filter((candidate) => candidate.getRootNode() === control.getRootNode())
-            : [control];
-        const target = semanticChoice(action.value);
-        const desired = group.find((candidate) => [
-          candidate.value,
-          candidate.dataset.applypilotOptionLabel || "",
-          candidate.labels?.[0]?.textContent || "",
-          candidate.getAttribute("aria-label") || "",
-          candidate.textContent || "",
-          candidate.closest("label")?.textContent || "",
-          candidate.id ? candidate.getRootNode()?.querySelector?.(`label[for="${CSS.escape(candidate.id)}"]`)?.textContent || "" : "",
-          candidate.nextElementSibling?.textContent || "",
-          candidate.previousElementSibling?.textContent || "",
-        ].some((value) => {
-          const normalized = normalizeChoice(value);
-          return normalized === normalizeChoice(action.value) || semanticChoice(value) === target;
-        }));
-        if (!desired) throw new Error(`No radio option matched "${action.value}".`);
-        const isSelected = (candidate) => Boolean(
-          candidate.checked
-          || candidate.dataset.applypilotSelected === "true"
-          || candidate.getAttribute("aria-checked") === "true"
-          || candidate.getAttribute("aria-pressed") === "true"
-          || candidate.getAttribute("aria-selected") === "true"
-          || ["checked", "on", "selected", "active"].includes(
-            String(candidate.getAttribute("data-state") || "").toLowerCase(),
-          )
-          || /(?:^|[\s_-])(?:selected|active|checked|chosen)(?:$|[\s_-])/i.test(
-            typeof candidate.className === "string" ? candidate.className : "",
-          )
-        );
-        const wasSelected = isSelected(desired);
-        if (!wasSelected) {
-          desired.click();
-          await new Promise((resolve) => setTimeout(resolve, 50));
-          group.forEach((candidate) => {
-            candidate.dataset.applypilotSelected = candidate === desired ? "true" : "false";
-          });
-        }
-        if (!isSelected(desired) && desired.labels?.[0]) desired.labels[0].click();
-        if (!isSelected(desired) && desired instanceof HTMLInputElement) {
-          const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
-          if (descriptor?.set) descriptor.set.call(desired, true);
-          else desired.checked = true;
-          dispatch(desired);
-        }
-        const backingInput = desired.parentElement?.querySelector('input[type="checkbox"]');
-        const backingMatches = backingInput && ["yes", "no"].includes(target)
-          ? backingInput.checked === (target === "yes")
-          : true;
-        if (!isSelected(desired) && !backingMatches) {
-          throw new Error(`The radio option "${action.value}" did not remain selected.`);
-        }
-        filled += 1;
-        filledIds.push(action.field_id);
-        continue;
-      } else if (control.tagName === "SELECT") {
-        const normalizeOption = (value) => String(value || "")
-          .normalize("NFKD")
-          .replace(/[^a-z0-9]+/gi, " ")
-          .replace(/\s+/g, " ")
-          .trim()
-          .toLowerCase();
-        const target = normalizeOption(action.value);
-        const option = [...control.options].find((candidate) =>
-          [candidate.value, candidate.textContent].some((value) => {
-            const candidateValue = normalizeOption(value);
-            if (candidateValue === target) return true;
-            if (target.length < 3 || candidateValue.length < 3) return false;
-            return candidateValue.startsWith(`${target} `) || target.startsWith(`${candidateValue} `);
-          }),
-        );
-        if (!option) throw new Error(`No dropdown option matched "${action.value}".`);
-        control.value = option.value;
-      } else {
-        const prototype = Object.getPrototypeOf(control);
-        const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
-        if (descriptor?.set) descriptor.set.call(control, action.value);
-        else control.value = action.value;
-      }
+      // Text-like inputs and textareas.
+      const prototype = Object.getPrototypeOf(control);
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+      if (descriptor?.set) descriptor.set.call(control, requested);
+      else control.value = requested;
       dispatch(control);
-      filled += 1;
-      filledIds.push(action.field_id);
+      if (String(control.value) === requested) {
+        result.status = "verified";
+        result.evidence = "native";
+        result.observed_value = control.value;
+      } else {
+        result.observed_value = String(control.value || "");
+        result.message = `The page changed the entered value to "${result.observed_value}".`;
+        result.status = result.observed_value ? "unverified" : "failed";
+      }
     } catch (error) {
-      errors.push({ field_id: action.field_id, message: error.message });
+      result.status = "failed";
+      result.message = error.message;
     }
   }
 
-  return { filled, filled_ids: filledIds, errors, submit_clicked: false };
+  // Authoritative post-action verification: rescan the live page and compare
+  // page-owned state against every requested value. A click that the page
+  // ignored is downgraded here no matter what the executor observed.
+  await wait(200);
+  const freshRecords = discover();
+  for (const result of results) {
+    if (result.status === "skipped" || !result.fingerprint) continue;
+    const fresh = freshRecords.find((record) => record.field.fingerprint === result.fingerprint);
+    if (!fresh) {
+      if (result.status === "verified") {
+        result.status = "unverified";
+        result.message = "The field was replaced after the action, so the result could not be re-confirmed.";
+      }
+      continue;
+    }
+    const field = fresh.field;
+    const readable = ["checkbox", "radio"].includes(field.field_type)
+      ? field.state_readable || Boolean(field.value_evidence)
+      : true;
+    if (!readable) {
+      if (result.status !== "failed") {
+        result.status = "unverified";
+        if (!result.message) {
+          result.message = "This control exposes no page-owned selected state, so the change could not be confirmed.";
+        }
+      }
+      continue;
+    }
+    result.observed_value = field.value_label || field.value;
+    result.evidence = field.value_evidence || result.evidence;
+    if (valueMatches(field, result.requested_value)) {
+      result.status = "verified";
+      if (!result.message) result.message = "Confirmed by a fresh page scan.";
+    } else if (["checkbox", "radio", "select"].includes(field.field_type)) {
+      result.status = "failed";
+      result.message = `A fresh scan shows "${result.observed_value || "no selection"}" instead of "${result.requested_value}".`;
+    } else if (!String(field.value || "").trim()) {
+      result.status = "failed";
+      result.message = "A fresh scan shows the field is still empty.";
+    } else if (result.status === "verified") {
+      result.status = "unverified";
+      result.message = `A fresh scan shows "${result.observed_value}", which differs from the requested value.`;
+    }
+  }
+
+  const filledIds = results.filter((result) => result.status === "verified").map((result) => result.field_id);
+  const errors = results
+    .filter((result) => result.status === "failed")
+    .map((result) => ({ field_id: result.field_id, message: result.message }));
+  return {
+    filled: filledIds.length,
+    filled_ids: filledIds,
+    errors,
+    results,
+    fields: freshRecords.map((record) => record.field),
+    submit_clicked: false,
+  };
 }
 
 function clickFinalSubmit() {
