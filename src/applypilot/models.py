@@ -61,6 +61,7 @@ class JobApplicationOptions(BaseModel):
     company_url_verified: bool = False
     external_apply_available: bool = False
     easy_apply_available: bool = False
+    prefer_easy_apply: bool = False
 
 
 class ApplicationRouteDecision(BaseModel):

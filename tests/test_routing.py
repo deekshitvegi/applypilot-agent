@@ -65,6 +65,35 @@ def test_unverified_external_url_requires_review() -> None:
     assert decision.route == "manual_review"
 
 
+def test_preferring_easy_apply_overrides_the_company_route() -> None:
+    decision = choose_application_route(
+        JobApplicationOptions(
+            source_url="https://www.linkedin.com/jobs/view/example",
+            company_application_url="https://careers.example.com/jobs/123/apply",
+            company_url_verified=True,
+            easy_apply_available=True,
+            prefer_easy_apply=True,
+        )
+    )
+
+    assert decision.route == "easy_apply"
+    assert decision.target_url == "https://www.linkedin.com/jobs/view/example"
+
+
+def test_preferring_easy_apply_still_uses_company_route_when_unavailable() -> None:
+    decision = choose_application_route(
+        JobApplicationOptions(
+            source_url="https://www.linkedin.com/jobs/view/example",
+            company_application_url="https://careers.example.com/jobs/123/apply",
+            company_url_verified=True,
+            easy_apply_available=False,
+            prefer_easy_apply=True,
+        )
+    )
+
+    assert decision.route == "company_site"
+
+
 def test_recognized_ats_url_is_verified_automatically() -> None:
     decision = choose_application_route(
         JobApplicationOptions(

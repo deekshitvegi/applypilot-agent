@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.13.0 - 2026-07-04
+
+- Redesigned the side panel around one agent surface: the job you are on, a
+  live one-line status, Start/Stop, and a full-height conversation where the
+  agent narrates each step as a timeline. Removed the duplicated cards.
+- Rewrote every setting in plain language and grouped them into "Your AI
+  model", "How I apply", and "Your data", each control with a one-line
+  explanation; on/off choices are now toggle switches.
+- Added an application-route choice: apply on the company's own website
+  (default) or use LinkedIn Easy Apply when it exists.
+- Fixed pasted question text being read as a command: "add github ci" followed
+  by a question containing "select all …" selected every option in the group.
+  Option matching now strips the referenced question text first.
+- Added exclusive-set corrections: "not all, just GitHub CI and Docker"
+  selects exactly the named options and clears the rest of that group instead
+  of falling through to a model prose reply.
+- Chat results now name each option ("GitHub CI — selected") instead of
+  repeating the group question with a raw true value.
+- The agent's live narration is first-person and specific ("I found the
+  employer's Apply button on this page — clicking it now…").
+- Added a plain-English, step-by-step setup guide to the README for
+  non-developers.
+
 ## 0.12.0 - 2026-07-04
 
 - Replaced attempted-action verification with an authoritative post-action

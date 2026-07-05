@@ -8,12 +8,22 @@
   </head>
   <body>
     <header class="app-header">
-      <div class="brand-mark" aria-hidden="true">A</div>
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 2 11 13" />
+          <path d="M22 2 15 22l-4-9-9-4Z" />
+        </svg>
+      </div>
       <div class="brand-copy">
         <h1>ApplyPilot</h1>
         <p id="connection" class="status">Connecting…</p>
       </div>
-      <button id="settings" class="icon-button" type="button" title="Settings" aria-label="Open settings">⚙</button>
+      <button id="settings" class="icon-button" type="button" title="Settings" aria-label="Open settings">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z" />
+        </svg>
+      </button>
     </header>
 
     <div id="settings-backdrop" class="settings-backdrop hidden"></div>
@@ -23,11 +33,15 @@
           <p class="section-label">ApplyPilot</p>
           <h2>Settings</h2>
         </div>
-        <button id="close-settings" class="icon-button" type="button" aria-label="Close settings">×</button>
+        <button id="close-settings" class="icon-button" type="button" aria-label="Close settings">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </button>
       </div>
       <div class="settings-tabs" role="tablist" aria-label="Settings sections">
         <button id="preferences-tab" class="settings-tab active" type="button" role="tab" aria-selected="true">Preferences</button>
-        <button id="profile-tab" class="settings-tab" type="button" role="tab" aria-selected="false">Profile & résumé</button>
+        <button id="profile-tab" class="settings-tab" type="button" role="tab" aria-selected="false">Profile &amp; résumé</button>
       </div>
       <div id="preferences-pane" class="settings-pane"></div>
       <div id="profile-pane" class="settings-pane hidden"></div>
@@ -35,139 +49,38 @@
 
     <main>
       <section id="offline-card" class="panel offline-panel hidden">
-        <div class="offline-icon" aria-hidden="true">A</div>
-        <h2>Open ApplyPilot</h2>
-        <p>The private desktop companion is not running yet. Start ApplyPilot, then try again.</p>
+        <div class="offline-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 2 11 13" />
+            <path d="M22 2 15 22l-4-9-9-4Z" />
+          </svg>
+        </div>
+        <h2>Start the ApplyPilot app</h2>
+        <p>The private helper that stores your profile is not running on this computer yet. Start it, then press Try again.</p>
         <button id="retry-connection" type="button">Try again</button>
-        <p class="field-help">Your profile, résumé, and AI settings remain on this computer.</p>
+        <p class="field-help">Everything — your profile, résumé, and AI keys — stays on this computer.</p>
       </section>
 
-      <section id="quick-run" class="panel quick-run">
-        <p class="section-label">Current page</p>
-        <h2>Apply to this job</h2>
-        <p class="muted">ApplyPilot will read the job, prepare the best truthful résumé, fill known fields, and pause only when it needs you.</p>
-        <div class="button-row">
-          <button id="start-automation" type="button">Start applying</button>
-          <button id="stop-automation" class="secondary-button" type="button" disabled>Stop</button>
+      <section id="quick-run" class="panel agent-surface">
+        <div class="agent-topbar">
+          <div class="agent-topbar-copy">
+            <p id="chat-context" class="agent-job">No job open yet</p>
+            <p id="automation-status" class="agent-status">Open a job page, then press Start applying.</p>
+          </div>
+          <div class="run-controls">
+            <button id="start-automation" type="button">Start applying</button>
+            <button id="stop-automation" class="stop-button" type="button" disabled>Stop</button>
+          </div>
         </div>
-        <p id="automation-status" class="field-help">Open a job page when you are ready.</p>
-      </section>
 
-      <details id="advanced-settings" class="advanced-settings">
-        <summary>
-          <span><strong>Settings</strong><small>AI model, permissions, and automation preferences</small></span>
-        </summary>
-        <div class="settings-stack">
-      <section id="provider-card" class="panel setup-panel">
-        <div class="section-heading">
-          <div>
-            <p class="section-label">AI provider</p>
-            <h2 id="provider-title">Connect a model</h2>
-          </div>
-          <span id="provider-badge" class="badge">Not configured</span>
-        </div>
-        <p id="provider-privacy" class="muted">Runs on this computer with no API key or cloud quota.</p>
-        <form id="provider-form">
-          <label for="provider-select">Provider</label>
-          <select id="provider-select">
-            <option value="ollama">Ollama (local and free)</option>
-            <option value="gemini">Google Gemini</option>
-            <option value="openai">OpenAI</option>
-            <option value="anthropic">Anthropic Claude</option>
-          </select>
-          <label id="provider-key-label" class="hidden" for="provider-key">API key</label>
-          <div id="provider-key-row" class="password-row hidden">
-            <input id="provider-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a newly generated key" />
-            <button id="toggle-key" class="inline-button" type="button" aria-label="Show or hide API key">Show</button>
-          </div>
-          <label for="provider-model">Model</label>
-          <input id="provider-model" type="text" autocomplete="off" spellcheck="false" value="qwen3:4b" />
-          <p id="provider-help" class="field-help">Qwen3 4B is the balanced low-memory default; image attachments use local gemma3:4b.</p>
-          <div class="button-row">
-            <button id="save-provider" type="submit">Save securely</button>
-            <button id="disconnect-provider" class="secondary-button" type="button">Disconnect</button>
-          </div>
-        </form>
-        <div id="reasoning-provider-settings" class="reasoning-provider-box hidden">
-          <p class="section-label">Optional Gemini assist</p>
-          <p class="muted">Keep Ollama for free local chat. Gemini is used only for résumé tailoring and unfamiliar page/form decisions.</p>
-          <label for="reasoning-provider-key">Gemini API key</label>
-          <input id="reasoning-provider-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a Gemini key" />
-          <label for="reasoning-provider-model">Gemini model</label>
-          <input id="reasoning-provider-model" type="text" autocomplete="off" spellcheck="false" value="gemini-2.5-flash" />
-          <p id="reasoning-provider-help" class="field-help"></p>
-          <div class="button-row">
-            <button id="save-reasoning-provider" type="button">Save Gemini assist</button>
-            <button id="disconnect-reasoning-provider" class="secondary-button" type="button">Remove assist</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel automation-panel">
-        <div class="section-heading">
-          <div>
-            <p class="section-label">Automation</p>
-            <h2>Application runner</h2>
-          </div>
-          <span id="site-access-badge" class="badge">Access needed</span>
-        </div>
-        <p class="muted">Common fields use your saved profile—no AI call required.</p>
-        <button id="enable-site-access" class="secondary-button" type="button">Enable job-site access</button>
-        <label for="automation-policy">Before final submission</label>
-        <select id="automation-policy">
-          <option value="review_each">Ask me every time</option>
-          <option value="always_allow">Always allow for this browser</option>
-        </select>
-        <label for="resume-policy">Résumé attachment</label>
-        <select id="resume-policy">
-          <option value="ask_each">Ask: original or tailored</option>
-          <option value="always_tailored">Always use the tailored résumé</option>
-          <option value="always_original">Always use the original résumé</option>
-        </select>
-        <label for="cover-letter-policy">Cover-letter attachment</label>
-        <select id="cover-letter-policy">
-          <option value="never">Do not attach a cover letter</option>
-          <option value="ask_each">Ask when a cover-letter field appears</option>
-          <option value="always_saved">Always attach my saved cover letter</option>
-          <option value="always_generate">Always generate a job-specific cover letter</option>
-        </select>
-        <button id="preview-generated-cover-letter" class="secondary-button hidden" type="button">Preview generated cover letter</button>
-        <label for="minimum-fit">Minimum fit score for automatic applications</label>
-        <input id="minimum-fit" type="number" min="0" max="100" step="5" value="60" />
-        <label class="check-row" for="continue-next">
-          <input id="continue-next" type="checkbox" checked />
-          Continue to the next queued LinkedIn job
-        </label>
-        <label class="check-row" for="login-assistance">
-          <input id="login-assistance" type="checkbox" />
-          Automatically continue normal login
-        </label>
-        <p class="field-help">With your consent, waits for your browser password manager, clicks unique Sign in/Next controls, and resumes the application. It never stores credentials or bypasses CAPTCHA, MFA, verification codes, or security checks.</p>
-        <button id="download-history" class="secondary-button" type="button">Download application history (CSV)</button>
-        <p class="field-help">Includes local timestamps, job details, route, status, and the latest recorded event.</p>
-        <div id="automation-warning" class="automation-warning hidden">
-          Automatic mode will fill, submit, and continue without asking again. Consented normal login can continue automatically. CAPTCHA, MFA, verification codes, missing answers, and ambiguous controls still pause the runner.
-        </div>
-      </section>
-        </div>
-      </details>
-
-      <section class="panel chat-card">
-        <div class="section-heading">
-          <div>
-            <p class="section-label">Copilot</p>
-            <h2>Application chat</h2>
-          </div>
-          <span id="chat-context" class="badge neutral">No job</span>
-        </div>
         <div id="messages" class="messages" aria-live="polite">
-          <div class="agent-message message">Open a job and choose Start applying. I’ll explain each step and ask here only when I need an answer.</div>
+          <div class="agent-message message">Hi! Open a job on LinkedIn, Indeed, Dice, or a company careers page and press <strong>Start applying</strong>. I’ll tell you what I’m doing at every step, and I’ll only stop to ask when I truly need your answer. You can interrupt me here at any time — “use my original résumé”, “add GitHub CI”, “change that answer to No”.</div>
         </div>
         <div id="chat-question-slot" class="chat-question-slot"></div>
         <form id="chat-form" class="chat-form">
           <div id="image-previews" class="image-previews hidden"></div>
           <label class="sr-only" for="chat-input">Message ApplyPilot</label>
-          <textarea id="chat-input" rows="3" placeholder="Ask ApplyPilot…" disabled></textarea>
+          <textarea id="chat-input" rows="2" placeholder="Tell me what to change or ask me anything…" disabled></textarea>
           <div class="composer-actions">
             <label id="attach-image-label" class="attach-button disabled" for="chat-images" title="Attach up to 3 images">
               <span aria-hidden="true">＋</span> Image
@@ -178,54 +91,201 @@
         </form>
       </section>
 
+      <details id="advanced-settings" class="advanced-settings">
+        <summary>
+          <span><strong>Settings</strong><small>AI model, permissions, and how I apply</small></span>
+        </summary>
+        <div class="settings-stack">
+      <section id="provider-card" class="panel setup-panel">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Your AI model</p>
+            <h2 id="provider-title">Choose the brain</h2>
+          </div>
+          <span id="provider-badge" class="badge">Not set up</span>
+        </div>
+        <p id="provider-privacy" class="muted">The free option runs entirely on this computer — no account, no key, nothing leaves your PC.</p>
+        <form id="provider-form">
+          <label for="provider-select">AI model</label>
+          <select id="provider-select">
+            <option value="ollama">Free &amp; private — runs on this computer (Ollama)</option>
+            <option value="gemini">Google Gemini (needs a free API key)</option>
+            <option value="openai">OpenAI (needs an API key)</option>
+            <option value="anthropic">Anthropic Claude (needs an API key)</option>
+          </select>
+          <label id="provider-key-label" class="hidden" for="provider-key">API key</label>
+          <div id="provider-key-row" class="password-row hidden">
+            <input id="provider-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a newly generated key" />
+            <button id="toggle-key" class="inline-button" type="button" aria-label="Show or hide API key">Show</button>
+          </div>
+          <label for="provider-model">Model name</label>
+          <input id="provider-model" type="text" autocomplete="off" spellcheck="false" value="qwen3:4b" />
+          <p id="provider-help" class="field-help">Leave this as-is unless you know you want a different model.</p>
+          <div class="button-row">
+            <button id="save-provider" type="submit">Save</button>
+            <button id="disconnect-provider" class="secondary-button" type="button">Disconnect</button>
+          </div>
+        </form>
+        <div id="reasoning-provider-settings" class="reasoning-provider-box hidden">
+          <p class="section-label">Optional booster</p>
+          <p class="muted">Keep the free local model for everyday work and let Google Gemini handle the hard parts: résumé tailoring and unfamiliar questions.</p>
+          <label for="reasoning-provider-key">Gemini API key</label>
+          <input id="reasoning-provider-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a Gemini key" />
+          <label for="reasoning-provider-model">Gemini model</label>
+          <input id="reasoning-provider-model" type="text" autocomplete="off" spellcheck="false" value="gemini-2.5-flash" />
+          <p id="reasoning-provider-help" class="field-help"></p>
+          <div class="button-row">
+            <button id="save-reasoning-provider" type="button">Save booster</button>
+            <button id="disconnect-reasoning-provider" class="secondary-button" type="button">Remove</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel automation-panel">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Applying</p>
+            <h2>How I apply</h2>
+          </div>
+          <span id="site-access-badge" class="badge">Access needed</span>
+        </div>
+        <p class="muted">I need one permission to read and fill job pages for you.</p>
+        <button id="enable-site-access" class="secondary-button" type="button">Let me work on job sites</button>
+
+        <div class="setting-row">
+          <label for="route-preference">Where to apply</label>
+          <select id="route-preference">
+            <option value="company_first">On the company’s own website (recommended)</option>
+            <option value="easy_apply_first">With LinkedIn Easy Apply when it exists</option>
+          </select>
+          <p class="field-help">Company websites put you straight into the employer’s system. Easy Apply is faster when speed matters more.</p>
+        </div>
+
+        <div class="setting-row">
+          <label for="automation-policy">Pressing the final Submit button</label>
+          <select id="automation-policy">
+            <option value="review_each">Always ask me first (recommended)</option>
+            <option value="always_allow">Submit for me automatically</option>
+          </select>
+          <p class="field-help">Even in automatic mode I stop for logins, CAPTCHAs, and questions I can’t answer.</p>
+        </div>
+
+        <div class="setting-row">
+          <label for="resume-policy">Which résumé to send</label>
+          <select id="resume-policy">
+            <option value="ask_each">Ask me each time</option>
+            <option value="always_tailored">Always the résumé tailored to the job</option>
+            <option value="always_original">Always my original résumé</option>
+          </select>
+          <p class="field-help">Tailored résumés reorder your real experience for each job — nothing is ever invented.</p>
+        </div>
+
+        <div class="setting-row">
+          <label for="cover-letter-policy">Cover letter</label>
+          <select id="cover-letter-policy">
+            <option value="never">Don’t send one</option>
+            <option value="ask_each">Ask me when the form has a cover-letter field</option>
+            <option value="always_saved">Always send my saved cover letter</option>
+            <option value="always_generate">Always write one for the specific job</option>
+          </select>
+          <button id="preview-generated-cover-letter" class="secondary-button hidden" type="button">Read the letter I wrote</button>
+        </div>
+
+        <div class="setting-row">
+          <label for="minimum-fit">Skip jobs that match my profile less than</label>
+          <div class="percent-row">
+            <input id="minimum-fit" type="number" min="0" max="100" step="5" value="60" />
+            <span class="percent-suffix">%</span>
+          </div>
+          <p class="field-help">Only used in automatic mode, so I don’t waste applications on weak matches.</p>
+        </div>
+
+        <label class="check-row" for="continue-next">
+          <input id="continue-next" type="checkbox" checked />
+          After submitting, continue to the next job in the list
+        </label>
+        <label class="check-row" for="login-assistance">
+          <input id="login-assistance" type="checkbox" />
+          Continue sign-in for me when my browser fills the password
+        </label>
+        <p class="field-help">I never see, store, or type your passwords — your browser’s password manager does the filling. CAPTCHAs and verification codes always come back to you.</p>
+
+        <div id="automation-warning" class="automation-warning hidden">
+          Automatic mode fills, submits, and moves to the next job without asking again. Logins, CAPTCHAs, unknown questions, and anything ambiguous still stop and wait for you.
+        </div>
+      </section>
+
+      <section class="panel data-panel">
+        <div class="section-heading">
+          <div>
+            <p class="section-label">Your data</p>
+            <h2>Everything stays local</h2>
+          </div>
+        </div>
+        <p class="muted">Your profile, answers, résumés, and history live in an encrypted file on this computer. Nothing is uploaded anywhere.</p>
+        <button id="download-history" class="secondary-button" type="button">Download my application history (CSV)</button>
+        <p class="field-help">Every application with date, time, company, role, where it was sent, and its current status.</p>
+      </section>
+        </div>
+      </details>
+
       <details class="manual-workflow">
         <summary><strong>Manual controls</strong><small>Profile, résumé, job capture, and form tools</small></summary>
         <section class="workflow">
 
-        <details id="onboarding-card" class="panel workflow-step" open>
-          <summary>
-            <span class="step-number">1</span>
-            <span><strong>Candidate profile</strong><small id="progress">Checking profile…</small></span>
-          </summary>
-          <div class="step-content">
-            <h2 id="question">Checking your candidate profile…</h2>
-            <form id="answer-form" class="hidden">
-              <label class="sr-only" for="answer-input">Your answer</label>
-              <input id="answer-input" type="text" autocomplete="off" />
-              <select id="answer-choice" class="hidden"></select>
-              <button type="submit">Save answer</button>
-            </form>
-            <button id="edit-profile" class="secondary-button" type="button">Edit saved profile</button>
-            <button id="refresh" class="secondary-button" type="button">Refresh status</button>
-            <form id="profile-editor" class="profile-editor hidden">
-              <div id="profile-fields" class="profile-fields"></div>
-              <div id="saved-answers" class="saved-answers"></div>
-              <p class="privacy-note">
-                Saved in encrypted local storage at data/applypilot.sqlite3 with a separate
-                local key. Demographic answers are optional and are never guessed by ApplyPilot.
-              </p>
-              <div class="button-row">
-                <button type="submit">Save profile</button>
-                <button id="cancel-profile" class="secondary-button" type="button">Cancel</button>
-              </div>
-            </form>
+        <section id="onboarding-card" class="panel profile-card">
+          <div class="section-heading">
+            <div>
+              <p class="section-label">About you</p>
+              <h2>Your profile</h2>
+            </div>
           </div>
-        </details>
+          <p class="muted">This is what I use to fill applications — name, contact details, work authorization, links, and your saved answers.</p>
+          <p id="progress" class="muted">Checking profile…</p>
+          <p id="question" class="profile-question">Checking your candidate profile…</p>
+          <form id="answer-form" class="hidden">
+            <label class="sr-only" for="answer-input">Your answer</label>
+            <input id="answer-input" type="text" autocomplete="off" />
+            <select id="answer-choice" class="hidden"></select>
+            <button type="submit">Save answer</button>
+          </form>
+          <div class="button-row">
+            <button id="edit-profile" class="secondary-button" type="button">Edit my details</button>
+            <button id="refresh" class="secondary-button" type="button">Refresh</button>
+          </div>
+          <form id="profile-editor" class="profile-editor hidden">
+            <div id="profile-fields" class="profile-fields"></div>
+            <div id="saved-answers" class="saved-answers"></div>
+            <p class="privacy-note">
+              Saved in encrypted local storage at data/applypilot.sqlite3 with a separate
+              local key. Demographic answers are optional and are never guessed by ApplyPilot.
+            </p>
+            <div class="button-row">
+              <button type="submit">Save profile</button>
+              <button id="cancel-profile" class="secondary-button" type="button">Cancel</button>
+            </div>
+          </form>
+        </section>
 
-        <details class="panel workflow-step">
-          <summary>
-            <span class="step-number">2</span>
-            <span><strong>Base résumé</strong><small id="resume-status">DOCX, PDF, or TXT</small></span>
-          </summary>
-          <div class="step-content">
-            <p class="muted">Stored only by your local agent.</p>
-            <label class="file-button" for="resume-file">Choose résumé</label>
-            <input id="resume-file" class="sr-only" type="file" accept=".docx,.pdf,.txt" />
-            <p id="cover-letter-status" class="muted">No cover letter saved</p>
-            <label class="file-button" for="cover-letter-file">Choose cover letter</label>
-            <input id="cover-letter-file" class="sr-only" type="file" accept=".docx,.pdf,.txt" />
+        <section class="panel documents-card">
+          <div class="section-heading">
+            <div>
+              <p class="section-label">Your documents</p>
+              <h2>Résumé &amp; cover letter</h2>
+            </div>
           </div>
-        </details>
+          <p id="resume-status" class="muted">No résumé uploaded yet</p>
+          <label class="file-button" for="resume-file">Upload résumé (DOCX, PDF, or TXT)</label>
+          <input id="resume-file" class="sr-only" type="file" accept=".docx,.pdf,.txt" />
+          <p id="cover-letter-status" class="muted">No cover letter saved</p>
+          <label class="file-button secondary-button" for="cover-letter-file">Upload cover letter (optional)</label>
+          <input id="cover-letter-file" class="sr-only" type="file" accept=".docx,.pdf,.txt" />
+          <p class="field-help">Both stay in encrypted storage on this computer.</p>
+        </section>
+
+        <details class="troubleshooting-tools">
+          <summary>Advanced tools</summary>
+          <p class="field-help">Manual job capture and form tools for diagnosing an unsupported page. Start applying normally does all of this for you.</p>
 
         <details class="panel workflow-step">
           <summary>
@@ -272,6 +332,7 @@
             <button id="approve-submit" class="danger-button hidden" type="button">Approve and submit application</button>
             <div id="form-result" class="result-box hidden"></div>
           </div>
+        </details>
         </details>
         </section>
       </details>

@@ -381,3 +381,79 @@ def test_bare_reply_binds_to_the_focused_question_only(page):
     parsed = parse_intents(page, "No", fields, SPONSORSHIP)
     assert [(item["field"]["id"], item["value"]) for item in parsed["assignments"]] == [("ap-1", "No")]
     assert parsed["ambiguous"] == []
+
+
+SELECT_ALL_QUESTION = (
+    "Please select all of the tools you have hands on experience with?"
+    " This must be hands on experience only."
+)
+
+
+def tools_fields() -> list[dict]:
+    return [
+        checkbox_field("ap-1", SELECT_ALL_QUESTION, "GitHub CI"),
+        checkbox_field("ap-2", SELECT_ALL_QUESTION, "Docker"),
+        checkbox_field("ap-3", SELECT_ALL_QUESTION, "Terraform"),
+        checkbox_field("ap-4", SELECT_ALL_QUESTION, "Jenkins"),
+    ]
+
+
+def test_pasted_question_text_cannot_trigger_select_all(page):
+    # Live regression: the question itself contains "select all", and pasting
+    # it after "add github ci" used to select every option in the group.
+    load_sidepanel(page)
+    message = f"add github ci {SELECT_ALL_QUESTION} in this"
+    parsed = parse_intents(page, message, tools_fields())
+    assert [(item["field"]["id"], item["value"]) for item in parsed["assignments"]] == [("ap-1", "true")]
+
+
+def test_not_all_just_these_replaces_the_whole_selection(page):
+    # Live regression: "not all just github ci and docker" must become an
+    # exclusive scoped correction, not a model prose reply.
+    load_sidepanel(page)
+    parsed = parse_intents(
+        page, "not all just github ci and docker", tools_fields(), SELECT_ALL_QUESTION,
+    )
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "false", "ap-4": "false"}
+
+
+def test_only_correction_without_focus_binds_to_single_matching_group(page):
+    load_sidepanel(page)
+    fields = tools_fields() + [radio_field("ap-9", SPONSORSHIP, ["Yes", "No"])]
+    parsed = parse_intents(page, "only docker and jenkins", fields)
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "false", "ap-2": "true", "ap-3": "false", "ap-4": "true"}
+
+
+def test_select_all_still_works_when_the_user_actually_asks_for_it(page):
+    load_sidepanel(page)
+    parsed = parse_intents(page, "select all of them", tools_fields(), SELECT_ALL_QUESTION)
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "true", "ap-4": "true"}
+
+
+def test_check_all_phrasing_selects_the_focused_group(page):
+    load_sidepanel(page)
+    parsed = parse_intents(page, "check all", tools_fields(), SELECT_ALL_QUESTION)
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "true", "ap-4": "true"}
+
+
+def test_additive_just_add_does_not_clear_other_options(page):
+    # "also just add Docker" is additive: it must select Docker and leave the
+    # other checkboxes in the group untouched, never clear them.
+    load_sidepanel(page)
+    parsed = parse_intents(page, "also just add docker", tools_fields(), SELECT_ALL_QUESTION)
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-2": "true"}
+
+
+def test_conversational_sentence_with_just_and_an_option_is_not_a_correction(page):
+    # An ordinary sentence containing "just" and an option name must never
+    # rewrite the group selection.
+    load_sidepanel(page)
+    parsed = parse_intents(
+        page, "it was just a small project using docker", tools_fields(),
+    )
+    assert parsed["assignments"] == []
