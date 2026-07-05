@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>React-style re-render replacing option elements</title>
+    <style>
+      main { width: 640px; margin: 24px; font-family: sans-serif; }
+      .segmented { display: flex; gap: 8px; }
+      .segmented button { padding: 10px 24px; }
+      .segmented button.selected { border: 2px solid #2563eb; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="question-block" id="relocation-block">
+        <p class="question">Are you willing to relocate for this position?</p>
+        <div class="segmented" id="relocation-options"></div>
+      </div>
+    </main>
+    <script>
+      // Simulates a reactive framework: every selection asynchronously
+      // replaces the option elements with new nodes and new generated ids.
+      let renderCount = 0;
+      let selected = "";
+      const container = document.querySelector("#relocation-options");
+      function render() {
+        renderCount += 1;
+        container.innerHTML = ["Yes", "No"].map((label) => (
+          `<button type="button" id="opt-${renderCount}-${label.toLowerCase()}"` +
+          `${selected === label ? ' class="selected"' : ""}>${label}</button>`
+        )).join("");
+      }
+      container.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        const label = button.textContent.trim();
+        setTimeout(() => {
+          selected = label;
+          render();
+        }, 120);
+      });
+      render();
+    </script>
+  </body>
+</html>
