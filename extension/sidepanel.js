@@ -2409,7 +2409,7 @@ async function saveCanonicalProfileAnswer(field, value) {
 function shouldUseFormAgent(message) {
   if (!state.localMode || !state.provider?.configured) return false;
   if (state.pendingAgentQuestion) return true;
-  return /\b(fill|complete|apply|add|select|check|choose|include|set|change|update|answer|do it|put|reviewed|relocate|authorized|authorization|sponsor|sponsorship|this field|this part|in the form|in the application|it is|it was)\b/i.test(message);
+  return /\b(fill|complete|apply|add|select|check|uncheck|choose|include|set|change|update|remove|deselect|answer|do it|put|reviewed|relocate|authorized|authorization|sponsor|sponsorship|this field|this part|in the form|in the application|it is|it was)\b/i.test(message);
 }
 
 async function persistVerifiedAgentActions(actions, filledIds, fields) {
@@ -2710,7 +2710,7 @@ async function runModelAutomationPass() {
 }
 
 function looksLikeFormActionRequest(message) {
-  return /\b(?:add|select|check|uncheck|choose|include|set|change|update|fill|apply|clear|answer|relocat\w*|sponsor\w*|authoriz\w*|reviewed|for this one|it is|it was)\b/i.test(message);
+  return /\b(?:add|select|check|uncheck|choose|include|set|change|update|fill|apply|clear|remove|deselect|answer|relocat\w*|sponsor\w*|authoriz\w*|reviewed|for this one|it is|it was)\b/i.test(message);
 }
 
 function semanticAnswerChoice(value) {
@@ -2721,23 +2721,48 @@ function semanticAnswerChoice(value) {
   return normalized;
 }
 
-// True only for messages that are essentially "not all / only / just" plus
-// visible option names — the shape of a replacement instruction. Additive
-// phrasing and ordinary sentences that happen to contain "just" and an
-// option name are rejected so they can never clear a user's selections.
-function isExclusiveCorrection(normalizedText, normalizedOptionTexts) {
-  if (!/\b(?:not all|only|just|exactly)\b/.test(normalizedText)) return false;
-  if (/\b(?:add|also|too|as well|include|keep|plus)\b/.test(normalizedText)) return false;
-  let remainder = normalizedText;
-  for (const optionText of normalizedOptionTexts) {
-    if (!optionText) continue;
-    remainder = remainder.replace(new RegExp(`\\b${escapeRegularExpression(optionText)}\\b`, "g"), " ");
+// Decides whether the message asks to REPLACE a group's selection rather
+// than add to it. Evaluated per clause, not on the whole message, so one
+// long instruction can carry several intents. Exclusive when:
+//   - the message explicitly clears the remainder ("remove the rest",
+//     "uncheck the others", "all except …", "not all"), or
+//   - an "only/just/exactly" marker is followed by an option name with
+//     nothing but filler words between them ("I only know Docker").
+// Additive phrasing ("also just add Docker") and ordinary sentences
+// ("it was just a small project using Docker") are rejected, so a casual
+// "just" can never clear a user's selections.
+const EXCLUSIVE_FILLER_WORDS = new Set([
+  "know", "use", "have", "used", "using", "worked", "work", "with", "the",
+  "these", "those", "them", "my", "i", "answer", "is", "are", "select",
+  "selected", "choose", "keep", "want", "need", "and", "or", "for", "on",
+  "in", "to",
+]);
+function isExclusiveSelection(normalizedText, normalizedOptionTexts) {
+  if (/\b(?:remove|clear|uncheck|deselect|drop)\b[^.;!?]{0,40}\b(?:the\s+)?(?:rest|others?|other ones|everything else|all others?)\b/.test(normalizedText)) {
+    return true;
   }
-  remainder = remainder
-    .replace(/\b(?:not all|only|just|exactly|and|or|select|choose|use|check|want|need|these|those|them|ones?|the|it s|its|i)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return remainder === "";
+  if (/\b(?:all\s+)?except\b|\bnot all\b|\bnothing else\b|\bonly (?:these|those)\b/.test(normalizedText)) {
+    return true;
+  }
+  for (const marker of normalizedText.matchAll(/\b(?:only|just|exactly)\b/g)) {
+    const windowText = normalizedText.slice(
+      marker.index + marker[0].length,
+      marker.index + marker[0].length + 70,
+    );
+    let earliest = -1;
+    for (const optionText of normalizedOptionTexts) {
+      if (!optionText) continue;
+      const match = new RegExp(`\\b${escapeRegularExpression(optionText)}\\b`).exec(windowText);
+      if (match && (earliest === -1 || match.index < earliest)) earliest = match.index;
+    }
+    if (earliest === -1) continue;
+    const between = windowText.slice(0, earliest).trim();
+    if (/\b(?:add|include|also|too|plus|as well)\b/.test(between)) continue;
+    if (!between || between.split(/\s+/).every((word) => EXCLUSIVE_FILLER_WORDS.has(word))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // Deterministic, page-scoped interpretation of an explicit chat instruction.
@@ -2973,11 +2998,9 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
       });
       const selectAll = /\b(?:(?:select|check|tick|choose)\s+(?:them\s+)?all|all of (?:them|these|the above)|everything)\b/.test(strippedChoiceMessage)
         || strippedChoiceMessage.trim() === "all";
-      // "not all, just X and Y" replaces the whole selection — but only when
-      // the message is nothing beyond marker words and option names. Additive
-      // phrasing ("also just add Docker") and ordinary sentences ("it was
-      // just a small project using Docker") must never clear other options.
-      const exclusive = namedFields.length > 0 && isExclusiveCorrection(
+      // "not all, just X and Y" / "I only know X" / "remove the rest"
+      // replaces the whole selection; anything else only adds.
+      const exclusive = namedFields.length > 0 && isExclusiveSelection(
         strippedChoiceMessage,
         focusedCheckboxes.map((field) => normalizeChoicePhrase(field.option_label || field.label)),
       );
@@ -2994,9 +3017,10 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
     }
   }
 
-  // "only X and Y" corrections without an explicit question reference bind
-  // to the single checkbox group that contains every named option.
-  if (!assignments.size && /\b(?:not all|only|just|exactly)\b/.test(padded)) {
+  // "only X and Y" / "remove the rest" corrections without an explicit
+  // question reference bind to the single checkbox group that contains
+  // every named option.
+  if (!assignments.size && /\b(?:not all|only|just|exactly|except|remove|clear|uncheck|deselect|drop)\b/.test(padded)) {
     const namedGroups = new Map();
     for (const field of fields.filter((candidate) => candidate.field_type === "checkbox")) {
       const optionText = normalizeChoicePhrase(field.option_label || field.label);
@@ -3013,7 +3037,7 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
         && normalizeQuestion(field.group_label || field.label) === groupKey
       ));
       const question = groupFields[0].group_label || groupFields[0].label;
-      const exclusiveHere = isExclusiveCorrection(
+      const exclusiveHere = isExclusiveSelection(
         normalizedChoiceMessage,
         groupFields.map((field) => normalizeChoicePhrase(field.option_label || field.label)),
       );
@@ -3027,6 +3051,30 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
       }
     }
   }
+
+  // Requests to fill a profile-backed contact field, e.g. "fill my phone
+  // number". The caller resolves the actual value from the saved profile.
+  const profileRequests = [];
+  const profilePatterns = [
+    [/\b(?:fill|enter|put|add|update|type)\b[^.;!?]{0,30}\bphone(?:\s+number)?\b/, /phone|mobile/i, "phone"],
+    [/\b(?:fill|enter|put|add|update|type)\b[^.;!?]{0,30}\be\s?mail\b/, /e-?mail/i, "email"],
+    [/\b(?:fill|enter|put|add|update|type)\b[^.;!?]{0,30}\blinkedin\b/, /linkedin/i, "linkedin_url"],
+    [/\b(?:fill|enter|put|add|update|type)\b[^.;!?]{0,30}\bgithub\b/, /github/i, "github_url"],
+  ];
+  for (const [requestPattern, labelPattern, key] of profilePatterns) {
+    if (!requestPattern.test(padded)) continue;
+    const field = fields.find((candidate) => (
+      ["text", "tel", "email", "url"].includes(candidate.field_type)
+      && labelPattern.test(candidate.group_label || candidate.label)
+    ));
+    if (field && !assignments.has(field.id)) {
+      profileRequests.push({ field, key, question: field.group_label || field.label });
+    }
+  }
+
+  // The final Submit button is never pressed from a chat instruction; the
+  // caller explains the approval flow instead of silently ignoring it.
+  const submitRequested = /\b(?:click|press|hit)\s+(?:on\s+)?submit\b|\bsubmit\s+(?:the\s+)?(?:application|form|it)\b|\bthen\s+submit\b/.test(padded);
 
   // Explicitly named visible options for radio/select questions.
   const directOptionMatches = [];
@@ -3076,6 +3124,8 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
     assignments: [...assignments.values()],
     canonical,
     ambiguous,
+    profileRequests,
+    submitRequested,
     actionable: looksLikeFormActionRequest(message) || assignments.size > 0,
   };
 }
@@ -3100,10 +3150,10 @@ async function executeExplicitPageAnswers(message) {
   const possibleOptionReply = normalizeQuestion(message).split(" ").length <= 5
     && knownVisibleOption
     && !looksLikeChatQuestion(message);
-  // "not all, just GitHub CI and Docker" — an exclusive correction that names
-  // at least one visible option is always a page instruction, never chat.
-  const exclusiveCorrection = /\b(?:not all|only|just|exactly)\b/i.test(message)
-    && !/\b(?:add|also|too|as well|include|keep|plus)\b/i.test(message)
+  // "not all, just GitHub CI and Docker" / "remove the rest" — a correction
+  // that names at least one visible option is always a page instruction,
+  // never chat. The parser decides precisely; this gate only routes.
+  const exclusiveCorrection = /\b(?:not all|only|just|exactly|except|remove|clear|uncheck|deselect|drop)\b/i.test(message)
     && scannedOptions.some((option) => {
       const text = normalizeChoicePhrase(option.label || option.value);
       return text && new RegExp(`\\b${escapeRegularExpression(text)}\\b`).test(normalizedChoiceMessage);
@@ -3134,7 +3184,31 @@ async function executeExplicitPageAnswers(message) {
     );
     return true;
   }
-  if (!parsed.assignments.length) return false;
+  // "fill my phone number" style requests resolve against the saved profile.
+  const profileNotes = [];
+  for (const request of parsed.profileRequests || []) {
+    const value = state.profile?.[request.key];
+    if (typeof value === "string" && value.trim()) {
+      parsed.assignments.push({ field: request.field, value: value.trim(), question: request.question });
+    } else {
+      profileNotes.push(
+        `I don't have your ${request.key.replace(/_/g, " ").replace(" url", "")} saved yet — add it in Settings → Profile & résumé and I'll fill it automatically from now on.`,
+      );
+    }
+  }
+  const explainSubmitPolicy = () => {
+    if (!parsed.submitRequested) return;
+    appendMessage(
+      "About submitting: I never press the final Submit button from a chat message — that step stays under your control. When every required field is verified, an “Approve and submit application” button appears; press it to send. If you want me to submit without asking, turn on “Submit for me automatically” in Settings → How I apply.",
+      "agent-message",
+    );
+  };
+  if (!parsed.assignments.length) {
+    if (!profileNotes.length && !parsed.submitRequested) return false;
+    for (const note of profileNotes) appendMessage(note, "agent-message");
+    explainSubmitPolicy();
+    return true;
+  }
   // The user's own statement is authoritative for canonical profile facts,
   // even when the page control cannot confirm the visible change.
   for (const fact of parsed.canonical) {
@@ -3144,7 +3218,7 @@ async function executeExplicitPageAnswers(message) {
   if (assignedQuestions.size === 1) {
     state.lastReferencedFieldLabel = [...assignedQuestions][0];
   }
-  return executeFormAgentDecision(message, {
+  const handled = await executeFormAgentDecision(message, {
     handled: true,
     actions: parsed.assignments.map((assignment) => ({
       field_id: assignment.field.id,
@@ -3156,6 +3230,9 @@ async function executeExplicitPageAnswers(message) {
     question: "",
     explanation: "Applied your instruction to the matching visible question(s).",
   });
+  for (const note of profileNotes) appendMessage(note, "agent-message");
+  explainSubmitPolicy();
+  return handled || profileNotes.length > 0 || parsed.submitRequested;
 }
 
 async function handlePageActionCommand(message) {

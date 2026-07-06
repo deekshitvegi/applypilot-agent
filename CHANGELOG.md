@@ -20,6 +20,17 @@
   repeating the group question with a raw true value.
 - The agent's live narration is first-person and specific ("I found the
   employer's Apply button on this page — clicking it now…").
+- One chat message can now carry several intents ("fill my phone number …
+  check the background policy … I'm able to relocate anywhere … I only know
+  docker and github ci … click submit"): each part becomes its own scoped,
+  verified action. "I only know X and Y" and "remove the rest" replace a
+  group's selection exclusively, evaluated per clause so casual words like
+  "just" in ordinary sentences never clear selections.
+- "Fill my phone number/email/LinkedIn/GitHub" fills the matching visible
+  field from the saved profile, or tells you the profile value is missing.
+- Submit requests in chat get an explicit answer describing the approval
+  flow instead of being silently ignored; the final Submit is never pressed
+  from a chat message.
 - Added a plain-English, step-by-step setup guide to the README for
   non-developers.
 

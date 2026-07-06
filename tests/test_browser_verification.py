@@ -457,3 +457,90 @@ def test_conversational_sentence_with_just_and_an_option_is_not_a_correction(pag
         page, "it was just a small project using docker", tools_fields(),
     )
     assert parsed["assignments"] == []
+
+
+def test_remove_the_rest_with_typo_replaces_the_selection(page):
+    # Live regression: "I said I oly know github ci and docker remove the
+    # rest" produced model prose instead of clearing the other tools.
+    load_sidepanel(page)
+    parsed = parse_intents(
+        page, "I said I oly know github ci and docker remove the rest", tools_fields(),
+    )
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "false", "ap-4": "false"}
+
+
+def test_i_only_know_phrasing_is_exclusive_for_the_focused_group(page):
+    load_sidepanel(page)
+    parsed = parse_intents(
+        page, "I only know docker and github ci", tools_fields(), SELECT_ALL_QUESTION,
+    )
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "false", "ap-4": "false"}
+
+
+RELOCATION_QUESTION = (
+    "If you do not currently reside in the San Jose/San Francisco Bay Area,"
+    " please select what city you would be interested in a Company assisted"
+    " relocation package?"
+)
+BACKGROUND_QUESTION = (
+    "If you have any questions regarding our screening process or data privacy,"
+    " please review our Background Check Policy at this link."
+)
+GIANT_MESSAGE = (
+    "fill my phone number and also check the I have reviewed the background"
+    " check policy also I'm able to relocate anywhere in the united states "
+    + SELECT_ALL_QUESTION
+    + " in this I only know docker and github ci also click on submit once you"
+    " made these changes"
+)
+
+
+def giant_page_fields() -> list[dict]:
+    phone = {
+        "id": "ap-20",
+        "label": "Phone",
+        "group_label": "",
+        "option_label": "",
+        "field_type": "tel",
+        "value": "",
+        "fingerprint": "fp-ap-20",
+        "options": [],
+    }
+    background = radio_field(
+        "ap-21", BACKGROUND_QUESTION, ["I have reviewed the Background Check Policy"],
+    )
+    relocation = [
+        checkbox_field("ap-30", RELOCATION_QUESTION, "San Jose, CA/San Francisco Bay Area"),
+        checkbox_field("ap-31", RELOCATION_QUESTION, "Kansas City MO/Overland Park KS Metro Area"),
+        checkbox_field(
+            "ap-32", RELOCATION_QUESTION,
+            "I am unable to relocate, I can only work remotely from the city where I currently reside.",
+        ),
+    ]
+    return [phone, background, *relocation, *tools_fields()]
+
+
+def test_one_message_with_many_intents_is_split_into_scoped_actions(page):
+    # Live regression: one long instruction must produce phone fill, the
+    # background-policy confirmation, relocation everywhere-except-unable,
+    # an exclusive tools selection, and a submit-policy note — never a
+    # partial fan-out or generic prose.
+    load_sidepanel(page)
+    parsed = parse_intents(page, GIANT_MESSAGE, giant_page_fields())
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {
+        "ap-21": "I have reviewed the Background Check Policy",
+        "ap-30": "true",
+        "ap-31": "true",
+        "ap-32": "false",
+        "ap-1": "true",   # GitHub CI
+        "ap-2": "true",   # Docker
+        "ap-3": "false",  # Terraform
+        "ap-4": "false",  # Jenkins
+    }
+    assert [item["field"]["id"] for item in parsed["profileRequests"]] == ["ap-20"]
+    assert parsed["profileRequests"][0]["key"] == "phone"
+    assert parsed["submitRequested"] is True
+    assert parsed["canonical"] == [{"key": "willing_to_relocate", "value": True}]
