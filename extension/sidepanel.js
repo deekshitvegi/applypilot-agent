@@ -1978,12 +1978,80 @@ async function runAutomationCycle() {
   await runCurrentApplicationPage();
 }
 
+// Ask the model what this page actually is before acting on it. Following an
+// "Apply" link can land on a recruiting aggregator or a sign-up wall, and the
+// action planner alone will happily keep clicking there.
+async function understandCurrentPage() {
+  if (!state.provider?.configured) return null;
+  try {
+    const context = await chrome.runtime.sendMessage({ action: "readPageContext" });
+    if (context?.error || !context?.text) return null;
+    const understanding = await api("/api/pages/understand", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        goal: "Complete this job application on the employer's own site.",
+        page_url: context.url || "",
+        page_title: context.title || "",
+        page_text: String(context.text).slice(0, 12000),
+        expected_company: state.job?.company || "",
+        expected_role: state.job?.title || "",
+      }),
+    });
+    if (understanding?.summary) {
+      reportActivity(`Looking at this page: ${understanding.summary}`);
+    }
+    return understanding;
+  } catch (error) {
+    reportActivity(`I couldn't classify this page (${error.message}); continuing carefully.`);
+    return null;
+  }
+}
+
+// Page kinds the agent must never try to push through on its own.
+const HANDOFF_PAGE_KINDS = {
+  account_signup_required:
+    "This route wants me to create an account, which I never do. Create it yourself and press Start applying again, or say “skip” and I'll move to the next job.",
+  login_required:
+    "This page needs you signed in. Sign in with your browser password manager, then press Start applying again.",
+  blocked:
+    "This page can't be used right now (it looks blocked, expired, or in error).",
+  confirmation:
+    "This application already looks submitted, so I stopped rather than sending it twice.",
+};
+
 async function runCurrentApplicationPage() {
   // Re-inspect the live page on every start or resume. The stored flag is only
   // history; the user may have stopped or navigated back to an employer listing.
   {
     const entry = await chrome.runtime.sendMessage({ action: "openApplicationForm" });
     if (entry.error && !entry.already_form) {
+      // No form here. Work out what this page is before clicking anything: it
+      // may be an aggregator or a sign-up wall rather than the employer.
+      const understanding = await understandCurrentPage();
+      const handoff = understanding && HANDOFF_PAGE_KINDS[understanding.page_kind];
+      if (handoff) {
+        setAutomationRunning(
+          false,
+          `Paused: ${understanding.blocking_reason || handoff}`,
+        );
+        appendMessage(
+          `${handoff}${understanding.suggested_next_step ? `\n\n${understanding.suggested_next_step}` : ""}`,
+          "agent-message",
+        );
+        return;
+      }
+      if (understanding && understanding.belongs_to_expected_employer === false) {
+        setAutomationRunning(
+          false,
+          `Paused: this page is not ${state.job?.company || "the employer"}'s own application.`,
+        );
+        appendMessage(
+          `That Apply link led to ${understanding.summary || "a third-party site"}, not ${state.job?.company || "the employer"}'s own application. I stopped rather than submit your details to someone else. Say “skip” to move to the next job, or open the employer's careers page yourself and press Start applying.`,
+          "agent-message",
+        );
+        return;
+      }
       reportActivity(`${entry.error} Checking the current page for a form…`);
       const planned = await planAndClickPageAction(
         "Open or start this job application. Do not submit the application.",

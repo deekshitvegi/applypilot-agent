@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.16.0 - 2026-07-30
+
+- **The agent now works out what page it is on before acting.** Following an
+  employer Apply link landed on jackandjill.ai - a recruiting platform, not the
+  employer - and the action planner kept clicking there until it hit a guard
+  and reported the unhelpful "The AI planner cannot click final or destructive
+  controls". A new classification step runs first and returns a typed page kind
+  (application form, job listing, login required, account signup required,
+  third-party redirect, confirmation, blocked, unrelated) plus a plain-language
+  summary of what it sees.
+- **The run stops with an explanation instead of blundering on.** A page that
+  demands a new account, needs a sign-in, is already submitted, or is blocked
+  becomes a clear handoff. A page that does not belong to the expected employer
+  stops with "That Apply link led to ... not the employer's own application. I
+  stopped rather than submit your details to someone else."
+- Page text is passed to the model as untrusted data, and the classifier can
+  only choose from a fixed set of kinds - it never picks a control.
+
 ## 0.15.6 - 2026-07-30
 
 - **Fixed a regression from 0.15.5: application forms treated as sign-in

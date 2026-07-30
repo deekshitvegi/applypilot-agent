@@ -446,3 +446,35 @@ class CompanyRouteResult(BaseModel):
     board_url: str = ""
     matched_title: str = ""
     confidence: float = 0.0
+
+
+PageKind = Literal[
+    "application_form",
+    "job_listing",
+    "login_required",
+    "account_signup_required",
+    "third_party_redirect",
+    "confirmation",
+    "blocked",
+    "unrelated",
+]
+
+
+class PageUnderstandingRequest(BaseModel):
+    goal: str = ""
+    page_url: str = Field(default="", max_length=2000)
+    page_title: str = Field(default="", max_length=400)
+    page_text: str = Field(default="", max_length=12000)
+    expected_company: str = Field(default="", max_length=200)
+    expected_role: str = Field(default="", max_length=300)
+
+
+class PageUnderstanding(BaseModel):
+    """What the agent believes it is looking at, and why."""
+
+    page_kind: PageKind = "unrelated"
+    summary: str = Field(default="", max_length=400)
+    belongs_to_expected_employer: bool = True
+    can_proceed_automatically: bool = False
+    blocking_reason: str = Field(default="", max_length=400)
+    suggested_next_step: str = Field(default="", max_length=300)

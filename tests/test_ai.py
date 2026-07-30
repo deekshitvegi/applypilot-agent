@@ -595,3 +595,46 @@ def test_gemini_does_not_retry_schemaless_for_an_invalid_key(monkeypatch) -> Non
     with pytest.raises(AIProviderError, match="rejected this API key"):
         provider._structured("prompt", ChatResponse)
     assert attempts == [True]
+
+
+def test_page_understanding_classifies_before_acting(monkeypatch) -> None:
+    # Live regression: following an Apply link landed on jackandjill.ai, a
+    # recruiting platform, and the action planner kept clicking there. The
+    # runner now classifies the page first so it can stop and explain.
+    from applypilot.ai import GeminiProvider
+    from applypilot.models import PageUnderstanding, PageUnderstandingRequest
+
+    captured: dict = {}
+
+    def fake_structured(prompt, schema):
+        captured["prompt"] = prompt
+        captured["schema"] = schema
+        return PageUnderstanding(
+            page_kind="third_party_redirect",
+            summary="Marketing homepage for a recruiting platform.",
+            belongs_to_expected_employer=False,
+            can_proceed_automatically=False,
+            blocking_reason="Not the employer's own application page.",
+        )
+
+    provider = GeminiProvider("test-key", "test-model")
+    monkeypatch.setattr(provider, "_structured", fake_structured)
+
+    result = provider.understand_page(
+        PageUnderstandingRequest(
+            goal="Complete this job application on the employer's own site.",
+            page_url="https://www.jackandjill.ai/",
+            page_title="Jack & Jill",
+            page_text="Sign up. Talk to Jack and get hired by companies like Hedral Inc.",
+            expected_company="Hedral Inc",
+            expected_role="AI Engineer",
+        )
+    )
+
+    assert result.page_kind == "third_party_redirect"
+    assert result.belongs_to_expected_employer is False
+    assert result.can_proceed_automatically is False
+    assert captured["schema"] is PageUnderstanding
+    # The employer must be in the prompt, and page text marked untrusted.
+    assert "Hedral Inc" in captured["prompt"]
+    assert "untrusted" in captured["prompt"].lower()

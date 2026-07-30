@@ -66,6 +66,8 @@ from .models import (
     OnboardingState,
     PageActionDecision,
     PageActionRequest,
+    PageUnderstanding,
+    PageUnderstandingRequest,
     ProviderConfigRequest,
     ProviderStatus,
     ResumeDocument,
@@ -633,6 +635,16 @@ def form_plan(request: FormPlanRequest) -> FormFillPlan:
         resume_text=resume.extracted_text if resume else "",
         adapter=request.adapter,
     )
+
+
+@app.post("/api/pages/understand", response_model=PageUnderstanding)
+def understand_page(request: PageUnderstandingRequest) -> PageUnderstanding:
+    """Classify the current page so the runner can stop instead of blundering on."""
+    require_local_data_mode()
+    try:
+        return ai_provider.understand_page(request)
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/forms/agent-plan", response_model=FormAgentDecision)
