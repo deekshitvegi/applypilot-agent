@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.16.3 - 2026-07-30
+
+- **Answering a question in chat now fills the field and is remembered.**
+  "state texas", "set my state to Texas" and "phone device type mobile"
+  produced conversational prose while the required dropdown stayed empty and
+  blocked the application. Naming a visible field and its value is now a
+  scoped action, so the value is selected from the employer's own options,
+  verified on the page, and saved as a reusable answer for next time. A value
+  the page does not offer is still never invented.
+- **A saved answer whose wording differs slightly now matches.** The page
+  labelled a field "State" while the saved answer was "State / Territory", and
+  0.15.4's length guard rejected the pair. Matching now allows a short answer
+  to complete a short label while still refusing to let one claim a full
+  employer question.
+- **Stopped reporting a correct selection as a failure.** The page had accepted
+  "United States of America" for a saved "United States" and the run reported
+  "I could not complete: Country".
+
 ## 0.16.2 - 2026-07-30
 
 Found by surveying ten kinds of job site rather than fixing one report at a time.

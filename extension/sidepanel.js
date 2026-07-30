@@ -3322,6 +3322,57 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
     }
   }
 
+  // "<label> <value>" answers, e.g. "state texas", "phone device type mobile",
+  // "set my state to Texas". Users naturally name the field they are answering,
+  // and without this such a message became conversational prose while the
+  // required field stayed empty.
+  if (!assignments.size && !ambiguous.length) {
+    const labelValueMatches = [];
+    for (const field of fields) {
+      const question = field.group_label || field.label;
+      const normalizedLabel = normalizeQuestion(question);
+      if (!normalizedLabel || normalizedLabel.length < 3) continue;
+      const pattern = new RegExp(
+        `(?:^|\\b)(?:my\\s+|the\\s+)?${escapeRegularExpression(normalizedLabel)}\\s*(?:is|to|as|=|:)?\\s+(.+)$`,
+      );
+      const found = pattern.exec(normalizedMessage);
+      const spoken = found?.[1]?.trim();
+      if (!spoken) continue;
+      const visibleOptions = (field.options || [])
+        .map((option) => option.label || option.value)
+        .filter(Boolean);
+      if (visibleOptions.length) {
+        // Only ever choose from options the employer actually shows.
+        const chosen = visibleOptions.find(
+          (option) => normalizeQuestion(option) === spoken,
+        ) || visibleOptions.find((option) => {
+          const normalizedOption = normalizeQuestion(option);
+          return normalizedOption && new RegExp(`\\b${escapeRegularExpression(normalizedOption)}\\b`).test(spoken);
+        });
+        if (chosen) labelValueMatches.push({ field, value: chosen, question });
+      } else if (["text", "textarea", "email", "tel", "url", "number"].includes(field.field_type)) {
+        const raw = message.slice(message.toLowerCase().lastIndexOf(spoken.slice(0, 6).toLowerCase()));
+        labelValueMatches.push({ field, value: (raw || spoken).trim(), question });
+      }
+    }
+    // Prefer the most specific label when several match ("state" vs
+    // "state / territory"), and never guess between unrelated fields.
+    labelValueMatches.sort(
+      (left, right) => normalizeQuestion(right.question).length - normalizeQuestion(left.question).length,
+    );
+    if (labelValueMatches.length) {
+      const best = labelValueMatches[0];
+      const equallySpecific = labelValueMatches.filter(
+        (match) => normalizeQuestion(match.question).length === normalizeQuestion(best.question).length,
+      );
+      if (equallySpecific.length === 1) {
+        assign(best.field, best.value, best.question);
+      } else {
+        ambiguous.push(...new Set(equallySpecific.map((match) => match.question)));
+      }
+    }
+  }
+
   return {
     assignments: [...assignments.values()],
     canonical,

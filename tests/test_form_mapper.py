@@ -622,3 +622,39 @@ def test_exact_option_still_beats_a_longer_near_match() -> None:
     plan = plan_form_fill("https://example.test", fields, profile, [])
 
     assert plan.actions[0].value == "IN"
+
+
+def test_saved_state_answer_fills_a_state_territory_field() -> None:
+    # Live regression: the page labels the field "State", the saved answer is
+    # "State / Territory". The agent told the user "your state is set to Texas"
+    # while leaving the required dropdown empty and blocking the application.
+    fields = [
+        FormField(
+            id="state",
+            label="State",
+            field_type="select",
+            required=True,
+            options=[FormOption(value="TX", label="Texas"), FormOption(value="CA", label="California")],
+        )
+    ]
+    answers = [ReusableAnswer(id="s1", question="State / Territory", answer="Texas")]
+
+    plan = plan_form_fill("https://careers.example.test/apply", fields, CandidateProfile(), answers)
+
+    assert {a.field_id: a.value for a in plan.actions} == {"state": "TX"}
+    assert plan.unknown_fields == []
+
+
+def test_a_short_answer_still_cannot_claim_a_full_sentence_question() -> None:
+    # The guard above must not undo the sponsorship fix.
+    sponsorship = (
+        "Will you now or will you in the future require employment visa "
+        "sponsorship to work in the country in which this role is based?"
+    )
+    fields = [FormField(id="sp", label=sponsorship, field_type="text", required=True)]
+    answers = [ReusableAnswer(id="c1", question="Country", answer="United States")]
+
+    plan = plan_form_fill("https://careers.example.test/apply", fields, CandidateProfile(), answers)
+
+    assert plan.actions == []
+    assert [f.field_id for f in plan.unknown_fields] == ["sp"]

@@ -775,3 +775,79 @@ def test_a_sign_in_page_is_still_detected_next_to_that_guard(page):
     login = page.evaluate("() => clickReadyLogin(false)")
 
     assert login["login_page"] is True
+
+
+def test_a_longer_employer_option_still_counts_as_the_saved_answer(page):
+    # Live regression: the page had selected "United States of America" and the
+    # saved answer was "United States", so the run reported "I could not
+    # complete: Country" for a value the page had actually accepted.
+    load_worker_fixture(page, "rerender_on_select.html")
+    page.evaluate(
+        """() => {
+             const select = document.querySelector('#country');
+             select.options[1].textContent = 'United States of America';
+             select.options[1].value = 'USA';
+           }"""
+    )
+    country = field_by_label(scan(page), "country", "select")
+
+    result = fill(page, [action_for(country, "United States")])
+
+    assert result["results"][0]["status"] == "verified"
+    assert page.evaluate("() => document.querySelector('#country').value") == "USA"
+
+
+def label_value_fields() -> list[dict]:
+    return [
+        {
+            "id": "ap-1", "label": "State", "group_label": "State", "option_label": "",
+            "name": "state", "field_type": "select", "required": True, "value": "",
+            "options": [{"value": "TX", "label": "Texas"}, {"value": "CA", "label": "California"}],
+            "fingerprint": "f1",
+        },
+        {
+            "id": "ap-2", "label": "Phone Device Type", "group_label": "Phone Device Type",
+            "option_label": "", "name": "pt", "field_type": "select", "required": True, "value": "",
+            "options": [{"value": "M", "label": "Mobile"}, {"value": "H", "label": "Home"}],
+            "fingerprint": "f2",
+        },
+        {
+            "id": "ap-3", "label": "County", "group_label": "County", "option_label": "",
+            "name": "county", "field_type": "text", "required": False, "value": "",
+            "options": [], "fingerprint": "f3",
+        },
+    ]
+
+
+def test_naming_a_field_and_its_value_fills_that_field(page):
+    # Live regression: "state texas" and "set my state to Texas" produced
+    # conversational prose ("your state is set to Texas") while the required
+    # dropdown stayed empty and blocked the application.
+    load_sidepanel(page)
+    fields = label_value_fields()
+
+    for message, expected in [
+        ("state texas", ("ap-1", "Texas")),
+        ("set my state to Texas", ("ap-1", "Texas")),
+        ("my state is Texas", ("ap-1", "Texas")),
+        ("phone device type mobile", ("ap-2", "Mobile")),
+        ("county Denton County", ("ap-3", "Denton County")),
+    ]:
+        parsed = parse_intents(page, message, fields)
+        actual = [(item["field"]["id"], item["value"]) for item in parsed["assignments"]]
+        assert actual == [expected], f"{message!r} produced {actual}"
+
+
+def test_label_value_answers_only_choose_options_the_page_shows(page):
+    load_sidepanel(page)
+    parsed = parse_intents(page, "state Atlantis", label_value_fields())
+
+    # Atlantis is not an option, so nothing is assigned and nothing invented.
+    assert parsed["assignments"] == []
+
+
+def test_a_bare_option_reply_still_binds_to_its_question(page):
+    load_sidepanel(page)
+    parsed = parse_intents(page, "california", label_value_fields())
+
+    assert [(i["field"]["id"], i["value"]) for i in parsed["assignments"]] == [("ap-1", "California")]

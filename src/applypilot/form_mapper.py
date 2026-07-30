@@ -208,8 +208,14 @@ def map_reusable_answer(
         # answering "...require visa sponsorship to work in the country in
         # which this role is based?" with "United States".
         if candidate in comparison_label or comparison_label in candidate:
-            lengths = sorted((len(candidate), len(comparison_label)))
-            if lengths[1] and lengths[0] / lengths[1] >= 0.5:
+            # Length alone was too blunt: it rejected "State" for "State /
+            # Territory". What actually distinguishes the bad case is that the
+            # longer text is a *sentence*. A short saved answer may complete a
+            # short label, but never claim a full employer question.
+            longer = candidate if len(candidate) > len(comparison_label) else comparison_label
+            shorter = comparison_label if longer is candidate else candidate
+            comparable_length = len(longer) and len(shorter) / len(longer) >= 0.5
+            if len(longer.split()) <= 6 or comparable_length:
                 score = max(score, 0.95)
         if best is None or score > best[0]:
             best = (score, answer)

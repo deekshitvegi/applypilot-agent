@@ -1243,9 +1243,18 @@ async function runFormPass(actions) {
           || (normalizeText(text) && semanticChoice(text) === semanticChoice(requested))
         ))
       ));
+      // An employer's option is often a longer form of the saved answer:
+      // "United States of America" for "United States". Reporting that as a
+      // failure hid a selection the page had actually accepted.
+      const startsWithWord = (longer, shorter) => (
+        Boolean(longer) && Boolean(shorter)
+        && longer !== shorter
+        && (longer.startsWith(`${shorter} `) || shorter.startsWith(`${longer} `))
+      );
       return observedTexts.some((text) => (
         normalizeText(text) === normalizeText(requested)
         || semanticChoice(text) === semanticChoice(requested)
+        || startsWithWord(normalizeText(text), normalizeText(requested))
         || (requestedOption && [requestedOption.value, requestedOption.label].some((optionText) => (
           normalizeText(optionText) && normalizeText(optionText) === normalizeText(text)
         )))
