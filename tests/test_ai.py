@@ -518,3 +518,75 @@ def test_gemini_waits_for_a_short_reset_and_retries_once(monkeypatch) -> None:
     assert "retried once successfully" in result.answer
     assert calls == [True, True]
     assert waits == [2.9]
+
+
+class _SchemaRejection(Exception):
+    """Mimics google-genai's 400 when a nested response_schema is refused."""
+
+    def __init__(self) -> None:
+        super().__init__("Invalid JSON payload received. Unknown name \"$ref\" at response_schema")
+        self.code = 400
+        self.status = "INVALID_ARGUMENT"
+        self.message = 'Invalid value at response_schema: unknown name "$ref"'
+
+
+def test_gemini_retries_without_schema_when_google_rejects_it(monkeypatch) -> None:
+    # Live regression: the field planner died with "Gemini rejected the
+    # request ... invalid argument" because FormAgentDecision nests
+    # FormAgentAction, which Pydantic emits as $defs/$ref. Falling back to a
+    # schemaless JSON request keeps the agent working; the reply is still
+    # validated against the same model before anything uses it.
+    from applypilot.ai import ChatResponse, GeminiProvider
+
+    calls: list[bool] = []
+
+    class FakeModels:
+        def generate_content(self, *, model, contents, config):
+            used_schema = getattr(config, "response_schema", None) is not None
+            calls.append(used_schema)
+            if used_schema:
+                raise _SchemaRejection()
+            return type("Response", (), {"text": '{"answer": "recovered"}'})()
+
+    class FakeClient:
+        def __init__(self, **_kwargs) -> None:
+            self.models = FakeModels()
+
+    monkeypatch.setattr("applypilot.ai.genai.Client", FakeClient)
+    provider = GeminiProvider("test-key", "gemini-2.5-flash")
+
+    result = provider._structured("prompt", ChatResponse)
+
+    assert result.answer == "recovered"
+    assert calls == [True, False]
+
+
+def test_gemini_does_not_retry_schemaless_for_an_invalid_key(monkeypatch) -> None:
+    import pytest
+
+    from applypilot.ai import AIProviderError, ChatResponse, GeminiProvider
+
+    class KeyRejection(Exception):
+        def __init__(self) -> None:
+            super().__init__("API key not valid")
+            self.code = 401
+            self.status = "UNAUTHENTICATED"
+            self.message = "API key not valid"
+
+    attempts: list[bool] = []
+
+    class FakeModels:
+        def generate_content(self, *, model, contents, config):
+            attempts.append(getattr(config, "response_schema", None) is not None)
+            raise KeyRejection()
+
+    class FakeClient:
+        def __init__(self, **_kwargs) -> None:
+            self.models = FakeModels()
+
+    monkeypatch.setattr("applypilot.ai.genai.Client", FakeClient)
+    provider = GeminiProvider("bad-key", "gemini-2.5-flash")
+
+    with pytest.raises(AIProviderError, match="rejected this API key"):
+        provider._structured("prompt", ChatResponse)
+    assert attempts == [True]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import math
 import re
 import time
@@ -107,8 +108,31 @@ def gemini_error_message(exc: Exception, retry_attempted: bool = False) -> str:
         return "The selected Gemini model is unavailable for this key. Choose an available Gemini model and save again."
     if code == 400 or status in {"INVALID_ARGUMENT", "FAILED_PRECONDITION"}:
         detail = safe_detail or "No additional detail was returned."
-        return f"Gemini rejected the connection test. Google reported: {detail}"
+        return f"Gemini rejected the request. Google reported: {detail}"
     return "Gemini could not complete the request. Check the saved key, model access, and Google AI Studio quota."
+
+
+def gemini_rejected_schema(error: Exception) -> bool:
+    """True when Gemini refused the structured-output schema itself.
+
+    Nested Pydantic models serialize to ``$defs``/``$ref``, which the API
+    rejects as an invalid argument. That is worth retrying without the schema,
+    unlike a bad key or an exhausted quota.
+    """
+    code = getattr(error, "code", None)
+    status = str(getattr(error, "status", "") or "").upper()
+    if code != 400 and status not in {"INVALID_ARGUMENT", "FAILED_PRECONDITION"}:
+        return False
+    lowered = str(getattr(error, "message", "") or error).lower()
+    schema_markers = (
+        "response_schema",
+        "responseschema",
+        "$ref",
+        "$defs",
+        "schema",
+        "json_schema",
+    )
+    return any(marker in lowered for marker in schema_markers)
 
 
 class BaseAIProvider:
@@ -527,16 +551,39 @@ class GeminiProvider(BaseAIProvider):
         )
         client = genai.Client(api_key=self.api_key)
         retry_attempted = False
-        for attempt in range(2):
+        # Nested schemas with defaults and enums (FormAgentDecision carries a
+        # list of FormAgentAction) become $defs/$ref, which Gemini rejects with
+        # INVALID_ARGUMENT. When that happens, ask for plain JSON of the same
+        # shape instead. Model output stays untrusted either way: the reply is
+        # still validated against the Pydantic schema before anything uses it.
+        schemaless = False
+        for attempt in range(3):
             try:
-                response = client.models.generate_content(
-                    model=self.model,
-                    contents=[types.Content(role="user", parts=parts)],
-                    config=types.GenerateContentConfig(
+                config = (
+                    types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        temperature=0.2,
+                    )
+                    if schemaless
+                    else types.GenerateContentConfig(
                         response_mime_type="application/json",
                         response_schema=schema,
                         temperature=0.2,
-                    ),
+                    )
+                )
+                request_parts = list(parts)
+                if schemaless:
+                    request_parts.append(types.Part.from_text(
+                        text=(
+                            "\n\nReturn only a JSON object matching this JSON Schema. "
+                            "Do not wrap it in markdown.\n"
+                            f"{json.dumps(schema.model_json_schema())}"
+                        ),
+                    ))
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=[types.Content(role="user", parts=request_parts)],
+                    config=config,
                 )
                 if not response.text:
                     raise AIProviderError("Gemini returned an empty response")
@@ -550,8 +597,11 @@ class GeminiProvider(BaseAIProvider):
             except AIProviderError:
                 raise
             except Exception as exc:
+                if not schemaless and gemini_rejected_schema(exc):
+                    schemaless = True
+                    continue
                 delay = gemini_retry_delay(exc)
-                if attempt == 0 and delay is not None and delay <= 60:
+                if not retry_attempted and delay is not None and delay <= 60:
                     retry_attempted = True
                     time.sleep(min(delay + 0.5, 60))
                     continue

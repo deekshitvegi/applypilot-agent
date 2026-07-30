@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.14.2 - 2026-07-30
+
+- **Fixed the AI field planner dying on Gemini.** `FormAgentDecision` nests
+  `FormAgentAction`, which Pydantic serialises as `$defs`/`$ref`; Gemini
+  rejects that structured-output schema with `INVALID_ARGUMENT`, so every
+  planning pass failed and every question fell back to the user. Gemini calls
+  now retry once without the schema, asking for plain JSON of the same shape.
+  Model output stays untrusted: the reply is still validated against the same
+  Pydantic model before anything uses it. Key, quota and permission failures
+  are unaffected and still fail fast.
+- Stopped reporting unrelated Gemini failures as "Gemini rejected the
+  connection test"; a failed planning call no longer claims a connection test
+  ran.
+
 ## 0.14.1 - 2026-07-30
 
 - **Fixed the same question being asked forever.** Saving an answer for a
