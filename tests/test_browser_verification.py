@@ -622,3 +622,50 @@ def test_job_extraction_never_returns_bundled_script_text(page):
     job = page.evaluate("() => extractJobFromPage()")
     assert "use strict" not in job["description"]
     assert "__ANALYTICS__" not in job["description"]
+
+
+# --- CAPTCHA: only pause for a challenge the user can actually solve --------
+#
+# Live regression: a run stopped with "Paused: CAPTCHA, MFA, or a verification
+# code requires you" on an ordinary employer form. The detector matched any
+# visible captcha iframe, including the invisible reCAPTCHA badge that sits on
+# a large share of career sites and requires no interaction at all.
+
+
+def test_invisible_recaptcha_badge_does_not_block_the_application(page):
+    load_worker_fixture(page, "recaptcha_badge.html")
+
+    entry = page.evaluate("() => clickApplicationEntry(true)")
+    assert "CAPTCHA" not in (entry.get("error") or "")
+
+    login = page.evaluate("() => clickReadyLogin(false)")
+    assert "CAPTCHA" not in (login.get("error") or "")
+    # No password field either, so this is simply not a login page.
+    assert login["login_page"] is False
+
+
+def test_recaptcha_checkbox_challenge_still_stops_for_the_user(page):
+    load_worker_fixture(page, "recaptcha_checkbox.html")
+
+    login = page.evaluate("() => clickReadyLogin(true)")
+
+    assert login["clicked"] is False
+    assert login["login_page"] is True
+    assert "CAPTCHA" in login["error"]
+
+
+def test_one_time_code_field_still_stops_for_the_user(page):
+    load_worker_fixture(page, "recaptcha_badge.html")
+    page.evaluate(
+        """() => {
+             const otp = document.createElement('input');
+             otp.setAttribute('autocomplete', 'one-time-code');
+             otp.style.width = '200px';
+             document.querySelector('#application').appendChild(otp);
+           }"""
+    )
+
+    login = page.evaluate("() => clickReadyLogin(true)")
+
+    assert login["login_page"] is True
+    assert "CAPTCHA" in login["error"]

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.1 - 2026-07-30
+
+- **Stopped pausing on the invisible reCAPTCHA badge.** A run halted with
+  "Paused: CAPTCHA, MFA, or a verification code requires you" on an ordinary
+  employer application form. The detector matched any visible captcha iframe,
+  and the reCAPTCHA v3 badge — present on a large share of career sites, and
+  requiring no interaction whatsoever — is a visible 256x60 iframe. Every such
+  application was blocked before it began.
+- A pause now requires a challenge the user can actually solve: a visible
+  one-time-code field, the reCAPTCHA/hCaptcha image challenge (`bframe`), or a
+  checkbox widget of interactive size. Invisible badges and `size=invisible`
+  anchors are ignored. CAPTCHA, MFA and verification codes are still never
+  bypassed or solved — they remain user handoffs.
+
 ## 0.15.0 - 2026-07-30
 
 - **Easy Apply listings now route to the employer's own application page.**

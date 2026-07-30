@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Login page with a reCAPTCHA checkbox challenge</title>
+    <style>
+      main { width: 480px; margin: 24px; font-family: sans-serif; }
+      .g-recaptcha { width: 304px; height: 78px; margin: 12px 0; }
+      input { display: block; width: 300px; padding: 6px; margin: 6px 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <form id="login">
+        <input id="email" name="email" type="email" autocomplete="username" value="user@example.test" />
+        <input id="password" name="password" type="password" value="filled-by-manager" />
+        <!-- reCAPTCHA v2: the user must tick this box themselves. -->
+        <div class="g-recaptcha">
+          <iframe
+            title="reCAPTCHA"
+            src="https://www.google.com/recaptcha/api2/anchor?k=demo&amp;size=normal"
+            width="304" height="78"></iframe>
+        </div>
+        <button type="submit">Sign in</button>
+      </form>
+    </main>
+  </body>
+</html>

@@ -1620,15 +1620,23 @@ function clickFinalSubmit() {
       error: "This is a LinkedIn listing, not an application form. Open the employer application first.",
     };
   }
-  const challenge = [
-    "iframe[src*='captcha']",
-    "iframe[src*='recaptcha']",
-    "iframe[src*='hcaptcha']",
-    "[class*='captcha']",
-    "[id*='captcha']",
-    "input[autocomplete='one-time-code']",
-  ].some((selector) => [...document.querySelectorAll(selector)].some(visible));
-  if (challenge) {
+  // Only a challenge the user must actually solve counts. The invisible
+  // reCAPTCHA badge sits on a large share of career sites and needs no
+  // interaction; treating it as a challenge blocked untouched applications.
+  const solvableChallenge = () => {
+    if ([...document.querySelectorAll("input[autocomplete='one-time-code']")].some(visible)) {
+      return true;
+    }
+    return [...document.querySelectorAll("iframe")].filter(visible).some((frame) => {
+      const source = (frame.getAttribute("src") || "").toLowerCase();
+      if (!source.includes("captcha")) return false;
+      if (source.includes("bframe") || source.includes("frame=challenge")) return true;
+      if (source.includes("size=invisible") || frame.closest(".grecaptcha-badge")) return false;
+      const rect = frame.getBoundingClientRect();
+      return rect.width >= 200 && rect.height >= 60;
+    });
+  };
+  if (solvableChallenge()) {
     return { clicked: false, error: "CAPTCHA or verification is present and requires the user." };
   }
 
@@ -2037,9 +2045,18 @@ function clickReadyLogin(allowClick) {
     const rect = element.getBoundingClientRect();
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
-  const challenge = [...document.querySelectorAll(
-    "iframe[src*='captcha'], iframe[src*='recaptcha'], iframe[src*='hcaptcha'], input[autocomplete='one-time-code']",
-  )].some(visible);
+  // Distinguish a real challenge from the invisible reCAPTCHA badge, which
+  // requires nothing of the user. Pausing on the badge stopped applications
+  // on ordinary employer forms that had presented no challenge at all.
+  const challenge = [...document.querySelectorAll("input[autocomplete='one-time-code']")].some(visible)
+    || [...document.querySelectorAll("iframe")].filter(visible).some((frame) => {
+      const source = (frame.getAttribute("src") || "").toLowerCase();
+      if (!source.includes("captcha")) return false;
+      if (source.includes("bframe") || source.includes("frame=challenge")) return true;
+      if (source.includes("size=invisible") || frame.closest(".grecaptcha-badge")) return false;
+      const rect = frame.getBoundingClientRect();
+      return rect.width >= 200 && rect.height >= 60;
+    });
   if (challenge) {
     return {
       clicked: false,
