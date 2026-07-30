@@ -898,15 +898,19 @@ async function runFormPass(actions) {
       .map((id) => control.getRootNode()?.getElementById?.(id) || document.getElementById(id))
       .filter(Boolean);
     if (!popupRoots.length) {
-      popupRoots = [...document.querySelectorAll("[role='listbox']")].filter(elementVisible);
+      popupRoots = [...document.querySelectorAll("[role='listbox'], [role='menu']")]
+        .filter(elementVisible);
     }
-    const selector = popupRoots.length
-      ? "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], li"
-      : "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], [class*='option'], li";
-    return (popupRoots.length
-      ? popupRoots.flatMap((popup) => [...popup.querySelectorAll(selector)])
-      : [...document.querySelectorAll(selector)]
-    ).filter(elementVisible);
+    // Never fall back to the whole document. Doing so turned every list item on
+    // the page into an "option": a Location dropdown reported 27 choices made
+    // up of a salary chip, Yes/No buttons, relocation checkboxes and the EEO
+    // race list, and the panel then offered all of them as one question.
+    if (!popupRoots.length) return [];
+    return popupRoots
+      .flatMap((popup) => [...popup.querySelectorAll(
+        "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], li",
+      )])
+      .filter(elementVisible);
   };
 
   const closePopup = (control) => {

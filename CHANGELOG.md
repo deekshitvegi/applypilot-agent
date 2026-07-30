@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.17.2 - 2026-07-30
+
+- **A dropdown no longer claims the whole page as its options.** When a custom
+  dropdown exposed no identifiable popup, option enumeration fell back to
+  querying the entire document, so on a live Ashby form the Location and School
+  dropdowns each reported 27 "options" assembled from a salary chip, Yes/No
+  buttons, relocation checkboxes and the EEO race list. The panel then offered
+  all of them together as a single question. Options are now read only from a
+  popup the control actually owns; a dropdown whose choices cannot be seen
+  reports none rather than inventing them, and the remaining questions keep
+  their own separate, correct choices.
+
 ## 0.17.1 - 2026-07-30
 
 - **The résumé now answers optional questions.** On a live Ashby form, School,

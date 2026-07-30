@@ -851,3 +851,26 @@ def test_a_bare_option_reply_still_binds_to_its_question(page):
     parsed = parse_intents(page, "california", label_value_fields())
 
     assert [(i["field"]["id"], i["value"]) for i in parsed["assignments"]] == [("ap-1", "California")]
+
+
+def test_a_dropdown_never_reports_unrelated_page_items_as_its_options(page):
+    # Live regression from an Ashby form: a Location dropdown that exposes no
+    # listbox reported 27 "options" scraped from the whole document - a salary
+    # chip, Yes/No buttons, relocation checkboxes and the EEO race list - and
+    # the panel then offered every one of them as a single question.
+    load_worker_fixture(page, "combobox_filter_input.html")
+    page.evaluate(
+        """() => {
+             // Page furniture that the old document-wide fallback swept up.
+             const noise = document.createElement('ul');
+             noise.innerHTML = '<li>$175K - $250K</li><li>Male</li><li>Female</li>'
+                             + '<li data-value="x">Hispanic or Latino</li>';
+             document.querySelector('main').appendChild(noise);
+             // Make the widget unidentifiable as a popup owner.
+             document.querySelector('#q1-menu').removeAttribute('role');
+           }"""
+    )
+
+    field = field_by_label(page.evaluate("() => runFormPass('enumerate')"), "work authorization", "select")
+
+    assert field["options"] == []
