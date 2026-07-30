@@ -579,3 +579,46 @@ def test_comparable_length_questions_still_match_loosely() -> None:
     )
 
     assert {a.field_id: a.value for a in plan.actions} == {"ap-1": "76208"}
+
+
+def test_country_picks_the_closest_option_not_the_first_containing_one() -> None:
+    # Live regression from a Workday form: "United States" selected "United
+    # States Minor Outlying Islands (+1)" because containment matched the
+    # first option in list order. The wrong country reached the employer.
+    profile = CandidateProfile(country="United States")
+    fields = [
+        FormField(
+            id="country",
+            label="Country",
+            field_type="select",
+            required=True,
+            options=[
+                FormOption(value="UMI", label="United States Minor Outlying Islands (+1)"),
+                FormOption(value="USA", label="United States of America (+1)"),
+            ],
+        )
+    ]
+
+    plan = plan_form_fill("https://swinerton.wd1.myworkdayjobs.test", fields, profile, [])
+
+    assert plan.actions[0].value == "USA"
+
+
+def test_exact_option_still_beats_a_longer_near_match() -> None:
+    profile = CandidateProfile(country="India")
+    fields = [
+        FormField(
+            id="country",
+            label="Country",
+            field_type="select",
+            required=True,
+            options=[
+                FormOption(value="IO", label="British Indian Ocean Territory"),
+                FormOption(value="IN", label="India"),
+            ],
+        )
+    ]
+
+    plan = plan_form_fill("https://example.test", fields, profile, [])
+
+    assert plan.actions[0].value == "IN"

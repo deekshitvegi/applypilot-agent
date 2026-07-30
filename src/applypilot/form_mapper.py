@@ -252,8 +252,22 @@ def coerce_option(value: str, field: FormField) -> str:
         option_text = normalize(f"{option.value} {option.label}")
         if normalized_value.isdigit() and normalized_value in option_text.split():
             return usable_option_value(option.value, option.label)
-        if normalized_value in option_text or option_text in normalized_value:
-            return usable_option_value(option.value, option.label)
+    # Containment alone is ambiguous: "United States" is inside both "United
+    # States of America" and "United States Minor Outlying Islands", and
+    # taking the first match picked the wrong country on a live Workday form.
+    # Rank the containing options so the closest one wins.
+    contained = [
+        (
+            SequenceMatcher(None, normalized_value, normalize(option.label or option.value)).ratio(),
+            option,
+        )
+        for option in field.options
+        if normalized_value in normalize(f"{option.value} {option.label}")
+        or normalize(f"{option.value} {option.label}") in normalized_value
+    ]
+    if contained:
+        best_option = max(contained, key=lambda item: item[0])[1]
+        return usable_option_value(best_option.value, best_option.label)
     fuzzy = max(
         (
             (

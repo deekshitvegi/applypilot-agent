@@ -538,6 +538,13 @@ async function runFormPass(actions) {
     } else {
       scope = document.querySelector("main, [role='main']") || document;
     }
+    // A scoped container that holds no controls means the site moved its form
+    // outside the expected wrapper. Falling back to the document beats
+    // reporting "no fillable fields" on a page full of them.
+    const controlSelector = "input, textarea, select, [role='combobox'], [role='radio'], [role='checkbox']";
+    if (scope && scope !== document && !scope.querySelector(controlSelector)) {
+      scope = document;
+    }
     const roots = [scope];
     for (let index = 0; index < roots.length; index += 1) {
       [...roots[index].querySelectorAll("*")].forEach((element) => {

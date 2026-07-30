@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16.1 - 2026-07-30
+
+- **Fixed the wrong country being selected.** On a live Workday form "United
+  States" chose "United States Minor Outlying Islands (+1)", because option
+  matching returned the first option that merely contained the value. Matching
+  options are now ranked by closeness, so the intended country wins. A wrong
+  country reaching an employer is exactly the kind of unverified answer that
+  must never happen.
+- **"No fillable fields were found" on a page full of fields.** When a site
+  moves its form outside the container the adapter scopes to, the scan now
+  falls back to the whole document instead of reporting an empty page.
+
 ## 0.16.0 - 2026-07-30
 
 - **The agent now works out what page it is on before acting.** Following an
