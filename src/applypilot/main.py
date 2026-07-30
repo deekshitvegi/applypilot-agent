@@ -7,6 +7,7 @@ import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,7 @@ from .applications import (
     create_application,
     transition_application,
 )
+from .company_route import resolve_company_application_url, safe_public_url
 from .config import settings
 from .documents import (
     artifact_filename,
@@ -48,6 +50,8 @@ from .models import (
     CandidateProfile,
     ChatRequest,
     ChatResponse,
+    CompanyRouteRequest,
+    CompanyRouteResult,
     CoverLetterDocument,
     FormAgentDecision,
     FormAgentRequest,
@@ -581,6 +585,39 @@ def refine_application_answer(
 @app.post("/api/application-route", response_model=ApplicationRouteDecision)
 def application_route(options: JobApplicationOptions) -> ApplicationRouteDecision:
     return choose_application_route(options)
+
+
+@app.post("/api/company-route", response_model=CompanyRouteResult)
+def company_route(request: CompanyRouteRequest) -> CompanyRouteResult:
+    """Find the employer's own application page for a job seen on a board.
+
+    Used when a listing offers only Easy Apply: the employer almost always
+    still posts the role on their own ATS, and applying there is preferred.
+    Only a verified recognised-ATS URL is returned.
+    """
+    require_local_data_mode()
+
+    def fetch(url: str) -> tuple[int, str]:
+        if not safe_public_url(url):
+            raise ValueError("Refusing to fetch a non-public URL.")
+        response = httpx.get(
+            url,
+            timeout=8.0,
+            follow_redirects=True,
+            headers={"User-Agent": "ApplyPilot/1.0 (+local job application agent)"},
+        )
+        return response.status_code, response.text
+
+    resolved = resolve_company_application_url(request.company, request.title, fetch)
+    if resolved is None:
+        return CompanyRouteResult(found=False)
+    return CompanyRouteResult(
+        found=True,
+        url=resolved.url,
+        board_url=resolved.board_url,
+        matched_title=resolved.matched_title,
+        confidence=resolved.confidence,
+    )
 
 
 @app.post("/api/forms/plan", response_model=FormFillPlan)

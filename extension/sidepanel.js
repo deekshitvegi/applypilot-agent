@@ -929,13 +929,41 @@ async function captureJob(options = {}) {
     elements.chatContext.textContent = captured.title || "Active job";
     elements.tailorResume.disabled = !(state.localMode && state.provider?.configured);
     elements.analyzeFit.disabled = !(state.localMode && state.provider?.configured);
+    let companyApplicationUrl = captured.company_application_url;
+    let companyUrlVerified = captured.company_url_verified;
+    // A listing that only offers Easy Apply is still usually posted on the
+    // employer's own ATS, and applying there is the preferred route. Look the
+    // company up before settling for the aggregator's form.
+    if (!companyUrlVerified && state.routePreference !== "easy_apply_first" && captured.company) {
+      reportActivity(`Looking for ${captured.company}'s own application page before using Easy Apply…`);
+      try {
+        const discovered = await api("/api/company-route", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ company: captured.company, title: captured.title || "" }),
+        });
+        if (discovered.found) {
+          companyApplicationUrl = discovered.url;
+          companyUrlVerified = true;
+          reportActivity(
+            discovered.matched_title
+              ? `Found it — “${discovered.matched_title}” on ${captured.company}'s own careers site. I'll apply there instead of Easy Apply.`
+              : `Found ${captured.company}'s careers site. I'll look for this role there instead of using Easy Apply.`,
+          );
+        } else {
+          reportActivity(`I couldn't verify a careers page for ${captured.company}, so I'll use the listing's own apply route.`);
+        }
+      } catch (error) {
+        reportActivity(`Company-site lookup failed (${error.message}); using the listing's apply route.`);
+      }
+    }
     state.route = await api("/api/application-route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         source_url: captured.source_url,
-        company_application_url: captured.company_application_url,
-        company_url_verified: captured.company_url_verified,
+        company_application_url: companyApplicationUrl,
+        company_url_verified: companyUrlVerified,
         external_apply_available: captured.external_apply_available,
         easy_apply_available: captured.easy_apply_available,
         prefer_easy_apply: state.routePreference === "easy_apply_first",

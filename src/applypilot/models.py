@@ -431,3 +431,18 @@ class ApplicationTransition(BaseModel):
     status: ApplicationStatus
     message: str
     metadata: dict[str, str] = Field(default_factory=dict)
+
+
+class CompanyRouteRequest(BaseModel):
+    company: str = Field(default="", max_length=200)
+    title: str = Field(default="", max_length=300)
+
+
+class CompanyRouteResult(BaseModel):
+    """A verified employer application URL, or found=False."""
+
+    found: bool = False
+    url: str = ""
+    board_url: str = ""
+    matched_title: str = ""
+    confidence: float = 0.0

@@ -139,9 +139,20 @@ the listing exposes LinkedIn Easy Apply.
 ```text
 Job listing
     |---- verified company/ATS URL ----> company application (preferred)
-    |---- no verified external URL ----> Easy Apply (fallback)
+    |---- Easy Apply only -------------> resolve the employer's own board
+    |                                     |-- verified -> company application
+    |                                     `-- unverified -> Easy Apply
     `---- ambiguous or unsafe URL ------> ask the user
 ```
+
+A listing that exposes only Easy Apply is not accepted as the destination.
+`company_route.py` derives candidate board slugs from the company name (legal
+suffixes and batch tags removed), tries only recognised ATS hosts over HTTPS,
+and **verifies the board actually names that company** before trusting it — a
+slug collision must never send an application to the wrong employer. The
+matching posting is located by title similarity; when only the board verifies,
+that is still preferred over the aggregator. An unverified guess is never
+returned, and loopback/private targets are refused before any fetch.
 
 Redirects are recorded and revalidated. Unknown domains, shortened URLs, and
 URLs that request unusual credentials or payment stop the agent for review.

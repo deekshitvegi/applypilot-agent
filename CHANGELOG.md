@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.15.0 - 2026-07-30
+
+- **Easy Apply listings now route to the employer's own application page.**
+  Previously a LinkedIn job offering only Easy Apply had no company URL to
+  discover, so the agent fell back to the aggregator's form. ApplyPilot now
+  derives candidate ATS boards from the company name, verifies each one really
+  belongs to that employer, finds the matching posting, and applies there.
+  Verified live: an Easy-Apply-only listing for Anthropic "Research Engineer"
+  now routes to the real Greenhouse posting instead of Easy Apply.
+- Discovery is general, never per-employer: slugs come from the company name
+  with legal suffixes and YC batch tags stripped, candidates only target
+  recognised ATS hosts, a board whose page does not name the company is
+  rejected so a slug collision cannot send an application to the wrong
+  employer, and an unverified guess is never returned. Non-HTTPS, loopback and
+  private-network targets are refused before any fetch.
+- Easy Apply remains the fallback when no company page can be verified, and
+  Settings - Where to apply still lets you prefer Easy Apply outright.
+
 ## 0.14.3 - 2026-07-30
 
 - **The panel now shows the local agent's version and warns when it does not
