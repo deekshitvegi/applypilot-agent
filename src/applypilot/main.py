@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
+from .adapters import is_job_board, is_recognized_ats_url
 from .ai import AIProviderError, AIProviderManager
 from .applications import (
     InvalidApplicationTransition,
@@ -642,9 +643,21 @@ def understand_page(request: PageUnderstandingRequest) -> PageUnderstanding:
     """Classify the current page so the runner can stop instead of blundering on."""
     require_local_data_mode()
     try:
-        return ai_provider.understand_page(request)
+        result = ai_provider.understand_page(request)
     except AIProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    # Deterministic code owns identity. The model reads page copy and called a
+    # LinkedIn listing and a SmartRecruiters careers portal "third party", which
+    # would have halted every run at its starting point.
+    if is_recognized_ats_url(request.page_url):
+        result.host_kind = "ats"
+        result.belongs_to_expected_employer = True
+    elif is_job_board(request.page_url):
+        result.host_kind = "job_board"
+        result.belongs_to_expected_employer = True
+    else:
+        result.host_kind = "unknown"
+    return result
 
 
 @app.post("/api/forms/agent-plan", response_model=FormAgentDecision)

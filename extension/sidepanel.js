@@ -134,6 +134,8 @@ const state = {
   applicationSteps: 0,
   applicationStarted: false,
   lastStepFingerprint: "",
+  // Pages the planner already failed to get past, so a resume cannot loop.
+  stuckPages: new Map(),
   minimumFit: 60,
   siteAccessGranted: false,
   loginAssistance: false,
@@ -1863,6 +1865,7 @@ async function startAutomation() {
   );
   state.jobsProcessed = 0;
   state.applicationsSubmitted = 0;
+  if (!resumeCapturedJob) state.stuckPages = new Map();
   state.seenJobUrls = new Set();
   if (!resumeCapturedJob) state.jobQueue = [];
   setAutomationRunning(
@@ -2041,13 +2044,38 @@ async function runCurrentApplicationPage() {
         );
         return;
       }
-      if (understanding && understanding.belongs_to_expected_employer === false) {
+      // Only an unrecognised host can be a third party worth stopping on. A
+      // job board is where every run starts, and a recognised ATS is the
+      // employer's own application host — stopping on either would halt
+      // essentially every application.
+      if (
+        understanding
+        && understanding.host_kind === "unknown"
+        && understanding.belongs_to_expected_employer === false
+      ) {
         setAutomationRunning(
           false,
           `Paused: this page is not ${state.job?.company || "the employer"}'s own application.`,
         );
         appendMessage(
           `That Apply link led to ${understanding.summary || "a third-party site"}, not ${state.job?.company || "the employer"}'s own application. I stopped rather than submit your details to someone else. Say “skip” to move to the next job, or open the employer's careers page yourself and press Start applying.`,
+          "agent-message",
+        );
+        return;
+      }
+      // Remember pages that already defeated the planner. Without this the
+      // agent re-ran the same "click Apply -> page did not change" cycle every
+      // time the run resumed, forever.
+      const activeTab = await chrome.runtime.sendMessage({ action: "getActiveTab" });
+      const stuckKey = normalizeJobUrl(activeTab?.url || "");
+      const attempts = (state.stuckPages.get(stuckKey) || 0) + 1;
+      state.stuckPages.set(stuckKey, attempts);
+      if (attempts > 2) {
+        setAutomationRunning(false, "Paused: I can't get past this page on my own.");
+        appendMessage(
+          `I've tried ${attempts - 1} times to open the application from this page and it doesn't change. `
+          + "Please click the employer's Apply button yourself — once the actual form is on screen, "
+          + "press Start applying and I'll take it from there. Or say “skip” to move to the next job.",
           "agent-message",
         );
         return;

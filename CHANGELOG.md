@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.16.2 - 2026-07-30
+
+Found by surveying ten kinds of job site rather than fixing one report at a time.
+
+- **The page classifier would have stopped every run at its starting point.**
+  Asked to judge a LinkedIn listing, the model reasonably answered "this is not
+  the employer", and the runner treated that as a third-party redirect and
+  halted. SmartRecruiters, Indeed and Dice were rejected the same way. Host
+  identity is now decided deterministically from the URL - a recognised ATS is
+  the employer's application host, a job board is the expected starting point -
+  and only an unrecognised host can be a third party worth stopping on. The
+  model still explains what it sees; it no longer decides whether to stop.
+- **A stuck page no longer loops forever.** "AI page planner selected apply" /
+  "the observed page has not changed" repeated indefinitely because the guard
+  reset whenever the run resumed. Pages that already defeated the planner are
+  remembered for the run, and after two attempts the agent stops and asks the
+  user to open the form manually.
+- **Job-board search pages are no longer scanned as forms.** Dice reported 22
+  phantom fields and an application surface from its filter controls. Board
+  scoping now covers Dice, Glassdoor, ZipRecruiter, Monster and SimplyHired
+  alongside Indeed, and surface detection refuses board pages outright.
+
 ## 0.16.1 - 2026-07-30
 
 - **Fixed the wrong country being selected.** On a live Workday form "United

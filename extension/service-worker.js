@@ -525,14 +525,18 @@ async function runFormPass(actions) {
       scope = document.querySelector(".application-form, main") || document;
     } else if (host.includes("myworkdayjobs.com")) {
       scope = document.querySelector("[data-automation-id='applicationPage'], main") || document;
-    } else if (host.includes("indeed.com")) {
-      // Indeed's board pages are search surfaces full of save/filter controls.
-      // Only the dedicated apply host carries a real application form.
+    } else if (
+      ["indeed.com", "dice.com", "glassdoor.", "ziprecruiter.com", "monster.com", "simplyhired.com"]
+        .some((board) => host.includes(board))
+    ) {
+      // Job-board pages are search surfaces full of save/filter/sort controls.
+      // Scanning them produced phantom "fields" from saved-job toggles and job
+      // cards, so only a genuine apply surface counts here.
       scope = document.querySelector(
-        "#ia-container, [data-testid='ia-container'], form[action*='apply'], main form, main",
+        "#ia-container, [data-testid='ia-container'], form[action*='apply' i], [id*='apply' i] form",
       );
-      if (!host.startsWith("smartapply.") && !/\/(apply|application)/.test(location.pathname)) {
-        scope = document.querySelector("#ia-container, [data-testid='ia-container'], form[action*='apply']");
+      if (!scope && (host.startsWith("smartapply.") || /\/(apply|application)/.test(location.pathname))) {
+        scope = document.querySelector("main form, main, [role='main']");
       }
       if (!scope) return [];
     } else {
@@ -1902,6 +1906,15 @@ function detectApplicationSurface() {
     ].filter(Boolean).join(" ");
     return !searchLike.test(identity);
   };
+  // A job board's own pages are listings, never an application form, unless
+  // the URL is explicitly an apply surface. Dice's search page otherwise
+  // reported "application ready" from its filter form.
+  const host = location.hostname.toLowerCase();
+  const isJobBoard = ["linkedin.com", "indeed.com", "dice.com", "glassdoor.", "ziprecruiter.com",
+    "monster.com", "simplyhired.com"].some((board) => host.includes(board));
+  if (isJobBoard && !/\/(apply|application)/i.test(location.pathname) && !host.startsWith("smartapply.")) {
+    return { ready: false };
+  }
   const roots = [...document.querySelectorAll("form, [role='dialog']")];
   const ready = roots.some((root) => {
     if (!visible(root)) return false;

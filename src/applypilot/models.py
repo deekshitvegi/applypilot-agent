@@ -472,6 +472,10 @@ class PageUnderstandingRequest(BaseModel):
 class PageUnderstanding(BaseModel):
     """What the agent believes it is looking at, and why."""
 
+    # Set deterministically from the URL, never by the model: a recognised ATS
+    # is the employer's own application host and a job board is the expected
+    # starting point. Only "unknown" hosts can be third parties to stop on.
+    host_kind: Literal["ats", "job_board", "unknown"] = "unknown"
     page_kind: PageKind = "unrelated"
     summary: str = Field(default="", max_length=400)
     belongs_to_expected_employer: bool = True
