@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.14.1 - 2026-07-30
+
+- **Fixed the same question being asked forever.** Saving an answer for a
+  short question — "Name", "City", "Phone" — never mapped back to the field,
+  so the panel re-announced it after every save. Two causes: saved answers were
+  compared against a combined "label name" string rather than the label the
+  panel actually displayed, and the fuzzy matcher discarded every question
+  shorter than six characters before comparing. Exact matching now tries each
+  label form the panel could have shown.
+- **A missing tailored résumé no longer pauses the whole application.** When
+  résumé preference is "tailored" but no AI model is connected, ApplyPilot now
+  attaches the original uploaded résumé and explains why, instead of stopping
+  the run with "A tailored résumé is unavailable".
+- The agent now says plainly when it has no AI model connected and therefore
+  cannot read the résumé to answer remaining questions itself, instead of
+  silently returning them as manual questions.
+
 ## 0.14.0 - 2026-07-30
 
 Verified against live LinkedIn, Indeed, Greenhouse and Lever pages by running

@@ -490,3 +490,49 @@ def test_relocation_willingness_does_not_select_every_city() -> None:
     assert [(item.field_id, item.label) for item in plan.unknown_fields] == [
         ("san-jose", group)
     ]
+
+
+def test_saved_short_question_answer_is_reused_instead_of_asked_again() -> None:
+    # Live regression: the panel asked "Name" over and over. It saves an
+    # answer under the label it displayed ("Name"), but matching compared
+    # against the combined "label name" form and the fuzzy matcher dropped
+    # every question shorter than six characters, so the answer could never
+    # map and the same question was re-announced after every save.
+    fields = [
+        FormField(id="ap-1", label="Name", name="name", required=True),
+        FormField(id="ap-2", label="City", name="city", required=True),
+    ]
+    answers = [
+        ReusableAnswer(id="a1", question="Name", answer="Deekshitth Vegi"),
+        ReusableAnswer(id="a2", question="City", answer="Dallas"),
+    ]
+
+    plan = plan_form_fill(
+        "https://careers.example.test/apply", fields, CandidateProfile(), answers
+    )
+
+    values = {action.field_id: action.value for action in plan.actions}
+    assert values == {"ap-1": "Deekshitth Vegi", "ap-2": "Dallas"}
+    assert plan.unknown_fields == []
+
+
+def test_saved_answer_matches_the_group_label_the_panel_displayed() -> None:
+    # The panel shows `group_label or label`; a saved answer keyed to that
+    # exact text must map back to the field.
+    fields = [
+        FormField(
+            id="ap-9",
+            label="Preferred pronouns He/him",
+            group_label="Preferred pronouns",
+            name="pronouns",
+            field_type="text",
+            required=True,
+        ),
+    ]
+    answers = [ReusableAnswer(id="p1", question="Preferred pronouns", answer="He/him")]
+
+    plan = plan_form_fill(
+        "https://careers.example.test/apply", fields, CandidateProfile(), answers
+    )
+
+    assert {action.field_id: action.value for action in plan.actions} == {"ap-9": "He/him"}

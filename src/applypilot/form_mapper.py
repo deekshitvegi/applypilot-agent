@@ -196,6 +196,9 @@ def map_reusable_answer(
     best: tuple[float, ReusableAnswer] | None = None
     for answer in answers:
         candidate = normalize(answer.question)
+        # Generic prompts must never fuzzy-match a real question. Short but
+        # specific ones ("Name", "City") are handled by the exact matcher
+        # above, so skipping them here costs nothing.
         if candidate in {"select", "choose", "field", "question", "answer"} or len(candidate) < 6:
             continue
         score = SequenceMatcher(None, comparison_label, candidate).ratio()
@@ -211,9 +214,17 @@ def map_reusable_answer(
 def map_exact_reusable_answer(
     label: str, field: FormField, answers: list[ReusableAnswer]
 ) -> tuple[str, str, float] | None:
-    comparison_label = normalize(field.group_label) or label
+    # The side panel saves an answer under exactly the label it showed the
+    # user (``group_label or label``). Matching only against the combined
+    # "label name" form missed those, so a saved answer for a short question
+    # like "Name" or "Phone" never mapped and the panel asked for it forever.
+    candidates = {
+        value
+        for value in (normalize(field.group_label), normalize(field.label), label)
+        if value
+    }
     for answer in reversed(answers):
-        if normalize(answer.question) == comparison_label:
+        if normalize(answer.question) in candidates:
             return boolean_value(answer.answer, field), f"answer.{answer.id}", 1.0
     return None
 

@@ -1419,10 +1419,15 @@ async function maybeAttachResume() {
     ) ? "always_tailored" : "always_original";
   }
   if (choice === "always_tailored") {
-    if (!state.artifact) {
-      throw new Error("A tailored résumé is unavailable. Change the résumé preference to original or retry AI preparation.");
-    }
-    return attachTailoredResume({ throwOnError: true });
+    if (state.artifact) return attachTailoredResume({ throwOnError: true });
+    // Tailoring needs a connected AI model. Halting the whole application over
+    // it stranded runs that could still finish, so fall back to the résumé the
+    // user actually uploaded and say plainly why.
+    reportActivity(
+      state.provider?.configured
+        ? "A tailored résumé isn't ready for this job, so I'm attaching your original résumé instead."
+        : "No AI model is connected, so I can't tailor a résumé for this job. I'm attaching your original résumé instead — connect Ollama or Gemini in Settings if you want tailored versions.",
+    );
   }
   return attachOriginalResume({ throwOnError: true });
 }
@@ -2002,6 +2007,12 @@ async function runCurrentApplicationPage() {
     } catch (error) {
       reportActivity(`The AI field planner could not finish this pass (${error.message}). Asking only for the remaining verified unknowns.`);
     }
+  } else if (unknown.length) {
+    // Without a model ApplyPilot can only fill what it can prove from the
+    // saved profile, so say why the rest is coming back as questions.
+    reportActivity(
+      `No AI model is connected, so I can't read your résumé to answer the remaining ${unknown.length} question${unknown.length === 1 ? "" : "s"} myself. Connect Ollama (free, local) or Gemini in Settings and I'll answer them from your résumé instead of asking.`,
+    );
   }
   const blocked = plan.blocked_fields.filter((field) => field.required);
   if (unknown.length) {
