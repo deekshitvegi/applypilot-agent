@@ -658,3 +658,30 @@ def test_a_short_answer_still_cannot_claim_a_full_sentence_question() -> None:
 
     assert plan.actions == []
     assert [f.field_id for f in plan.unknown_fields] == ["sp"]
+
+
+def test_workday_state_field_is_not_filled_with_the_country() -> None:
+    # Live regression: Workday names its State field "countryRegion", so the
+    # saved "Country -> United States" claimed it by bare substring match and
+    # the run reported 'State: No dropdown option matched "United States of
+    # America"'. A country name must never reach a state dropdown.
+    fields = [
+        FormField(
+            id="state", label="State", name="countryRegion", field_type="select", required=True,
+            options=[FormOption(value="TX", label="Texas"),
+                     FormOption(value="CA", label="California")],
+        ),
+        FormField(
+            id="country", label="Country", name="country", field_type="select", required=True,
+            options=[FormOption(value="USA", label="United States of America")],
+        ),
+    ]
+    answers = [
+        ReusableAnswer(id="c1", question="Country", answer="United States"),
+        ReusableAnswer(id="s1", question="State / Territory", answer="Texas"),
+    ]
+
+    plan = plan_form_fill("https://swinerton.wd1.myworkdayjobs.test", fields, CandidateProfile(), answers)
+
+    assert {a.field_id: a.value for a in plan.actions} == {"state": "TX", "country": "USA"}
+    assert plan.unknown_fields == []

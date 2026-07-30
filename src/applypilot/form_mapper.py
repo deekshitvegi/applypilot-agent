@@ -189,10 +189,32 @@ def map_profile_field(
     return None
 
 
+def anchored_containment(shorter: str, longer: str) -> bool:
+    """True when ``shorter`` is a whole-word prefix or suffix of ``longer``.
+
+    Bare substring matching was the wrong test twice over. Workday names its
+    State field ``countryRegion``, so a saved "Country" answer claimed it and
+    wrote a country name into a state dropdown; and "Country" likewise claimed
+    "...to work in the country in which this role is based?". Anchoring at word
+    boundaries keeps the useful case ("State" completing "State / Territory")
+    while refusing a word buried inside an unrelated label or question.
+    """
+    if not shorter or not longer:
+        return False
+    if shorter == longer:
+        return True
+    return longer.startswith(f"{shorter} ") or longer.endswith(f" {shorter}")
+
+
 def map_reusable_answer(
     label: str, field: FormField, answers: list[ReusableAnswer]
 ) -> tuple[str, str, float] | None:
-    comparison_label = normalize(field.group_label) or label
+    # Compare against the label the user actually sees as well as the
+    # name-augmented form, so a field whose name contradicts its label cannot
+    # drag in the wrong answer.
+    comparison_labels = [
+        value for value in (normalize(field.group_label), normalize(field.label), label) if value
+    ]
     best: tuple[float, ReusableAnswer] | None = None
     for answer in answers:
         candidate = normalize(answer.question)
@@ -201,24 +223,15 @@ def map_reusable_answer(
         # above, so skipping them here costs nothing.
         if candidate in {"select", "choose", "field", "question", "answer"} or len(candidate) < 6:
             continue
-        score = SequenceMatcher(None, comparison_label, candidate).ratio()
-        # A containment boost is only meaningful when the two questions are of
-        # comparable length. Otherwise a short saved question hijacks any long
-        # employer question that happens to contain the word: "Country" was
-        # answering "...require visa sponsorship to work in the country in
-        # which this role is based?" with "United States".
-        if candidate in comparison_label or comparison_label in candidate:
-            # Length alone was too blunt: it rejected "State" for "State /
-            # Territory". What actually distinguishes the bad case is that the
-            # longer text is a *sentence*. A short saved answer may complete a
-            # short label, but never claim a full employer question.
-            longer = candidate if len(candidate) > len(comparison_label) else comparison_label
-            shorter = comparison_label if longer is candidate else candidate
-            comparable_length = len(longer) and len(shorter) / len(longer) >= 0.5
-            if len(longer.split()) <= 6 or comparable_length:
+        for comparison_label in comparison_labels:
+            score = SequenceMatcher(None, comparison_label, candidate).ratio()
+            if (
+                anchored_containment(candidate, comparison_label)
+                or anchored_containment(comparison_label, candidate)
+            ):
                 score = max(score, 0.95)
-        if best is None or score > best[0]:
-            best = (score, answer)
+            if best is None or score > best[0]:
+                best = (score, answer)
     if best is None or best[0] < 0.72:
         return None
     return boolean_value(best[1].answer, field), f"answer.{best[1].id}", best[0]

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.16.4 - 2026-07-30
+
+- **A country name is no longer written into a state dropdown.** Workday names
+  its State field `countryRegion`, so a saved "Country" answer claimed it by
+  bare substring match and the run reported 'State: No dropdown option matched
+  "United States of America"' while the required field stayed empty. Saved
+  answers now match only at word boundaries - a whole-word prefix or suffix -
+  so "State" still completes "State / Territory" but "Country" can claim
+  neither `countryRegion` nor "...work in the country in which this role is
+  based?". Matching also considers the label the user sees, not only the
+  name-augmented form, so a field whose name contradicts its label cannot drag
+  in the wrong answer.
+
 ## 0.16.3 - 2026-07-30
 
 - **Answering a question in chat now fills the field and is remembered.**
