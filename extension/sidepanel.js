@@ -1649,6 +1649,34 @@ async function fillForm(options = {}) {
       const field = fieldsAtFill.find((candidate) => candidate.id === item.field_id);
       return field?.group_label || field?.label || "A form field";
     });
+    // Narrate the outcome in the conversation, naming the questions actually
+    // confirmed on the page, so the user can interrupt and correct mid-run
+    // instead of reading a silent status line.
+    const describeList = (labels) => {
+      const trimmed = labels.map((label) => String(label).replace(/\s+/g, " ").trim().slice(0, 60));
+      return trimmed.length > 4
+        ? `${trimmed.slice(0, 4).join(", ")} and ${trimmed.length - 4} more`
+        : trimmed.join(", ");
+    };
+    const verifiedLabels = (result.results || [])
+      .filter((item) => item.status === "verified")
+      .map((item) => {
+        const field = fieldsAtFill.find((candidate) => candidate.id === item.field_id);
+        return field?.group_label || field?.label || "a field";
+      });
+    if (verifiedLabels.length) {
+      reportActivity(
+        `I filled and confirmed ${verifiedLabels.length} answer${verifiedLabels.length === 1 ? "" : "s"} on the page: ${describeList(verifiedLabels)}.`,
+      );
+    }
+    if (unverifiedLabels.length) {
+      reportActivity(
+        `I changed ${describeList(unverifiedLabels)}, but the page gives me no way to confirm it — please check ${unverifiedLabels.length === 1 ? "that one" : "those"} before submitting.`,
+      );
+    }
+    if (fillErrors.length) {
+      reportActivity(`I could not complete: ${describeList(fillErrors)}.`);
+    }
     elements.formResult.innerHTML = `
       <strong>Review the page carefully</strong>
       ${fillErrors.length

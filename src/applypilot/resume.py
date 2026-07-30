@@ -10,7 +10,6 @@ from pypdf import PdfReader
 
 from .models import ResumeDocument
 
-
 MAX_RESUME_BYTES = 8 * 1024 * 1024
 SUPPORTED_SUFFIXES = {".docx", ".pdf", ".txt"}
 

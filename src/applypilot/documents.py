@@ -14,7 +14,13 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
-from .models import CandidateProfile, GeneratedCoverLetter, JobContext, ResumeDocument, TailoredArtifact
+from .models import (
+    CandidateProfile,
+    GeneratedCoverLetter,
+    JobContext,
+    ResumeDocument,
+    TailoredArtifact,
+)
 
 
 def build_docx(artifact: TailoredArtifact, profile: CandidateProfile) -> bytes:

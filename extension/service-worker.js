@@ -58,7 +58,9 @@ async function captureActiveJob() {
 
 async function scanActiveForm() {
   const tab = await getActiveHttpTab();
-  const frames = await runInAllFrames(tab.id, runFormPass, [null]);
+  // "enumerate" also opens optionless custom dropdowns long enough to read the
+  // employer's real choices, so the planner never has to guess at them.
+  const frames = await runInAllFrames(tab.id, runFormPass, ["enumerate"]);
   const best = frames
     .filter((frame) => Array.isArray(frame.result?.fields))
     .sort((left, right) => right.result.fields.length - left.result.fields.length)[0];
@@ -488,6 +490,9 @@ function clickPlannedPageAction(actionId, expectedLabel, expectedKind) {
 
 async function runFormPass(actions) {
   const fillMode = Array.isArray(actions);
+  // "enumerate" scans and additionally opens optionless custom dropdowns to
+  // read their real choices, then closes them again.
+  const enumerateMode = actions === "enumerate";
   const cleanText = (value) => String(value || "").replace(/\s+/g, " ").replace(/\s*\*+\s*$/, "").trim();
   const normalizeText = (value) => String(value || "")
     .normalize("NFKD")
@@ -520,6 +525,16 @@ async function runFormPass(actions) {
       scope = document.querySelector(".application-form, main") || document;
     } else if (host.includes("myworkdayjobs.com")) {
       scope = document.querySelector("[data-automation-id='applicationPage'], main") || document;
+    } else if (host.includes("indeed.com")) {
+      // Indeed's board pages are search surfaces full of save/filter controls.
+      // Only the dedicated apply host carries a real application form.
+      scope = document.querySelector(
+        "#ia-container, [data-testid='ia-container'], form[action*='apply'], main form, main",
+      );
+      if (!host.startsWith("smartapply.") && !/\/(apply|application)/.test(location.pathname)) {
+        scope = document.querySelector("#ia-container, [data-testid='ia-container'], form[action*='apply']");
+      }
+      if (!scope) return [];
     } else {
       scope = document.querySelector("main, [role='main']") || document;
     }
@@ -648,6 +663,66 @@ async function runFormPass(actions) {
     return { member: null, evidence: "", readable };
   };
 
+  // Page-owned selection for a custom combobox. ApplyPilot types into the
+  // control's own value to filter option lists, so that text can never count
+  // as evidence of a choice; only signals the page itself sets are trusted.
+  const customSelectSelection = (control) => {
+    const activeId = control.getAttribute("aria-activedescendant");
+    if (activeId) {
+      const active = control.getRootNode()?.getElementById?.(activeId)
+        || document.getElementById(activeId);
+      const label = cleanText(active?.textContent);
+      if (label) return { label, evidence: "aria-activedescendant" };
+    }
+    const ownedIds = `${control.getAttribute("aria-controls") || ""} ${control.getAttribute("aria-owns") || ""}`
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    for (const id of ownedIds) {
+      const popup = control.getRootNode()?.getElementById?.(id) || document.getElementById(id);
+      const selected = popup?.querySelector("[role='option'][aria-selected='true']");
+      const label = cleanText(selected?.textContent);
+      if (label) return { label, evidence: "aria-selected" };
+    }
+    const emptyValues = new Set(["select", "select...", "choose", "choose...", "please select", ""]);
+    const displayed = cleanText(
+      control.getAttribute("aria-valuetext") || control.getAttribute("data-value")
+      || (control.tagName !== "INPUT" ? control.textContent : ""),
+    );
+    if (displayed && displayed.length <= 160 && !emptyValues.has(displayed.toLowerCase())) {
+      return { label: displayed, evidence: "displayed" };
+    }
+    // Widgets that keep a filter input separate from the committed choice
+    // render the chosen label in their own element. ApplyPilot never writes
+    // that node, so it is page-owned evidence.
+    if (control.tagName === "INPUT") {
+      let wrapper = control.parentElement;
+      for (let depth = 0; wrapper && depth < 4; depth += 1, wrapper = wrapper.parentElement) {
+        const rendered = [...wrapper.querySelectorAll(
+          "[class*='singleValue'], [class*='single-value'], [class*='selectedValue'],"
+          + " [class*='selected-value'], [class*='value-label']",
+        )].find((node) => !node.contains(control) && cleanText(node.textContent));
+        const label = cleanText(rendered?.textContent);
+        if (label && label.length <= 240 && !emptyValues.has(label.toLowerCase())) {
+          return { label, evidence: "displayed" };
+        }
+      }
+    }
+    // A hidden input or native select the page keeps in sync behind the widget.
+    let container = control.parentElement;
+    for (let depth = 0; container && depth < 4; depth += 1, container = container.parentElement) {
+      const backing = [...container.querySelectorAll("input[type='hidden'], select")]
+        .find((candidate) => candidate !== control && cleanText(candidate.value));
+      if (backing) {
+        const label = backing.tagName === "SELECT"
+          ? cleanText(backing.selectedOptions?.[0]?.textContent) || cleanText(backing.value)
+          : cleanText(backing.value);
+        if (label) return { label, evidence: "backing-input" };
+      }
+    }
+    return { label: "", evidence: "" };
+  };
+
   const labelledByText = (control) => cleanText(
     (control.getAttribute("aria-labelledby") || "")
       .split(/\s+/)
@@ -719,7 +794,13 @@ async function runFormPass(actions) {
         ),
       ];
       const question = candidates.find((candidate) => {
-        if (candidate.contains(control) || candidate.querySelector("input, textarea, select")) return false;
+        if (candidate.contains(control)) return false;
+        // A node that wraps other choices in the same group is a list of
+        // options, not the question. Using it produces labels like
+        // "He/himShe/herThey/them Xe/xem".
+        if (candidate.querySelector(
+          "input, textarea, select, label, button, [role='checkbox'], [role='radio'], [role='option']",
+        )) return false;
         const text = cleanText(candidate.textContent);
         return text.length >= 4 && text.length <= 500;
       });
@@ -731,8 +812,13 @@ async function runFormPass(actions) {
       }
       let previous = container.previousElementSibling;
       while (previous) {
+        // A preceding sibling that itself holds choices is another row of the
+        // same option grid, not the question this group belongs to.
+        const holdsChoices = previous.querySelector(
+          "input, textarea, select, label, [role='checkbox'], [role='radio']",
+        );
         const text = cleanText(previous.textContent);
-        if (text.length >= 4 && text.length <= 500) {
+        if (!holdsChoices && text.length >= 4 && text.length <= 500) {
           return { label: text, required: /\*/.test(previous.textContent || "") };
         }
         previous = previous.previousElementSibling;
@@ -766,6 +852,77 @@ async function runFormPass(actions) {
       seen.add(key);
       return [{ value, label }];
     });
+  };
+
+  // Custom dropdowns built on React-style widgets ignore a bare .click():
+  // they commit on the pointer/mouse sequence a real user produces.
+  const pointerOpen = (control) => {
+    try {
+      control.focus({ preventScroll: true });
+    } catch {
+      // Some widgets refuse focus; the pointer sequence still applies.
+    }
+    for (const type of ["pointerdown", "mousedown", "mouseup", "click"]) {
+      const Ctor = type.startsWith("pointer") && typeof PointerEvent === "function"
+        ? PointerEvent
+        : MouseEvent;
+      control.dispatchEvent(new Ctor(type, {
+        bubbles: true, cancelable: true, view: window, button: 0,
+      }));
+    }
+  };
+
+  const popupOptionElements = (control) => {
+    const ownedIds = `${control.getAttribute("aria-controls") || ""} ${control.getAttribute("aria-owns") || ""}`
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+    let popupRoots = ownedIds
+      .map((id) => control.getRootNode()?.getElementById?.(id) || document.getElementById(id))
+      .filter(Boolean);
+    if (!popupRoots.length) {
+      popupRoots = [...document.querySelectorAll("[role='listbox']")].filter(elementVisible);
+    }
+    const selector = popupRoots.length
+      ? "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], li"
+      : "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], [class*='option'], li";
+    return (popupRoots.length
+      ? popupRoots.flatMap((popup) => [...popup.querySelectorAll(selector)])
+      : [...document.querySelectorAll(selector)]
+    ).filter(elementVisible);
+  };
+
+  const closePopup = (control) => {
+    for (const type of ["keydown", "keyup"]) {
+      control.dispatchEvent(new KeyboardEvent(type, {
+        key: "Escape", code: "Escape", keyCode: 27, which: 27, bubbles: true, cancelable: true,
+      }));
+    }
+    control.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
+  };
+
+  // Enumerate a custom dropdown's real choices by opening it, reading the
+  // page's own option list, and closing it again. The planner cannot answer a
+  // required dropdown it has never seen the options for.
+  const readDropdownOptions = async (control) => {
+    pointerOpen(control);
+    let elements = [];
+    for (let attempt = 0; attempt < 8 && !elements.length; attempt += 1) {
+      await wait(80);
+      elements = popupOptionElements(control);
+    }
+    const seen = new Set();
+    const options = elements.flatMap((element) => {
+      const label = cleanText(element.textContent);
+      const value = cleanText(element.getAttribute("data-value") || element.getAttribute("value") || label);
+      const key = `${value.toLowerCase()}::${label.toLowerCase()}`;
+      if (!label || label.length > 240 || seen.has(key)) return [];
+      seen.add(key);
+      return [{ value, label }];
+    });
+    closePopup(control);
+    await wait(60);
+    return options;
   };
 
   const discover = () => {
@@ -945,9 +1102,20 @@ async function runFormPass(actions) {
         valueLabel = control.selectedOptions?.[0]?.textContent?.trim() || "";
         valueEvidence = "native";
       } else if (fieldType === "select") {
-        value = control.value || customValue;
-        valueLabel = customValue;
-        valueEvidence = customValue || control.value ? "displayed" : "";
+        const selection = customSelectSelection(control);
+        if (selection.label) {
+          value = selection.label;
+          valueLabel = selection.label;
+          valueEvidence = selection.evidence;
+        } else if (control.tagName === "INPUT" && cleanText(control.value)) {
+          // Loose text in a combobox input is not proof the page accepted a
+          // choice: it may be filter text ApplyPilot typed. Record it, but
+          // mark the control unreadable so it can never be called verified.
+          value = cleanText(control.value);
+          valueLabel = value;
+          valueEvidence = "input-text";
+          stateReadable = false;
+        }
       } else {
         value = control.value || customValue;
         valueLabel = value;
@@ -992,7 +1160,23 @@ async function runFormPass(actions) {
   };
 
   const records = discover();
-  if (!fillMode) return { fields: records.map((record) => record.field) };
+  if (!fillMode) {
+    if (enumerateMode) {
+      for (const record of records) {
+        const field = record.field;
+        if (field.field_type !== "select" || field.options.length) continue;
+        if (record.control.tagName === "SELECT" || !record.control.isConnected) continue;
+        try {
+          const options = await readDropdownOptions(record.control);
+          if (options.length) field.options = options;
+        } catch {
+          // A dropdown that refuses to open stays optionless and is reported
+          // as an unknown question rather than guessed at.
+        }
+      }
+    }
+    return { fields: records.map((record) => record.field) };
+  }
 
   const resolveByFingerprint = (fingerprint) => (
     fingerprint ? discover().find((record) => record.field.fingerprint === fingerprint) || null : null
@@ -1245,76 +1429,84 @@ async function runFormPass(actions) {
         continue;
       }
       if (fieldType === "select") {
-        if (control.tagName === "INPUT") {
-          control.click();
-          const descriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(control), "value");
-          if (descriptor?.set) descriptor.set.call(control, requested);
-          else control.value = requested;
-          dispatch(control);
-        } else {
-          control.click();
-        }
+        const previousValue = control.tagName === "INPUT" ? control.value : "";
+        // Filter text must not dispatch blur: that closes the very popup we
+        // are about to read options from.
+        const writeValue = (text) => {
+          const setter = Object.getOwnPropertyDescriptor(
+            Object.getPrototypeOf(control), "value",
+          )?.set;
+          if (setter) setter.call(control, text);
+          else control.value = text;
+          control.dispatchEvent(new Event("input", { bubbles: true }));
+          control.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        pointerOpen(control);
+        if (control.tagName === "INPUT") writeValue(requested);
         const target = normalizeText(requested);
+        const matchOption = (text) => {
+          const wanted = normalizeText(text);
+          return popupOptionElements(control).find((candidate) =>
+            [candidate.textContent, candidate.getAttribute("data-value"), candidate.getAttribute("value")]
+              .filter(Boolean)
+              .some((value) => {
+                const optionValue = normalizeText(value);
+                if (optionValue === wanted) return true;
+                if (/^\d{1,3}$/.test(wanted) && optionValue.split(" ").includes(wanted)) return true;
+                if (wanted.length < 3 || optionValue.length < 3) return false;
+                return optionValue.startsWith(`${wanted} `) || wanted.startsWith(`${optionValue} `);
+              }),
+          ) || null;
+        };
         let option = null;
         for (let attempt = 0; attempt < 10 && !option; attempt += 1) {
           await wait(100);
-          const ownedIds = `${control.getAttribute("aria-controls") || ""} ${control.getAttribute("aria-owns") || ""}`
-            .trim()
-            .split(/\s+/)
-            .filter(Boolean);
-          let popupRoots = ownedIds.map((id) => document.getElementById(id)).filter(Boolean);
-          if (!popupRoots.length) {
-            popupRoots = [...document.querySelectorAll("[role='listbox']")].filter((candidate) => {
-              const style = getComputedStyle(candidate);
-              const rect = candidate.getBoundingClientRect();
-              return style.display !== "none" && style.visibility !== "hidden" && rect.height > 0;
-            });
-          }
-          const selector = popupRoots.length
-            ? "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], li"
-            : "[role='option'], [data-value], [data-radix-collection-item], [data-slot='select-item'], [class*='option'], li";
-          const candidates = (popupRoots.length
-            ? popupRoots.flatMap((popup) => [...popup.querySelectorAll(selector)])
-            : [...document.querySelectorAll(selector)]
-          ).filter((candidate) => {
-            const style = getComputedStyle(candidate);
-            const rect = candidate.getBoundingClientRect();
-            return style.display !== "none" && style.visibility !== "hidden" && rect.height > 0;
-          });
-          option = candidates.find((candidate) =>
-            [candidate.textContent, candidate.getAttribute("data-value"), candidate.getAttribute("value")]
-              .filter(Boolean)
-              .some((text) => {
-                const optionValue = normalizeText(text);
-                if (optionValue === target) return true;
-                if (/^\d{1,3}$/.test(target) && optionValue.split(" ").includes(target)) return true;
-                if (target.length < 3 || optionValue.length < 3) return false;
-                return optionValue.startsWith(`${target} `) || target.startsWith(`${optionValue} `);
-              }),
-          );
+          option = matchOption(requested);
         }
         if (!option) {
+          // Never leave the typed filter text behind: a later scan would read
+          // ApplyPilot's own writing back as if the page had accepted a choice.
+          if (control.tagName === "INPUT" && control.value !== previousValue) {
+            writeValue(previousValue);
+          }
           result.message = `No dropdown option matched "${requested}".`;
           continue;
         }
+        // Clear our own filter text before committing. Whatever the input
+        // holds after the click is then something the page wrote, not us.
+        const optionLabel = cleanText(option.textContent) || requested;
+        if (control.tagName === "INPUT" && control.value) {
+          writeValue("");
+          await wait(120);
+          option = matchOption(optionLabel) || option;
+        }
         option.click();
         await wait(150);
-        const displayed = cleanText(
-          control.getAttribute("aria-valuetext") || control.getAttribute("data-value")
-          || control.value || control.textContent,
-        );
-        if (normalizeText(displayed) && (
-          normalizeText(displayed) === target
-          || normalizeText(displayed).startsWith(`${target} `)
-          || target.startsWith(`${normalizeText(displayed)} `)
+        let selection = customSelectSelection(control);
+        if (!selection.label && control.tagName === "INPUT" && cleanText(control.value)) {
+          // The input was empty immediately before the click, so text present
+          // now was committed by the page's own option handler.
+          selection = { label: cleanText(control.value), evidence: "page-written" };
+        }
+        const observed = normalizeText(selection.label);
+        if (observed && (
+          observed === target
+          || observed === normalizeText(optionLabel)
+          || observed.startsWith(`${target} `)
+          || target.startsWith(`${observed} `)
         )) {
           result.status = "verified";
-          result.evidence = "displayed";
-          result.observed_value = displayed;
+          result.evidence = selection.evidence;
+          result.observed_value = selection.label;
+        } else if (selection.label) {
+          result.observed_value = selection.label;
+          result.message = `The page shows "${selection.label}" instead of "${requested}".`;
         } else {
+          if (control.tagName === "INPUT" && control.value !== previousValue) {
+            writeValue(previousValue);
+          }
           result.status = "unverified";
-          result.observed_value = displayed;
-          result.message = "The option was clicked, but the displayed value could not be confirmed yet.";
+          result.message = "The option was clicked, but this dropdown exposes no page-owned selected state to confirm it.";
         }
         continue;
       }
@@ -1357,8 +1549,23 @@ async function runFormPass(actions) {
     const field = fresh.field;
     const readable = ["checkbox", "radio"].includes(field.field_type)
       ? field.state_readable || Boolean(field.value_evidence)
-      : true;
+      // A custom dropdown whose only signal is text sitting in its own input
+      // cannot confirm anything: ApplyPilot may have typed that text itself.
+      : field.field_type === "select"
+        ? field.state_readable
+        : true;
     if (!readable) {
+      // A dropdown whose commit the executor actually watched the page perform
+      // (it cleared its own text first) stays verified while that value holds.
+      if (
+        result.status === "verified"
+        && result.evidence === "page-written"
+        && valueMatches(field, result.requested_value)
+      ) {
+        result.observed_value = field.value_label || field.value;
+        if (!result.message) result.message = "Confirmed: the page wrote this value itself.";
+        continue;
+      }
       if (result.status !== "failed") {
         result.status = "unverified";
         if (!result.message) {
@@ -1646,11 +1853,28 @@ function detectApplicationSurface() {
     const rect = element.getBoundingClientRect();
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
+  // A job board's search and filter controls are not an application form.
+  // Only count inputs that are neither search widgets nor site chrome.
+  const searchLike = /search|keyword|filter|sort|location|distance|radius|query|salary|date.?posted|what|where/i;
+  const isChrome = (control) => Boolean(
+    control.closest("header, nav, [role='search'], [role='banner'], [role='navigation'], [class*='search' i], [id*='search' i]"),
+  );
+  const applicationControl = (control) => {
+    if (!visible(control)) return false;
+    const type = (control.type || "").toLowerCase();
+    if (["hidden", "search", "submit", "button", "reset", "image"].includes(type)) return false;
+    if (isChrome(control)) return false;
+    const identity = [
+      control.name, control.id, control.getAttribute("placeholder"),
+      control.getAttribute("aria-label"),
+    ].filter(Boolean).join(" ");
+    return !searchLike.test(identity);
+  };
   const roots = [...document.querySelectorAll("form, [role='dialog']")];
   const ready = roots.some((root) => {
     if (!visible(root)) return false;
     const controls = [...root.querySelectorAll("input, textarea, select, [role='combobox']")]
-      .filter((control) => visible(control) && !["hidden", "search"].includes((control.type || "").toLowerCase()));
+      .filter(applicationControl);
     return controls.length >= 2;
   });
   return { ready };
@@ -1916,10 +2140,19 @@ function applyFileToInput(fieldId, base64, filename, mediaType) {
 }
 
 function extractJobFromPage() {
-  const text = (selector) => document.querySelector(selector)?.textContent?.trim() || "";
+  // Never read script/style/template text as page copy: a single-page job
+  // board can otherwise return a megabyte of bundled JavaScript as the
+  // "description".
+  const readableText = (element) => {
+    if (!element) return "";
+    const clone = element.cloneNode(true);
+    clone.querySelectorAll("script, style, noscript, template, svg").forEach((node) => node.remove());
+    return (clone.textContent || "").replace(/\s+/g, " ").trim();
+  };
+  const text = (selector) => readableText(document.querySelector(selector));
   const meta = (name) =>
     document.querySelector(`meta[name="${name}"], meta[property="${name}"]`)?.content || "";
-  const clean = (value) => value.replace(/\s+/g, " ").trim();
+  const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
   const host = location.hostname.toLowerCase();
   const adapter = host.includes("linkedin.com")
     ? "linkedin"
@@ -1929,7 +2162,21 @@ function extractJobFromPage() {
         ? "lever"
         : host.includes("myworkdayjobs.com")
           ? "workday"
-          : "generic";
+          : host.includes("indeed.com")
+            ? "indeed"
+            : host.includes("ashbyhq.com")
+              ? "ashby"
+              : host.includes("smartrecruiters.com")
+                ? "smartrecruiters"
+                : host.includes("icims.com")
+                  ? "icims"
+                  : host.includes("jobvite.com")
+                    ? "jobvite"
+                    : host.includes("dice.com")
+                      ? "dice"
+                      : host.includes("glassdoor.")
+                        ? "glassdoor"
+                        : "generic";
 
   let structured = {};
   for (const node of document.querySelectorAll('script[type="application/ld+json"]')) {
@@ -1963,9 +2210,14 @@ function extractJobFromPage() {
       ".job-details-jobs-unified-top-card__company-name",
       ".jobs-unified-top-card__company-name",
       ".job-details-jobs-unified-top-card__primary-description-container a",
+      ".topcard__org-name-link",
+      ".topcard__flavor a",
+      "[data-testid='inlineHeader-companyName']",
+      "[data-company-name]",
       ".posting-headline .company",
       "#header .company-name",
       "[data-automation-id='jobPostingCompany']",
+      "[class*='companyName' i]",
       ".company-name",
     ],
     location: [
@@ -1997,7 +2249,25 @@ function extractJobFromPage() {
     if (!html) return "";
     const container = document.createElement("div");
     container.innerHTML = html;
+    container.querySelectorAll("script, style, noscript, template").forEach((node) => node.remove());
     return clean(container.textContent || "");
+  };
+
+  // Most employer-hosted boards name the company in their logo's alt text or
+  // in the document title ("... at Acme", "Acme - Role"). Both are ordinary
+  // page markup, so this stays a general rule rather than a per-site hack.
+  const companyFromPageChrome = () => {
+    const fromLogo = [...document.querySelectorAll("img[alt]")]
+      .map((image) => clean(image.alt))
+      .find((alt) => /\blogos?$/i.test(alt) && alt.length <= 60);
+    if (fromLogo) {
+      const name = clean(fromLogo.replace(/\s*\blogos?\b$/i, ""));
+      if (name) return name;
+    }
+    const title = clean(document.title);
+    const atMatch = title.match(/\bat\s+([^|–—-]{2,60})$/i);
+    if (atMatch) return clean(atMatch[1]);
+    return "";
   };
 
   const locationParts = [address.addressLocality, address.addressRegion, address.addressCountry]
@@ -2061,7 +2331,13 @@ function extractJobFromPage() {
   return {
     source_url: location.href,
     title: clean(structured.title || firstText(selectors.title) || meta("og:title")),
-    company: clean(organization.name || firstText(selectors.company)),
+    company: clean(
+      organization.name
+      || firstText(selectors.company)
+      || meta("og:site_name")
+      || document.querySelector("[itemprop='hiringOrganization'] [itemprop='name']")?.textContent
+      || companyFromPageChrome(),
+    ),
     location: clean(locationParts.join(", ") || firstText(selectors.location)),
     description: htmlToText(structured.description) || firstText(selectors.description),
     company_application_url: companyApplicationUrl,

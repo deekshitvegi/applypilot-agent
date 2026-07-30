@@ -20,7 +20,7 @@ import pytest
 
 pytest.importorskip("playwright.sync_api")
 
-from playwright.sync_api import sync_playwright  # noqa: E402
+from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKER_SOURCE = (ROOT / "extension" / "service-worker.js").read_text(encoding="utf-8")
@@ -544,3 +544,81 @@ def test_one_message_with_many_intents_is_split_into_scoped_actions(page):
     assert parsed["profileRequests"][0]["key"] == "phone"
     assert parsed["submitRequested"] is True
     assert parsed["canonical"] == [{"key": "willing_to_relocate", "value": True}]
+
+
+# --- Custom combobox: filter text is never evidence -------------------------
+#
+# Live regression from a real Greenhouse (react-select) form. The executor
+# types into the combobox's own input to filter the option list. A previous
+# release then re-read that self-written text during the verification rescan
+# and reported "verified" for an option the page never accepted.
+
+
+def combobox_field(page) -> dict:
+    return field_by_label(scan(page), "work authorization", "select")
+
+
+def test_custom_combobox_reports_real_option_as_verified(page):
+    load_worker_fixture(page, "combobox_filter_input.html")
+    field = combobox_field(page)
+    result = fill(page, [action_for(field, "Require sponsorship now")])
+
+    assert result["results"][0]["status"] == "verified"
+    assert result["filled_ids"] == [field["id"]]
+    # Page-owned state, read independently of anything the executor returned.
+    assert page.evaluate("() => window.__committedValue()") == "Require sponsorship now"
+
+
+def test_custom_combobox_never_verifies_its_own_filter_text(page):
+    load_worker_fixture(page, "combobox_filter_input.html")
+    field = combobox_field(page)
+    result = fill(page, [action_for(field, "Definitely Not An Option")])
+
+    outcome = result["results"][0]
+    assert outcome["status"] == "failed"
+    assert result["filled_ids"] == []
+    # The page committed nothing, and no typed text was left behind to be
+    # mistaken for an answer by a later scan.
+    assert page.evaluate("() => window.__committedValue()") == ""
+    assert page.evaluate("() => document.querySelector('#q1').value") == ""
+
+
+def test_custom_combobox_with_only_typed_text_is_not_state_readable(page):
+    load_worker_fixture(page, "combobox_filter_input.html")
+    # Simulate stray text sitting in the filter input with nothing committed.
+    page.evaluate("() => { document.querySelector('#q1').value = 'Require sponsorship now'; }")
+    field = combobox_field(page)
+
+    assert field["state_readable"] is False
+    assert field["value_evidence"] == "input-text"
+
+
+def test_enumerate_mode_reads_options_the_planner_would_otherwise_never_see(page):
+    load_worker_fixture(page, "combobox_filter_input.html")
+    plain = field_by_label(scan(page), "work authorization", "select")
+    assert plain["options"] == []
+
+    enumerated = page.evaluate("() => runFormPass('enumerate')")
+    field = field_by_label(enumerated, "work authorization", "select")
+    assert [option["label"] for option in field["options"]] == [
+        "Authorized to work in the US",
+        "Require sponsorship now",
+        "Require sponsorship later",
+    ]
+    # Enumeration must leave the widget closed and uncommitted.
+    assert page.evaluate("() => window.__committedValue()") == ""
+
+
+# --- Job boards are not application forms -----------------------------------
+
+
+def test_board_search_page_is_not_reported_as_an_application_surface(page):
+    load_worker_fixture(page, "board_search_page.html")
+    assert page.evaluate("() => detectApplicationSurface()") == {"ready": False}
+
+
+def test_job_extraction_never_returns_bundled_script_text(page):
+    load_worker_fixture(page, "board_search_page.html")
+    job = page.evaluate("() => extractJobFromPage()")
+    assert "use strict" not in job["description"]
+    assert "__ANALYTICS__" not in job["description"]

@@ -199,7 +199,7 @@ class JobPreparation(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     job: JobContext | None = None
-    images: list["ChatImage"] = Field(default_factory=list, max_length=3)
+    images: list[ChatImage] = Field(default_factory=list, max_length=3)
 
 
 class ChatImage(BaseModel):

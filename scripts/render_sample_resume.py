@@ -9,7 +9,6 @@ from applypilot.models import (
     TailoredResume,
 )
 
-
 output = Path("tmp/pdfs")
 output.mkdir(parents=True, exist_ok=True)
 

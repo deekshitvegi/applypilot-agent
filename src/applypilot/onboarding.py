@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from .models import CandidateProfile, OnboardingQuestion, OnboardingState
 
-
 QUESTIONS = (
     OnboardingQuestion(key="legal_name", prompt="What is your full legal name?"),
     OnboardingQuestion(key="email", prompt="Which email should applications use?"),

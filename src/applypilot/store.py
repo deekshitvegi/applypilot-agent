@@ -10,10 +10,10 @@ from .models import (
     CandidateProfile,
     CoverLetterDocument,
     GeneratedCoverLetter,
+    ProviderConfigRequest,
     ResumeDocument,
     ReusableAnswer,
     TailoredArtifact,
-    ProviderConfigRequest,
 )
 from .security import LocalCipher
 

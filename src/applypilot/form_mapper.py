@@ -12,7 +12,6 @@ from .models import (
     UnknownField,
 )
 
-
 BLOCKED_PATTERNS = (
     "password",
     "social security",

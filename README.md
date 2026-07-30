@@ -101,8 +101,12 @@ external **Apply** button, even when its destination is not present as a normal
 page link. LinkedIn Easy Apply is a fallback when no company application route
 is available.
 
-The same page-understanding loop also works from other job portals such as
-Indeed and Dice and from employer-hosted job pages. On multi-step applications,
+The same page-understanding loop also works from other job portals — Indeed,
+Dice, Glassdoor, ZipRecruiter, Monster and SimplyHired — and from
+employer-hosted job pages on Greenhouse, Lever, Workday, Ashby,
+SmartRecruiters, iCIMS, Jobvite and Workable. A job board is always treated as
+a place to *read* a listing, never as an application form: its search boxes,
+filters and saved-job toggles are ignored. On multi-step applications,
 ApplyPilot rescans each step, fills reusable answers, asks only for missing
 information, and advances through **Next** and **Review**. The configured
 ask/always-allow policy still controls the final submission.

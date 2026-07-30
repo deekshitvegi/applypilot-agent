@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import base64
-from collections.abc import Iterable
 import math
 import re
 import time
+from collections.abc import Iterable
 from typing import Any
 
 import httpx
@@ -14,8 +14,8 @@ from pydantic import BaseModel
 
 from .config import Settings
 from .models import (
-    CandidateProfile,
     ApplicationAnswerDraft,
+    CandidateProfile,
     ChatImage,
     ChatResponse,
     CoverLetterDraft,
@@ -23,17 +23,16 @@ from .models import (
     FormAgentRequest,
     JobContext,
     JobFitAnalysis,
-    ProviderConfigRequest,
-    ProviderStatus,
     PageActionDecision,
     PageActionRequest,
+    ProviderConfigRequest,
+    ProviderStatus,
     ResumeDocument,
     ResumeEvidence,
     ReusableAnswer,
     TailoredResume,
 )
 from .store import ProfileStore
-
 
 DEFAULT_MODELS = {
     "ollama": "qwen3:4b",
