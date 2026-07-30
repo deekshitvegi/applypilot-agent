@@ -751,3 +751,27 @@ def test_an_ordinary_application_form_is_not_mistaken_for_a_login(page):
     login = page.evaluate("() => clickReadyLogin(false)")
 
     assert login["login_page"] is False
+
+
+def test_an_application_form_on_a_postlogin_url_is_not_treated_as_a_login(page):
+    # Live regression introduced by the two-step login fix: the ADP
+    # application page lives at ".../postLogin.html" and has an email field,
+    # so login detection claimed it was a sign-in page. The runner then looped
+    # "Submitted a password-manager-filled login step" / "Login fields were
+    # not filled" forever on a form it should simply have filled.
+    load_worker_fixture(page, "postLogin_application.html")
+    assert "login" in page.url.lower()
+
+    login = page.evaluate("() => clickReadyLogin(true)")
+
+    assert login["login_page"] is False
+    assert login["clicked"] is False
+
+
+def test_a_sign_in_page_is_still_detected_next_to_that_guard(page):
+    # The guard must not undo two-step login detection.
+    load_worker_fixture(page, "two_step_login.html")
+
+    login = page.evaluate("() => clickReadyLogin(false)")
+
+    assert login["login_page"] is True

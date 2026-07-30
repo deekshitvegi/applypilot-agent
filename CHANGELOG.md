@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.15.6 - 2026-07-30
+
+- **Fixed a regression from 0.15.5: application forms treated as sign-in
+  pages.** Employer application URLs such as ADP's `.../postLogin.html`
+  contain "login", and application forms ask for an email address, so the
+  new two-step-login detection matched them. The runner then looped
+  "Submitted a password-manager-filled login step" against "Login fields were
+  not filled" on a form it should simply have filled. A page asking for name,
+  phone, address, résumé or demographics is now recognised as an application
+  whatever its URL says; only a real password field overrides that. Two-step
+  sign-in detection is unaffected - both directions are verified against the
+  live ADP sign-in page and a live Greenhouse application form.
+
 ## 0.15.5 - 2026-07-30
 
 - **Sign-in pages built as web components are recognised again.** An ADP

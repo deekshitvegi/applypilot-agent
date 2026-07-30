@@ -2110,7 +2110,36 @@ function clickReadyLogin(allowClick) {
     .find(usernameLike);
   const signInContext = /login|log-in|sign-in|signin|auth/i.test(location.pathname)
     || /\bsign\s?in\b|\blog\s?in\b/i.test(document.title || "");
-  const loginPage = Boolean(password || (username && signInContext));
+  // An application form also carries an email field, and employer URLs like
+  // ".../postLogin.html" contain "login", so those two signals alone wrongly
+  // marked a real application as a sign-in page and looped on it. A page
+  // asking for name, phone, address or a résumé is an application, whatever
+  // its URL says. Only a genuine password field overrides this.
+  const applicationIdentity = (control) => [
+    control.name,
+    control.id,
+    control.getAttribute("aria-label"),
+    control.getAttribute("placeholder"),
+    control.getAttribute("autocomplete"),
+    [...(control.labels || [])].map((label) => label.textContent).join(" "),
+  ].filter(Boolean).join(" ").toLowerCase();
+  const applicationPatterns = [
+    /(?:first|last|full|preferred)\s*name|given name|family name/,
+    /phone|mobile/,
+    /address|street|city|state|province|zip|postal|county|country/,
+    /resume|r[eé]sum[eé]|curriculum|\bcv\b|cover\s*letter/,
+    /linkedin|github|portfolio|website/,
+    /work\s*authorization|sponsor|visa|veteran|disability|ethnicity|gender/,
+  ];
+  const controls = queryAll("input, textarea, select").filter((control) => {
+    const type = (control.type || "").toLowerCase();
+    return visible(control) && !["hidden", "submit", "button", "reset", "search"].includes(type);
+  });
+  const applicationSignals = applicationPatterns.filter(
+    (pattern) => controls.some((control) => pattern.test(applicationIdentity(control))),
+  ).length;
+  const looksLikeApplication = applicationSignals >= 2;
+  const loginPage = Boolean(password || (username && signInContext && !looksLikeApplication));
   if (!loginPage) return { clicked: false, login_page: false };
   if ((password && !password.value) || (username && !username.value)) {
     return {
