@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Custom combobox with a separate filter input</title>
+    <style>
+      main { width: 640px; margin: 24px; font-family: sans-serif; }
+      .select__control { border: 1px solid #999; padding: 6px; position: relative; }
+      .select__single-value { font-weight: 600; }
+      .select__menu { border: 1px solid #ccc; }
+      .select__menu[hidden] { display: none; }
+      .select__option { padding: 6px; cursor: pointer; }
+      input.select__input { border: 0; outline: 0; min-width: 120px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <form>
+        <div class="question-block">
+          <label id="q1-label" for="q1">Which work authorization applies to you?</label>
+          <div class="select__control">
+            <div class="select__placeholder" id="q1-placeholder">Select...</div>
+            <div class="select__input-container">
+              <input
+                class="select__input"
+                id="q1"
+                type="text"
+                role="combobox"
+                aria-expanded="false"
+                aria-haspopup="true"
+                aria-labelledby="q1-label"
+                aria-required="true"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+          <div class="select__menu" id="q1-menu" role="listbox" hidden></div>
+        </div>
+      </form>
+    </main>
+    <script>
+      // Reproduces a React-select style widget: the visible input is only a
+      // filter, the committed choice is rendered in a separate element, and
+      // the menu opens on mousedown rather than on a bare .click().
+      const OPTIONS = ["Authorized to work in the US", "Require sponsorship now", "Require sponsorship later"];
+      const input = document.querySelector("#q1");
+      const menu = document.querySelector("#q1-menu");
+      const control = document.querySelector(".select__control");
+      const placeholder = document.querySelector("#q1-placeholder");
+      let committed = "";
+
+      function renderMenu() {
+        const filter = input.value.trim().toLowerCase();
+        menu.innerHTML = "";
+        OPTIONS.filter((option) => !filter || option.toLowerCase().includes(filter)).forEach((option) => {
+          const item = document.createElement("div");
+          item.className = "select__option";
+          item.setAttribute("role", "option");
+          item.textContent = option;
+          item.addEventListener("mousedown", (event) => event.preventDefault());
+          item.addEventListener("click", () => {
+            committed = option;
+            input.value = "";
+            placeholder.hidden = true;
+            let rendered = control.querySelector(".select__single-value");
+            if (!rendered) {
+              rendered = document.createElement("div");
+              rendered.className = "select__single-value";
+              control.prepend(rendered);
+            }
+            rendered.textContent = committed;
+            closeMenu();
+          });
+          menu.appendChild(item);
+        });
+      }
+
+      function openMenu() {
+        menu.hidden = false;
+        input.setAttribute("aria-expanded", "true");
+        renderMenu();
+      }
+      function closeMenu() {
+        menu.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+      }
+
+      // Opens on the pointer sequence only, like real widgets do.
+      input.addEventListener("mousedown", openMenu);
+      control.addEventListener("mousedown", openMenu);
+      input.addEventListener("input", () => {
+        if (menu.hidden) openMenu();
+        else renderMenu();
+      });
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") closeMenu();
+      });
+      window.__committedValue = () => committed;
+    </script>
+  </body>
+</html>

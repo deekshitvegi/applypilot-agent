@@ -9,7 +9,6 @@ from .models import (
     utc_now,
 )
 
-
 ALLOWED_TRANSITIONS: dict[ApplicationStatus, set[ApplicationStatus]] = {
     "discovered": {"analyzed", "blocked", "abandoned"},
     "analyzed": {"materials_ready", "filling", "blocked", "abandoned"},

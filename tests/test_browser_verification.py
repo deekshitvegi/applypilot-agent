@@ -20,7 +20,7 @@ import pytest
 
 pytest.importorskip("playwright.sync_api")
 
-from playwright.sync_api import sync_playwright  # noqa: E402
+from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKER_SOURCE = (ROOT / "extension" / "service-worker.js").read_text(encoding="utf-8")
@@ -381,3 +381,244 @@ def test_bare_reply_binds_to_the_focused_question_only(page):
     parsed = parse_intents(page, "No", fields, SPONSORSHIP)
     assert [(item["field"]["id"], item["value"]) for item in parsed["assignments"]] == [("ap-1", "No")]
     assert parsed["ambiguous"] == []
+
+
+SELECT_ALL_QUESTION = (
+    "Please select all of the tools you have hands on experience with?"
+    " This must be hands on experience only."
+)
+
+
+def tools_fields() -> list[dict]:
+    return [
+        checkbox_field("ap-1", SELECT_ALL_QUESTION, "GitHub CI"),
+        checkbox_field("ap-2", SELECT_ALL_QUESTION, "Docker"),
+        checkbox_field("ap-3", SELECT_ALL_QUESTION, "Terraform"),
+        checkbox_field("ap-4", SELECT_ALL_QUESTION, "Jenkins"),
+    ]
+
+
+def test_pasted_question_text_cannot_trigger_select_all(page):
+    # Live regression: the question itself contains "select all", and pasting
+    # it after "add github ci" used to select every option in the group.
+    load_sidepanel(page)
+    message = f"add github ci {SELECT_ALL_QUESTION} in this"
+    parsed = parse_intents(page, message, tools_fields())
+    assert [(item["field"]["id"], item["value"]) for item in parsed["assignments"]] == [("ap-1", "true")]
+
+
+def test_not_all_just_these_replaces_the_whole_selection(page):
+    # Live regression: "not all just github ci and docker" must become an
+    # exclusive scoped correction, not a model prose reply.
+    load_sidepanel(page)
+    parsed = parse_intents(
+        page, "not all just github ci and docker", tools_fields(), SELECT_ALL_QUESTION,
+    )
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "false", "ap-4": "false"}
+
+
+def test_only_correction_without_focus_binds_to_single_matching_group(page):
+    load_sidepanel(page)
+    fields = tools_fields() + [radio_field("ap-9", SPONSORSHIP, ["Yes", "No"])]
+    parsed = parse_intents(page, "only docker and jenkins", fields)
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "false", "ap-2": "true", "ap-3": "false", "ap-4": "true"}
+
+
+def test_select_all_still_works_when_the_user_actually_asks_for_it(page):
+    load_sidepanel(page)
+    parsed = parse_intents(page, "select all of them", tools_fields(), SELECT_ALL_QUESTION)
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "true", "ap-4": "true"}
+
+
+def test_check_all_phrasing_selects_the_focused_group(page):
+    load_sidepanel(page)
+    parsed = parse_intents(page, "check all", tools_fields(), SELECT_ALL_QUESTION)
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "true", "ap-4": "true"}
+
+
+def test_additive_just_add_does_not_clear_other_options(page):
+    # "also just add Docker" is additive: it must select Docker and leave the
+    # other checkboxes in the group untouched, never clear them.
+    load_sidepanel(page)
+    parsed = parse_intents(page, "also just add docker", tools_fields(), SELECT_ALL_QUESTION)
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-2": "true"}
+
+
+def test_conversational_sentence_with_just_and_an_option_is_not_a_correction(page):
+    # An ordinary sentence containing "just" and an option name must never
+    # rewrite the group selection.
+    load_sidepanel(page)
+    parsed = parse_intents(
+        page, "it was just a small project using docker", tools_fields(),
+    )
+    assert parsed["assignments"] == []
+
+
+def test_remove_the_rest_with_typo_replaces_the_selection(page):
+    # Live regression: "I said I oly know github ci and docker remove the
+    # rest" produced model prose instead of clearing the other tools.
+    load_sidepanel(page)
+    parsed = parse_intents(
+        page, "I said I oly know github ci and docker remove the rest", tools_fields(),
+    )
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "false", "ap-4": "false"}
+
+
+def test_i_only_know_phrasing_is_exclusive_for_the_focused_group(page):
+    load_sidepanel(page)
+    parsed = parse_intents(
+        page, "I only know docker and github ci", tools_fields(), SELECT_ALL_QUESTION,
+    )
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {"ap-1": "true", "ap-2": "true", "ap-3": "false", "ap-4": "false"}
+
+
+RELOCATION_QUESTION = (
+    "If you do not currently reside in the San Jose/San Francisco Bay Area,"
+    " please select what city you would be interested in a Company assisted"
+    " relocation package?"
+)
+BACKGROUND_QUESTION = (
+    "If you have any questions regarding our screening process or data privacy,"
+    " please review our Background Check Policy at this link."
+)
+GIANT_MESSAGE = (
+    "fill my phone number and also check the I have reviewed the background"
+    " check policy also I'm able to relocate anywhere in the united states "
+    + SELECT_ALL_QUESTION
+    + " in this I only know docker and github ci also click on submit once you"
+    " made these changes"
+)
+
+
+def giant_page_fields() -> list[dict]:
+    phone = {
+        "id": "ap-20",
+        "label": "Phone",
+        "group_label": "",
+        "option_label": "",
+        "field_type": "tel",
+        "value": "",
+        "fingerprint": "fp-ap-20",
+        "options": [],
+    }
+    background = radio_field(
+        "ap-21", BACKGROUND_QUESTION, ["I have reviewed the Background Check Policy"],
+    )
+    relocation = [
+        checkbox_field("ap-30", RELOCATION_QUESTION, "San Jose, CA/San Francisco Bay Area"),
+        checkbox_field("ap-31", RELOCATION_QUESTION, "Kansas City MO/Overland Park KS Metro Area"),
+        checkbox_field(
+            "ap-32", RELOCATION_QUESTION,
+            "I am unable to relocate, I can only work remotely from the city where I currently reside.",
+        ),
+    ]
+    return [phone, background, *relocation, *tools_fields()]
+
+
+def test_one_message_with_many_intents_is_split_into_scoped_actions(page):
+    # Live regression: one long instruction must produce phone fill, the
+    # background-policy confirmation, relocation everywhere-except-unable,
+    # an exclusive tools selection, and a submit-policy note — never a
+    # partial fan-out or generic prose.
+    load_sidepanel(page)
+    parsed = parse_intents(page, GIANT_MESSAGE, giant_page_fields())
+    values = {item["field"]["id"]: item["value"] for item in parsed["assignments"]}
+    assert values == {
+        "ap-21": "I have reviewed the Background Check Policy",
+        "ap-30": "true",
+        "ap-31": "true",
+        "ap-32": "false",
+        "ap-1": "true",   # GitHub CI
+        "ap-2": "true",   # Docker
+        "ap-3": "false",  # Terraform
+        "ap-4": "false",  # Jenkins
+    }
+    assert [item["field"]["id"] for item in parsed["profileRequests"]] == ["ap-20"]
+    assert parsed["profileRequests"][0]["key"] == "phone"
+    assert parsed["submitRequested"] is True
+    assert parsed["canonical"] == [{"key": "willing_to_relocate", "value": True}]
+
+
+# --- Custom combobox: filter text is never evidence -------------------------
+#
+# Live regression from a real Greenhouse (react-select) form. The executor
+# types into the combobox's own input to filter the option list. A previous
+# release then re-read that self-written text during the verification rescan
+# and reported "verified" for an option the page never accepted.
+
+
+def combobox_field(page) -> dict:
+    return field_by_label(scan(page), "work authorization", "select")
+
+
+def test_custom_combobox_reports_real_option_as_verified(page):
+    load_worker_fixture(page, "combobox_filter_input.html")
+    field = combobox_field(page)
+    result = fill(page, [action_for(field, "Require sponsorship now")])
+
+    assert result["results"][0]["status"] == "verified"
+    assert result["filled_ids"] == [field["id"]]
+    # Page-owned state, read independently of anything the executor returned.
+    assert page.evaluate("() => window.__committedValue()") == "Require sponsorship now"
+
+
+def test_custom_combobox_never_verifies_its_own_filter_text(page):
+    load_worker_fixture(page, "combobox_filter_input.html")
+    field = combobox_field(page)
+    result = fill(page, [action_for(field, "Definitely Not An Option")])
+
+    outcome = result["results"][0]
+    assert outcome["status"] == "failed"
+    assert result["filled_ids"] == []
+    # The page committed nothing, and no typed text was left behind to be
+    # mistaken for an answer by a later scan.
+    assert page.evaluate("() => window.__committedValue()") == ""
+    assert page.evaluate("() => document.querySelector('#q1').value") == ""
+
+
+def test_custom_combobox_with_only_typed_text_is_not_state_readable(page):
+    load_worker_fixture(page, "combobox_filter_input.html")
+    # Simulate stray text sitting in the filter input with nothing committed.
+    page.evaluate("() => { document.querySelector('#q1').value = 'Require sponsorship now'; }")
+    field = combobox_field(page)
+
+    assert field["state_readable"] is False
+    assert field["value_evidence"] == "input-text"
+
+
+def test_enumerate_mode_reads_options_the_planner_would_otherwise_never_see(page):
+    load_worker_fixture(page, "combobox_filter_input.html")
+    plain = field_by_label(scan(page), "work authorization", "select")
+    assert plain["options"] == []
+
+    enumerated = page.evaluate("() => runFormPass('enumerate')")
+    field = field_by_label(enumerated, "work authorization", "select")
+    assert [option["label"] for option in field["options"]] == [
+        "Authorized to work in the US",
+        "Require sponsorship now",
+        "Require sponsorship later",
+    ]
+    # Enumeration must leave the widget closed and uncommitted.
+    assert page.evaluate("() => window.__committedValue()") == ""
+
+
+# --- Job boards are not application forms -----------------------------------
+
+
+def test_board_search_page_is_not_reported_as_an_application_surface(page):
+    load_worker_fixture(page, "board_search_page.html")
+    assert page.evaluate("() => detectApplicationSurface()") == {"ready": False}
+
+
+def test_job_extraction_never_returns_bundled_script_text(page):
+    load_worker_fixture(page, "board_search_page.html")
+    job = page.evaluate("() => extractJobFromPage()")
+    assert "use strict" not in job["description"]
+    assert "__ANALYTICS__" not in job["description"]

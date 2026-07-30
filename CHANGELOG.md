@@ -1,5 +1,84 @@
 # Changelog
 
+## 0.14.0 - 2026-07-30
+
+Verified against live LinkedIn, Indeed, Greenhouse and Lever pages by running
+the extension's real injected functions inside those pages.
+
+- **Fixed a false "verified" on custom dropdowns.** The executor types into a
+  combobox's own input to filter its option list. The verification rescan then
+  read that self-written text back and reported success — including for
+  options the employer's page never accepted — overwriting the failure the
+  executor had already recorded. Reproduced on a live Greenhouse (react-select)
+  question. Selected state for a custom dropdown now comes only from signals
+  the page owns: `aria-activedescendant`, `aria-selected`, the widget's own
+  rendered value element, a hidden backing input, or a value the page wrote
+  after ApplyPilot cleared its filter text. A dropdown whose only signal is
+  loose text in its own input is reported unreadable and can never be verified.
+- Filter text is now restored when no option matches, so a later scan cannot
+  mistake an abandoned keystroke for an answer.
+- **Custom dropdowns now open the way a real user opens them** (a full pointer
+  sequence rather than a bare `click()`), and filter input no longer dispatches
+  `blur`, which had been closing the very menu the executor was about to read.
+- **The scanner can now enumerate a custom dropdown's real choices**, opening
+  it, reading the employer's own options, and closing it again. Required
+  dropdowns previously advertised zero options, leaving the planner blind.
+- **Job boards are no longer mistaken for application forms.** Indeed search
+  pages reported an application surface and produced 21 phantom fields (save
+  toggles and job cards read as radio groups). Search, filter and site-chrome
+  controls are now excluded, and Indeed scanning is scoped to a real apply
+  surface.
+- **Job descriptions no longer capture bundled JavaScript.** An Indeed search
+  page returned 1.2 MB of script source as the description; script, style and
+  template text is now stripped everywhere.
+- **Company name is now extracted reliably**, falling back through structured
+  data, `og:site_name`, logo alt text and the document title. It had been empty
+  on every site tested, which left the application history without employers.
+- **Grouped checkbox questions keep their real question.** A Lever pronoun
+  question was split into eleven fields labelled `He/himShe/herThey/them
+  Xe/xem`; it is now one question with eleven options.
+- Added adapters for Indeed, Ashby, SmartRecruiters, iCIMS, Jobvite, Dice,
+  Glassdoor, ZipRecruiter, Monster and SimplyHired, plus recognised ATS hosts
+  for Workable, BambooHR, Breezy, Teamtailor, Recruitee, SuccessFactors, Taleo,
+  Oracle Cloud, Paylocity and Dayforce.
+- The agent now narrates fill outcomes in the conversation, naming the answers
+  it confirmed and the ones the page would not confirm, instead of leaving that
+  detail in a silent status panel.
+
+## 0.13.0 - 2026-07-04
+
+- Redesigned the side panel around one agent surface: the job you are on, a
+  live one-line status, Start/Stop, and a full-height conversation where the
+  agent narrates each step as a timeline. Removed the duplicated cards.
+- Rewrote every setting in plain language and grouped them into "Your AI
+  model", "How I apply", and "Your data", each control with a one-line
+  explanation; on/off choices are now toggle switches.
+- Added an application-route choice: apply on the company's own website
+  (default) or use LinkedIn Easy Apply when it exists.
+- Fixed pasted question text being read as a command: "add github ci" followed
+  by a question containing "select all …" selected every option in the group.
+  Option matching now strips the referenced question text first.
+- Added exclusive-set corrections: "not all, just GitHub CI and Docker"
+  selects exactly the named options and clears the rest of that group instead
+  of falling through to a model prose reply.
+- Chat results now name each option ("GitHub CI — selected") instead of
+  repeating the group question with a raw true value.
+- The agent's live narration is first-person and specific ("I found the
+  employer's Apply button on this page — clicking it now…").
+- One chat message can now carry several intents ("fill my phone number …
+  check the background policy … I'm able to relocate anywhere … I only know
+  docker and github ci … click submit"): each part becomes its own scoped,
+  verified action. "I only know X and Y" and "remove the rest" replace a
+  group's selection exclusively, evaluated per clause so casual words like
+  "just" in ordinary sentences never clear selections.
+- "Fill my phone number/email/LinkedIn/GitHub" fills the matching visible
+  field from the saved profile, or tells you the profile value is missing.
+- Submit requests in chat get an explicit answer describing the approval
+  flow instead of being silently ignored; the final Submit is never pressed
+  from a chat message.
+- Added a plain-English, step-by-step setup guide to the README for
+  non-developers.
+
 ## 0.12.0 - 2026-07-04
 
 - Replaced attempted-action verification with an authoritative post-action

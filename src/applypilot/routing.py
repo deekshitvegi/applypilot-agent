@@ -6,6 +6,13 @@ from .models import ApplicationRouteDecision, JobApplicationOptions
 
 def choose_application_route(options: JobApplicationOptions) -> ApplicationRouteDecision:
     """Prefer a verified employer/ATS application over an aggregator form."""
+    if options.prefer_easy_apply and options.easy_apply_available:
+        return ApplicationRouteDecision(
+            route="easy_apply",
+            target_url=options.source_url,
+            reason="Easy Apply is preferred in the user's settings and is available.",
+        )
+
     verified = options.company_url_verified or is_recognized_ats_url(
         options.company_application_url
     )

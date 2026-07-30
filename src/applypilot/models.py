@@ -61,6 +61,7 @@ class JobApplicationOptions(BaseModel):
     company_url_verified: bool = False
     external_apply_available: bool = False
     easy_apply_available: bool = False
+    prefer_easy_apply: bool = False
 
 
 class ApplicationRouteDecision(BaseModel):
@@ -198,7 +199,7 @@ class JobPreparation(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     job: JobContext | None = None
-    images: list["ChatImage"] = Field(default_factory=list, max_length=3)
+    images: list[ChatImage] = Field(default_factory=list, max_length=3)
 
 
 class ChatImage(BaseModel):

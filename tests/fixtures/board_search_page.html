@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>software engineer jobs in Remote | Example Board</title>
+    <style>
+      main { width: 720px; margin: 24px; font-family: sans-serif; }
+      .card { border: 1px solid #ddd; padding: 8px; margin-bottom: 8px; }
+    </style>
+  </head>
+  <body>
+    <header role="banner">
+      <form role="search">
+        <input type="text" id="what" name="q" placeholder="Job title, keywords, or company" value="software engineer" />
+        <input type="text" id="where" name="l" placeholder="City, state, or remote" value="Remote" />
+      </form>
+    </header>
+    <main>
+      <form id="filters">
+        <select name="sort"><option>Relevance</option><option>Date posted</option></select>
+        <select name="salary"><option>Any salary</option><option>$100k+</option></select>
+      </form>
+      <div class="card">
+        <h2>Backend Engineer</h2>
+        <button type="button" aria-pressed="false">Save job Toggle</button>
+      </div>
+      <div class="card">
+        <h2>Platform Engineer</h2>
+        <button type="button" aria-pressed="false">Save job Toggle</button>
+      </div>
+    </main>
+    <script>
+      // A bundled analytics blob: extraction must never return this as the
+      // job description.
+      (() => { "use strict"; var r = {}, o = {}; window.__ANALYTICS__ = function bundled() { return r && o; }; })();
+    </script>
+  </body>
+</html>

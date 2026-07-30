@@ -101,8 +101,12 @@ external **Apply** button, even when its destination is not present as a normal
 page link. LinkedIn Easy Apply is a fallback when no company application route
 is available.
 
-The same page-understanding loop also works from other job portals such as
-Indeed and Dice and from employer-hosted job pages. On multi-step applications,
+The same page-understanding loop also works from other job portals — Indeed,
+Dice, Glassdoor, ZipRecruiter, Monster and SimplyHired — and from
+employer-hosted job pages on Greenhouse, Lever, Workday, Ashby,
+SmartRecruiters, iCIMS, Jobvite and Workable. A job board is always treated as
+a place to *read* a listing, never as an application form: its search boxes,
+filters and saved-job toggles are ignored. On multi-step applications,
 ApplyPilot rescans each step, fills reusable answers, asks only for missing
 information, and advances through **Next** and **Review**. The configured
 ask/always-allow policy still controls the final submission.
@@ -228,7 +232,41 @@ automation stay in the local service.
 Render automatically rebuilds the service from `main` after it is linked to the
 repository. Free instances can take about a minute to wake after being idle.
 
-## Run locally
+## Set it up on your computer (no coding needed)
+
+ApplyPilot has two parts: a small private helper app that keeps your profile
+and résumé encrypted on your own computer, and a browser extension that works
+on job pages. Ten minutes, once:
+
+1. **Install Python** (the helper runs on it). Download it from
+   [python.org/downloads](https://www.python.org/downloads/) and, during
+   installation, tick **"Add python.exe to PATH"**.
+2. **Download ApplyPilot.** On this GitHub page choose **Code → Download
+   ZIP**, then right-click the ZIP and **Extract All** somewhere easy, such as
+   `Documents\ApplyPilot`.
+3. **Run the setup script.** Open the extracted folder, right-click inside it
+   while holding Shift, choose **Open PowerShell window here**, and run
+   `.\scripts\setup.ps1`. This installs the helper, starts it, and makes it
+   start automatically when you sign in to Windows.
+4. **Load the extension.** In Chrome or Edge open `chrome://extensions`
+   (or `edge://extensions`), switch on **Developer mode** (top right), click
+   **Load unpacked**, and pick the `extension` folder inside ApplyPilot.
+   Pin ApplyPilot to the toolbar so it is one click away.
+5. **Tell it about you.** Click the ApplyPilot icon, open **Settings →
+   Profile & résumé**, answer the profile questions once, and upload your
+   résumé. Everything stays on your computer.
+6. **Pick the AI.** In **Settings → Preferences**, keep the free option
+   ("Free & private — runs on this computer") if you installed Ollama (see
+   below), or paste a Google Gemini key. Then press **Save**.
+7. **Apply.** Open any job on LinkedIn, Indeed, Dice, or a company careers
+   page and press **Start applying**. ApplyPilot narrates every step in the
+   chat, asks only when it truly needs you, and never presses the final
+   Submit button without your permission unless you turn that on.
+
+If the panel says the helper is not running, run `.\scripts\start.ps1` in the
+ApplyPilot folder (or just sign out and back in — it starts automatically).
+
+## Run locally (developers)
 
 Requirements: Python 3.11+ and Chrome/Edge with extension developer mode.
 
@@ -293,8 +331,9 @@ ollama pull qwen3:4b
 ollama pull gemma3:4b
 ```
 
-In the side panel, choose **Ollama (local and free)**, keep `qwen3:4b`, and
-choose **Save securely**. The first response is slower while the model loads.
+In the side panel settings, choose **Free & private — runs on this computer
+(Ollama)**, keep `qwen3:4b`, and press **Save**. The first response is slower
+while the model loads.
 Qwen3 handles text, reasoning, and résumé work; image attachments automatically
 use the local `gemma3:4b` vision model. ApplyPilot limits the local context and
 unloads the model after a short idle period so it does not occupy several

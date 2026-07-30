@@ -82,6 +82,25 @@ rescan → compare`:
    - `failed` — the fresh scan shows a different value, with evidence;
    - `skipped` — file/password controls that are handled elsewhere.
 
+### Custom dropdowns
+
+A combobox is the one control ApplyPilot must write to in order to read: the
+executor types into the widget's own input to filter its option list. That text
+is therefore **never** evidence. A custom dropdown is confirmed only from
+signals the page owns — `aria-activedescendant`, an `aria-selected` option, the
+widget's own rendered value element, a hidden backing input, or a value the
+page wrote *after* ApplyPilot cleared its filter text. When no option matches,
+the filter text is restored so no later scan can mistake it for an answer, and
+a dropdown whose only signal is loose text in its own input is reported
+unreadable rather than verified.
+
+Because these widgets commit on the pointer sequence a real user produces,
+opening one dispatches `pointerdown`/`mousedown`/`mouseup`/`click` rather than a
+bare `click()`, and filter input never dispatches `blur` — that would close the
+menu being read. A scan pass can additionally **enumerate** an optionless
+dropdown by opening it, reading the employer's real choices, and closing it, so
+the planner never has to guess at a required question.
+
 `filled_ids` therefore means "a fresh scan observed the requested value", not
 "a click was issued". Only verified values become reusable answers or
 canonical profile facts. File uploads trigger a complete re-observation, and
@@ -175,7 +194,16 @@ Current adapter coverage:
 - **Greenhouse:** job/application extraction and application-form scoping.
 - **Lever:** posting extraction and application-form scoping.
 - **Workday:** job extraction and active application-page scoping.
+- **Indeed, Dice, Glassdoor, ZipRecruiter, Monster, SimplyHired:** job boards.
+  Their own pages are read as listings and are never treated as application
+  forms; scanning is scoped to a genuine apply surface.
+- **Ashby, SmartRecruiters, iCIMS, Jobvite, Workable** and other recognised ATS
+  hosts route as employer application destinations.
 - **Generic:** standards-based JobPosting JSON-LD plus visible HTML controls.
+
+A **job board is never an application destination.** Search and filter inputs,
+site chrome, and saved-job toggles are excluded from surface detection, so a
+results page cannot be mistaken for a form to fill.
 
 ## Resume tailoring rules
 

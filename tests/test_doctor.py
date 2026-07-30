@@ -3,7 +3,6 @@ from pathlib import Path
 from applypilot.config import Settings
 from applypilot.doctor import run_checks
 
-
 EXTENSION_FILES = {
     "manifest.json",
     "service-worker.js",

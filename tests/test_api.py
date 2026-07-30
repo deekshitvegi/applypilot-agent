@@ -3,8 +3,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import applypilot.main as main_module
-from applypilot.config import Settings
 from applypilot.ai import AIProviderManager
+from applypilot.config import Settings
 from applypilot.main import app
 from applypilot.models import (
     CandidateProfile,
@@ -17,7 +17,6 @@ from applypilot.models import (
     TailoredResume,
 )
 from applypilot.store import ProfileStore
-
 
 client = TestClient(app)
 

@@ -39,6 +39,7 @@ const elements = {
   siteAccessBadge: document.querySelector("#site-access-badge"),
   enableSiteAccess: document.querySelector("#enable-site-access"),
   automationPolicy: document.querySelector("#automation-policy"),
+  routePreference: document.querySelector("#route-preference"),
   resumePolicy: document.querySelector("#resume-policy"),
   coverLetterPolicy: document.querySelector("#cover-letter-policy"),
   previewGeneratedCoverLetter: document.querySelector("#preview-generated-cover-letter"),
@@ -123,6 +124,7 @@ const state = {
   jobQueue: [],
   automationRunning: false,
   automationPolicy: "review_each",
+  routePreference: "company_first",
   resumePolicy: "ask_each",
   coverLetterPolicy: "never",
   fitAnalysis: null,
@@ -153,20 +155,6 @@ function setupSimpleLayout() {
   elements.preferencesPane.append(elements.advancedSettings);
   elements.profilePane.append(elements.manualWorkflow);
   elements.chatQuestionSlot.append(elements.unknownAnswerForm);
-
-  const workflow = elements.manualWorkflow.querySelector(".workflow");
-  const steps = [...workflow.querySelectorAll(":scope > .workflow-step")];
-  if (steps.length > 2) {
-    const troubleshooting = document.createElement("details");
-    troubleshooting.className = "troubleshooting-tools";
-    const summary = document.createElement("summary");
-    summary.textContent = "Troubleshooting tools";
-    const help = document.createElement("p");
-    help.className = "field-help";
-    help.textContent = "Manual job capture and form controls for diagnosing an unsupported page.";
-    troubleshooting.append(summary, help, ...steps.slice(2));
-    workflow.append(troubleshooting);
-  }
 }
 
 function showSettingsPane(name) {
@@ -367,6 +355,7 @@ async function loadState() {
 async function loadAutomationSettings() {
   const saved = await chrome.storage.local.get({
     automationPolicy: "review_each",
+    routePreference: "company_first",
     resumePolicy: "ask_each",
     coverLetterPolicy: "never",
     minimumFit: 60,
@@ -374,6 +363,8 @@ async function loadAutomationSettings() {
     loginAssistance: false,
   });
   state.automationPolicy = saved.automationPolicy;
+  state.routePreference = saved.routePreference;
+  elements.routePreference.value = saved.routePreference;
   state.resumePolicy = saved.resumePolicy === "always_attach" ? "always_tailored" : saved.resumePolicy;
   state.coverLetterPolicy = saved.coverLetterPolicy === "always_attach"
     ? "always_saved"
@@ -437,6 +428,11 @@ async function changeContinueNext() {
   await chrome.storage.local.set({ continueNext: elements.continueNext.checked });
 }
 
+async function changeRoutePreference() {
+  state.routePreference = elements.routePreference.value;
+  await chrome.storage.local.set({ routePreference: state.routePreference });
+}
+
 async function changeLoginAssistance() {
   if (elements.loginAssistance.checked) {
     const confirmed = window.confirm(
@@ -476,8 +472,8 @@ function updateChatAvailability() {
   elements.chatImages.disabled = !aiReady;
   elements.attachImageLabel.classList.toggle("disabled", !aiReady);
   elements.chatInput.placeholder = aiReady
-    ? "Ask ApplyPilot…"
-    : "Try “fill this page” or connect an AI provider for questions";
+    ? "Tell me what to change or ask me anything…"
+    : "Try “fill this page” — or connect an AI model in Settings to ask questions";
 }
 
 function renderProvider() {
@@ -926,6 +922,7 @@ async function captureJob(options = {}) {
         company_url_verified: captured.company_url_verified,
         external_apply_available: captured.external_apply_available,
         easy_apply_available: captured.easy_apply_available,
+        prefer_easy_apply: state.routePreference === "easy_apply_first",
       }),
     });
     state.application = await api("/api/applications", {
@@ -1486,7 +1483,7 @@ async function maybeAttachCoverLetter() {
 
 async function attachConfiguredApplicationFiles() {
   if (findResumeFileField()) {
-    reportActivity("Selecting the résumé configured for this application…");
+    reportActivity("I'm attaching the résumé you configured for this application…");
     await maybeAttachResume();
   }
   try {
@@ -1652,6 +1649,34 @@ async function fillForm(options = {}) {
       const field = fieldsAtFill.find((candidate) => candidate.id === item.field_id);
       return field?.group_label || field?.label || "A form field";
     });
+    // Narrate the outcome in the conversation, naming the questions actually
+    // confirmed on the page, so the user can interrupt and correct mid-run
+    // instead of reading a silent status line.
+    const describeList = (labels) => {
+      const trimmed = labels.map((label) => String(label).replace(/\s+/g, " ").trim().slice(0, 60));
+      return trimmed.length > 4
+        ? `${trimmed.slice(0, 4).join(", ")} and ${trimmed.length - 4} more`
+        : trimmed.join(", ");
+    };
+    const verifiedLabels = (result.results || [])
+      .filter((item) => item.status === "verified")
+      .map((item) => {
+        const field = fieldsAtFill.find((candidate) => candidate.id === item.field_id);
+        return field?.group_label || field?.label || "a field";
+      });
+    if (verifiedLabels.length) {
+      reportActivity(
+        `I filled and confirmed ${verifiedLabels.length} answer${verifiedLabels.length === 1 ? "" : "s"} on the page: ${describeList(verifiedLabels)}.`,
+      );
+    }
+    if (unverifiedLabels.length) {
+      reportActivity(
+        `I changed ${describeList(unverifiedLabels)}, but the page gives me no way to confirm it — please check ${unverifiedLabels.length === 1 ? "that one" : "those"} before submitting.`,
+      );
+    }
+    if (fillErrors.length) {
+      reportActivity(`I could not complete: ${describeList(fillErrors)}.`);
+    }
     elements.formResult.innerHTML = `
       <strong>Review the page carefully</strong>
       ${fillErrors.length
@@ -1830,7 +1855,7 @@ async function runAutomationCycle() {
   state.applicationSteps = 0;
   state.applicationStarted = false;
   state.lastStepFingerprint = "";
-  reportActivity("Reading the current job and company route…");
+  reportActivity("I'm reading this job posting and working out the best application route…");
   const captured = await captureJob({ throwOnError: true });
   state.seenJobUrls.add(normalizeJobUrl(captured.source_url));
   state.jobQueue = state.jobQueue.filter(
@@ -1840,14 +1865,14 @@ async function runAutomationCycle() {
   const target = state.route?.target_url || "";
   let companyRouteReady = false;
   if (state.route?.route === "company_button") {
-    reportActivity("Opening the employer application from this job page...");
+    reportActivity("I found the employer's Apply button on this page — clicking it now…");
     const opened = await openApplication({ throwOnError: true, transition: false });
     await waitForTabReady(opened.tab_id);
     companyRouteReady = true;
   } else if (["company_site", "manual_review"].includes(state.route?.route) && target) {
     companyRouteReady = true;
     if (normalizeJobUrl(target) !== normalizeJobUrl(captured.source_url)) {
-      reportActivity("Opening the company application...");
+      reportActivity("I'm opening the company's own application page…");
       const opened = await openApplication({ throwOnError: true, transition: false });
       await waitForTabReady(opened.tab_id);
     }
@@ -1857,13 +1882,13 @@ async function runAutomationCycle() {
     if (entry.clicked) {
       state.applicationStarted = true;
       await persistJobContext();
-      reportActivity("Opening the employer's application form...");
+      reportActivity("I'm opening the employer's application form…");
       await waitForTabReady(entry.tab_id);
     }
   }
 
   if (state.provider?.configured) {
-    reportActivity("Analyzing fit and preparing a job-specific résumé…");
+    reportActivity("I'm checking how well you fit this job and preparing a truthful tailored résumé…");
     try {
       await prepareJobMaterials();
       if (
@@ -1891,7 +1916,7 @@ async function runAutomationCycle() {
   if (companyRouteReady) {
     await transitionApplication("filling", "Opened the company application route.");
   } else if (state.route?.route === "easy_apply") {
-    reportActivity("Opening LinkedIn Easy Apply fallback…");
+    reportActivity("I'm opening LinkedIn Easy Apply for this job…");
     const easyApply = await chrome.runtime.sendMessage({ action: "openEasyApply" });
     if (easyApply.error || !easyApply.opened) {
       throw new Error(easyApply.error || "Easy Apply could not be opened.");
@@ -1939,7 +1964,7 @@ async function runCurrentApplicationPage() {
     reportActivity("Browser-assisted login completed; resuming the application…");
   }
 
-  reportActivity("Scanning and filling known fields from your profile…");
+  reportActivity("I'm scanning the form and filling every field I already know from your saved profile…");
   state.questionnaireActive = true;
   state.questionnaireTotal = 0;
   state.skippedFieldIds = new Set();
@@ -2062,7 +2087,7 @@ async function completeAutomationApplication() {
     if (state.applicationSteps > 15) {
       throw new Error("Application paused after 15 form steps to prevent an unintended loop.");
     }
-    reportActivity(`Opening the next application step (${step.label})...`);
+    reportActivity(`I clicked “${step.label}” — moving to the next step of the application…`);
     state.formPlan = null;
     state.formScan = null;
     state.questionnaireTotal = 0;
@@ -2412,7 +2437,7 @@ async function saveCanonicalProfileAnswer(field, value) {
 function shouldUseFormAgent(message) {
   if (!state.localMode || !state.provider?.configured) return false;
   if (state.pendingAgentQuestion) return true;
-  return /\b(fill|complete|apply|add|select|check|choose|include|set|change|update|answer|do it|put|reviewed|relocate|authorized|authorization|sponsor|sponsorship|this field|this part|in the form|in the application|it is|it was)\b/i.test(message);
+  return /\b(fill|complete|apply|add|select|check|uncheck|choose|include|set|change|update|remove|deselect|answer|do it|put|reviewed|relocate|authorized|authorization|sponsor|sponsorship|this field|this part|in the form|in the application|it is|it was)\b/i.test(message);
 }
 
 async function persistVerifiedAgentActions(actions, filledIds, fields) {
@@ -2560,15 +2585,28 @@ async function executeFormAgentDecision(message, decision, repairAttempt = 0, or
   }
   state.pendingAgentQuestion = "";
   await scanForm({ throwOnError: true });
-  const labelOf = (action) => {
+  // Describe checkbox options by their visible name ("GitHub CI — selected"),
+  // never as the group question repeated with a raw true/false value.
+  const describeAction = (action, failed = false) => {
     const field = fields.find((candidate) => candidate.id === action.field_id);
-    return field?.group_label || field?.label || action.field_id;
+    if (!field) return `${action.field_id} → ${action.value}`;
+    const question = field.group_label || field.label;
+    if (field.field_type === "checkbox" && field.option_label) {
+      const normalizedValue = String(action.value).toLowerCase();
+      const selected = ["true", "yes", "1", "on"].includes(normalizedValue)
+        || normalizeQuestion(action.value) === normalizeQuestion(field.option_label);
+      if (failed) {
+        return `${question} → ${field.option_label} — could not be ${selected ? "selected" : "cleared"}`;
+      }
+      return `${question} → ${field.option_label} ${selected ? "— selected" : "— cleared"}`;
+    }
+    return `${question} → ${action.value}`;
   };
-  const verifiedLabels = verified.map((action) => `${labelOf(action)} → ${action.value}`);
-  const unverifiedLabels = unverifiedActions.map((action) => `${labelOf(action)} → ${action.value}`);
+  const verifiedLabels = verified.map((action) => describeAction(action));
+  const unverifiedLabels = unverifiedActions.map((action) => describeAction(action));
   const failedLabels = failedActions.map((action) => {
     const outcome = outcomes.get(action.field_id);
-    return `${labelOf(action)}${outcome?.message ? ` (${outcome.message})` : ""}`;
+    return `${describeAction(action, true)}${outcome?.message ? ` (${outcome.message})` : ""}`;
   });
   if (origin === "automation") {
     reportActivity(
@@ -2700,7 +2738,7 @@ async function runModelAutomationPass() {
 }
 
 function looksLikeFormActionRequest(message) {
-  return /\b(?:add|select|check|uncheck|choose|include|set|change|update|fill|apply|clear|answer|relocat\w*|sponsor\w*|authoriz\w*|reviewed|for this one|it is|it was)\b/i.test(message);
+  return /\b(?:add|select|check|uncheck|choose|include|set|change|update|fill|apply|clear|remove|deselect|answer|relocat\w*|sponsor\w*|authoriz\w*|reviewed|for this one|it is|it was)\b/i.test(message);
 }
 
 function semanticAnswerChoice(value) {
@@ -2709,6 +2747,50 @@ function semanticAnswerChoice(value) {
   if (normalized === "true" || normalized === "1" || tokens.has("yes")) return "yes";
   if (normalized === "false" || normalized === "0" || tokens.has("no") || normalized.includes("do not")) return "no";
   return normalized;
+}
+
+// Decides whether the message asks to REPLACE a group's selection rather
+// than add to it. Evaluated per clause, not on the whole message, so one
+// long instruction can carry several intents. Exclusive when:
+//   - the message explicitly clears the remainder ("remove the rest",
+//     "uncheck the others", "all except …", "not all"), or
+//   - an "only/just/exactly" marker is followed by an option name with
+//     nothing but filler words between them ("I only know Docker").
+// Additive phrasing ("also just add Docker") and ordinary sentences
+// ("it was just a small project using Docker") are rejected, so a casual
+// "just" can never clear a user's selections.
+const EXCLUSIVE_FILLER_WORDS = new Set([
+  "know", "use", "have", "used", "using", "worked", "work", "with", "the",
+  "these", "those", "them", "my", "i", "answer", "is", "are", "select",
+  "selected", "choose", "keep", "want", "need", "and", "or", "for", "on",
+  "in", "to",
+]);
+function isExclusiveSelection(normalizedText, normalizedOptionTexts) {
+  if (/\b(?:remove|clear|uncheck|deselect|drop)\b[^.;!?]{0,40}\b(?:the\s+)?(?:rest|others?|other ones|everything else|all others?)\b/.test(normalizedText)) {
+    return true;
+  }
+  if (/\b(?:all\s+)?except\b|\bnot all\b|\bnothing else\b|\bonly (?:these|those)\b/.test(normalizedText)) {
+    return true;
+  }
+  for (const marker of normalizedText.matchAll(/\b(?:only|just|exactly)\b/g)) {
+    const windowText = normalizedText.slice(
+      marker.index + marker[0].length,
+      marker.index + marker[0].length + 70,
+    );
+    let earliest = -1;
+    for (const optionText of normalizedOptionTexts) {
+      if (!optionText) continue;
+      const match = new RegExp(`\\b${escapeRegularExpression(optionText)}\\b`).exec(windowText);
+      if (match && (earliest === -1 || match.index < earliest)) earliest = match.index;
+    }
+    if (earliest === -1) continue;
+    const between = windowText.slice(0, earliest).trim();
+    if (/\b(?:add|include|also|too|plus|as well)\b/.test(between)) continue;
+    if (!between || between.split(/\s+/).every((word) => EXCLUSIVE_FILLER_WORDS.has(word))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // Deterministic, page-scoped interpretation of an explicit chat instruction.
@@ -2722,6 +2804,35 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
   const normalizedMessage = normalizeQuestion(message);
   const normalizedChoiceMessage = normalizeChoicePhrase(message);
   const padded = ` ${normalizedMessage} `;
+
+  // Resolve the referenced question first: users often paste the question
+  // text itself into an instruction, and words inside that question (such as
+  // "select all the tools …") must never be read as commands. Command and
+  // option matching below therefore runs on the stripped message.
+  const exactReferencedGroups = [...new Set(fields
+    .map((field) => field.group_label || field.label)
+    .filter((label) => {
+      const normalized = normalizeQuestion(label);
+      return normalized.length >= 8 && normalizedMessage.includes(normalized);
+    }))];
+  const focusedQuestion = exactReferencedGroups.length === 1 ? exactReferencedGroups[0] : focusedLabel;
+  const stripQuestion = (text, normalizer) => {
+    if (!focusedQuestion) return text;
+    const target = normalizer(focusedQuestion);
+    if (!target) return text;
+    return text.split(target).join(" ").replace(/\s+/g, " ").trim();
+  };
+  // The raw strip can silently fail when the scanned label differs from what
+  // the user typed (required-marker asterisks, punctuation, curly quotes).
+  // When it fails, raw-text matching is disabled below rather than allowed to
+  // read commands out of the pasted question; the normalized strip is exact.
+  const rawStripped = focusedQuestion
+    ? message.replace(new RegExp(escapeRegularExpression(focusedQuestion), "gi"), " ")
+    : message;
+  const rawStripApplied = !focusedQuestion || rawStripped !== message
+    || !normalizedMessage.includes(normalizeQuestion(focusedQuestion));
+  const strippedMessage = rawStripApplied ? rawStripped : "";
+  const strippedChoiceMessage = stripQuestion(normalizedChoiceMessage, normalizeChoicePhrase);
 
   const assign = (field, value, question) => {
     if (!field) return;
@@ -2839,15 +2950,16 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
   }
 
   // Explicit add/remove of named visible options, e.g. "add github ci".
+  // The stripped message keeps a pasted question text from supplying the verb.
   for (const field of fields.filter((candidate) => candidate.field_type === "checkbox")) {
     const option = field.option_label || field.label;
     if (!option) continue;
     const escaped = escapeRegularExpression(option);
     const escapedNormalized = escapeRegularExpression(normalizeChoicePhrase(option));
-    const requested = new RegExp(`\\b(?:add|select|check|choose|include|enable|tick)\\b[^.;\\n]{0,45}\\b${escaped}\\b`, "i").test(message)
-      || (escapedNormalized && new RegExp(`\\b(?:add|select|check|choose|include|enable|tick)\\b[^.;]{0,45}\\b${escapedNormalized}\\b`).test(normalizedChoiceMessage));
-    const removed = new RegExp(`\\b(?:remove|deselect|uncheck|clear|untick)\\b[^.;\\n]{0,45}\\b${escaped}\\b`, "i").test(message)
-      || (escapedNormalized && new RegExp(`\\b(?:remove|deselect|uncheck|clear|untick)\\b[^.;]{0,45}\\b${escapedNormalized}\\b`).test(normalizedChoiceMessage));
+    const requested = new RegExp(`\\b(?:add|select|check|choose|include|enable|tick)\\b[^.;\\n]{0,45}\\b${escaped}\\b`, "i").test(strippedMessage)
+      || (escapedNormalized && new RegExp(`\\b(?:add|select|check|choose|include|enable|tick)\\b[^.;]{0,45}\\b${escapedNormalized}\\b`).test(strippedChoiceMessage));
+    const removed = new RegExp(`\\b(?:remove|deselect|uncheck|clear|untick)\\b[^.;\\n]{0,45}\\b${escaped}\\b`, "i").test(strippedMessage)
+      || (escapedNormalized && new RegExp(`\\b(?:remove|deselect|uncheck|clear|untick)\\b[^.;]{0,45}\\b${escapedNormalized}\\b`).test(strippedChoiceMessage));
     if (requested) assign(field, "true", field.group_label || field.label);
     else if (removed) assign(field, "false", field.group_label || field.label);
   }
@@ -2884,13 +2996,6 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
   // A short answer such as "Yes", "No", or "Experienced" belongs only to
   // the one question currently being asked or explicitly referenced. Never
   // fan it out to every visible field that exposes the same option label.
-  const exactReferencedGroups = [...new Set(fields
-    .map((field) => field.group_label || field.label)
-    .filter((label) => {
-      const normalized = normalizeQuestion(label);
-      return normalized.length >= 8 && normalizedMessage.includes(normalized);
-    }))];
-  const focusedQuestion = exactReferencedGroups.length === 1 ? exactReferencedGroups[0] : focusedLabel;
   if (focusedQuestion) {
     const focusedFields = fields.filter((field) => (
       normalizeQuestion(field.group_label || field.label) === normalizeQuestion(focusedQuestion)
@@ -2899,34 +3004,105 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
       ["radio", "select"].includes(field.field_type) && field.options?.length
     ));
     if (focusedField && !assignments.has(focusedField.id)) {
-      const answerTokens = [...message.matchAll(/\b(yes|no)\b/gi)].map((match) => match[1]);
+      const answerTokens = [...strippedChoiceMessage.matchAll(/\b(yes|no)\b/g)].map((match) => match[1]);
       const option = (focusedField.options || []).find((candidate) => {
         const visible = normalizeChoicePhrase(candidate.label || candidate.value);
         if (!visible) return false;
-        if (normalizedChoiceMessage === visible) return true;
+        if (strippedChoiceMessage.trim() === visible) return true;
         if (["yes", "no"].includes(visible) && answerTokens.length) {
           return visible === answerTokens.at(-1).toLowerCase();
         }
         return new RegExp(`\\b(?:answer\\s*(?:is|:|-)?\\s*|set\\s+(?:it\\s+to\\s+)?|select\\s+|choose\\s+)?${escapeRegularExpression(visible)}\\b`, "i")
-          .test(normalizedChoiceMessage);
+          .test(strippedChoiceMessage);
       });
       if (option) assign(focusedField, option.label || option.value, focusedQuestion);
     }
     const focusedCheckboxes = focusedFields.filter((field) => field.field_type === "checkbox");
     if (focusedCheckboxes.length > 1 && !focusedField) {
-      const selectAll = /\b(?:all of (?:them|these|the above)|select all|everything|all\b)/.test(padded);
-      for (const field of focusedCheckboxes) {
+      const namedFields = focusedCheckboxes.filter((field) => {
         const optionText = normalizeChoicePhrase(field.option_label || field.label);
-        if (!optionText) continue;
+        return optionText
+          && new RegExp(`\\b${escapeRegularExpression(optionText)}\\b`).test(strippedChoiceMessage);
+      });
+      const selectAll = /\b(?:(?:select|check|tick|choose)\s+(?:them\s+)?all|all of (?:them|these|the above)|everything)\b/.test(strippedChoiceMessage)
+        || strippedChoiceMessage.trim() === "all";
+      // "not all, just X and Y" / "I only know X" / "remove the rest"
+      // replaces the whole selection; anything else only adds.
+      const exclusive = namedFields.length > 0 && isExclusiveSelection(
+        strippedChoiceMessage,
+        focusedCheckboxes.map((field) => normalizeChoicePhrase(field.option_label || field.label)),
+      );
+      for (const field of focusedCheckboxes) {
         const negativeOption = /\bnone\b|unable|no experience|not applicable/i.test(field.option_label || field.label);
         if (selectAll) {
           assign(field, negativeOption ? "false" : "true", focusedQuestion);
-        } else if (new RegExp(`\\b${escapeRegularExpression(optionText)}\\b`).test(normalizedChoiceMessage)) {
+        } else if (namedFields.includes(field)) {
           assign(field, "true", focusedQuestion);
+        } else if (exclusive) {
+          assign(field, "false", focusedQuestion);
         }
       }
     }
   }
+
+  // "only X and Y" / "remove the rest" corrections without an explicit
+  // question reference bind to the single checkbox group that contains
+  // every named option.
+  if (!assignments.size && /\b(?:not all|only|just|exactly|except|remove|clear|uncheck|deselect|drop)\b/.test(padded)) {
+    const namedGroups = new Map();
+    for (const field of fields.filter((candidate) => candidate.field_type === "checkbox")) {
+      const optionText = normalizeChoicePhrase(field.option_label || field.label);
+      if (!optionText) continue;
+      if (new RegExp(`\\b${escapeRegularExpression(optionText)}\\b`).test(normalizedChoiceMessage)) {
+        const key = normalizeQuestion(field.group_label || field.label);
+        namedGroups.set(key, (namedGroups.get(key) || 0) + 1);
+      }
+    }
+    if (namedGroups.size === 1) {
+      const [groupKey] = namedGroups.keys();
+      const groupFields = fields.filter((field) => (
+        field.field_type === "checkbox"
+        && normalizeQuestion(field.group_label || field.label) === groupKey
+      ));
+      const question = groupFields[0].group_label || groupFields[0].label;
+      const exclusiveHere = isExclusiveSelection(
+        normalizedChoiceMessage,
+        groupFields.map((field) => normalizeChoicePhrase(field.option_label || field.label)),
+      );
+      if (exclusiveHere) {
+        for (const field of groupFields) {
+          const optionText = normalizeChoicePhrase(field.option_label || field.label);
+          const named = optionText
+            && new RegExp(`\\b${escapeRegularExpression(optionText)}\\b`).test(normalizedChoiceMessage);
+          assign(field, named ? "true" : "false", question);
+        }
+      }
+    }
+  }
+
+  // Requests to fill a profile-backed contact field, e.g. "fill my phone
+  // number". The caller resolves the actual value from the saved profile.
+  const profileRequests = [];
+  const profilePatterns = [
+    [/\b(?:fill|enter|put|add|update|type)\b[^.;!?]{0,30}\bphone(?:\s+number)?\b/, /phone|mobile/i, "phone"],
+    [/\b(?:fill|enter|put|add|update|type)\b[^.;!?]{0,30}\be\s?mail\b/, /e-?mail/i, "email"],
+    [/\b(?:fill|enter|put|add|update|type)\b[^.;!?]{0,30}\blinkedin\b/, /linkedin/i, "linkedin_url"],
+    [/\b(?:fill|enter|put|add|update|type)\b[^.;!?]{0,30}\bgithub\b/, /github/i, "github_url"],
+  ];
+  for (const [requestPattern, labelPattern, key] of profilePatterns) {
+    if (!requestPattern.test(padded)) continue;
+    const field = fields.find((candidate) => (
+      ["text", "tel", "email", "url"].includes(candidate.field_type)
+      && labelPattern.test(candidate.group_label || candidate.label)
+    ));
+    if (field && !assignments.has(field.id)) {
+      profileRequests.push({ field, key, question: field.group_label || field.label });
+    }
+  }
+
+  // The final Submit button is never pressed from a chat instruction; the
+  // caller explains the approval flow instead of silently ignoring it.
+  const submitRequested = /\b(?:click|press|hit)\s+(?:on\s+)?submit\b|\bsubmit\s+(?:the\s+)?(?:application|form|it)\b|\bthen\s+submit\b/.test(padded);
 
   // Explicitly named visible options for radio/select questions.
   const directOptionMatches = [];
@@ -2976,6 +3152,8 @@ function parseScopedFieldIntents(message, fields, focusedLabel = "", options = {
     assignments: [...assignments.values()],
     canonical,
     ambiguous,
+    profileRequests,
+    submitRequested,
     actionable: looksLikeFormActionRequest(message) || assignments.size > 0,
   };
 }
@@ -3000,7 +3178,16 @@ async function executeExplicitPageAnswers(message) {
   const possibleOptionReply = normalizeQuestion(message).split(" ").length <= 5
     && knownVisibleOption
     && !looksLikeChatQuestion(message);
-  if (!looksLikeFormActionRequest(message) && !possibleOptionReply) return false;
+  // "not all, just GitHub CI and Docker" / "remove the rest" — a correction
+  // that names at least one visible option is always a page instruction,
+  // never chat. The parser decides precisely; this gate only routes.
+  const exclusiveCorrection = /\b(?:not all|only|just|exactly|except|remove|clear|uncheck|deselect|drop)\b/i.test(message)
+    && scannedOptions.some((option) => {
+      const text = normalizeChoicePhrase(option.label || option.value);
+      return text && new RegExp(`\\b${escapeRegularExpression(text)}\\b`).test(normalizedChoiceMessage);
+    })
+    && !looksLikeChatQuestion(message);
+  if (!looksLikeFormActionRequest(message) && !possibleOptionReply && !exclusiveCorrection) return false;
   await scanForm({ throwOnError: true });
   const fields = state.formScan?.fields || [];
 
@@ -3025,16 +3212,41 @@ async function executeExplicitPageAnswers(message) {
     );
     return true;
   }
-  if (!parsed.assignments.length) return false;
+  // "fill my phone number" style requests resolve against the saved profile.
+  const profileNotes = [];
+  for (const request of parsed.profileRequests || []) {
+    const value = state.profile?.[request.key];
+    if (typeof value === "string" && value.trim()) {
+      parsed.assignments.push({ field: request.field, value: value.trim(), question: request.question });
+    } else {
+      profileNotes.push(
+        `I don't have your ${request.key.replace(/_/g, " ").replace(" url", "")} saved yet — add it in Settings → Profile & résumé and I'll fill it automatically from now on.`,
+      );
+    }
+  }
+  const explainSubmitPolicy = () => {
+    if (!parsed.submitRequested) return;
+    appendMessage(
+      "About submitting: I never press the final Submit button from a chat message — that step stays under your control. When every required field is verified, an “Approve and submit application” button appears; press it to send. If you want me to submit without asking, turn on “Submit for me automatically” in Settings → How I apply.",
+      "agent-message",
+    );
+  };
+  if (!parsed.assignments.length) {
+    if (!profileNotes.length && !parsed.submitRequested) return false;
+    for (const note of profileNotes) appendMessage(note, "agent-message");
+    explainSubmitPolicy();
+    return true;
+  }
   // The user's own statement is authoritative for canonical profile facts,
   // even when the page control cannot confirm the visible change.
   for (const fact of parsed.canonical) {
     await saveCanonicalProfileFact(fact.key, fact.value);
   }
-  if (parsed.assignments.length === 1) {
-    state.lastReferencedFieldLabel = parsed.assignments[0].question;
+  const assignedQuestions = new Set(parsed.assignments.map((assignment) => assignment.question));
+  if (assignedQuestions.size === 1) {
+    state.lastReferencedFieldLabel = [...assignedQuestions][0];
   }
-  return executeFormAgentDecision(message, {
+  const handled = await executeFormAgentDecision(message, {
     handled: true,
     actions: parsed.assignments.map((assignment) => ({
       field_id: assignment.field.id,
@@ -3046,6 +3258,9 @@ async function executeExplicitPageAnswers(message) {
     question: "",
     explanation: "Applied your instruction to the matching visible question(s).",
   });
+  for (const note of profileNotes) appendMessage(note, "agent-message");
+  explainSubmitPolicy();
+  return handled || profileNotes.length > 0 || parsed.submitRequested;
 }
 
 async function handlePageActionCommand(message) {
@@ -3532,6 +3747,7 @@ elements.enableSiteAccess.addEventListener("click", async () => {
   }
 });
 elements.automationPolicy.addEventListener("change", changeAutomationPolicy);
+elements.routePreference.addEventListener("change", changeRoutePreference);
 elements.resumePolicy.addEventListener("change", changeResumePolicy);
 elements.coverLetterPolicy.addEventListener("change", changeCoverLetterPolicy);
 elements.previewGeneratedCoverLetter.addEventListener("click", () => {
