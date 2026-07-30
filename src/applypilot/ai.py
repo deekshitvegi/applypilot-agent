@@ -113,26 +113,20 @@ def gemini_error_message(exc: Exception, retry_attempted: bool = False) -> str:
 
 
 def gemini_rejected_schema(error: Exception) -> bool:
-    """True when Gemini refused the structured-output schema itself.
+    """True when a structured-output call is worth retrying without its schema.
 
     Nested Pydantic models serialize to ``$defs``/``$ref``, which the API
-    rejects as an invalid argument. That is worth retrying without the schema,
-    unlike a bad key or an exhausted quota.
+    rejects as an invalid argument. Google often reports only a bare "Request
+    contains an invalid argument", with nothing naming the schema, so keying
+    off such markers missed the real failures seen in practice. Any
+    ``INVALID_ARGUMENT`` on a schema-bearing request therefore earns one
+    schemaless retry; if the cause was something else the retry simply fails
+    the same way. Key, quota, and permission errors use other codes and are
+    deliberately excluded so they still fail fast.
     """
     code = getattr(error, "code", None)
     status = str(getattr(error, "status", "") or "").upper()
-    if code != 400 and status not in {"INVALID_ARGUMENT", "FAILED_PRECONDITION"}:
-        return False
-    lowered = str(getattr(error, "message", "") or error).lower()
-    schema_markers = (
-        "response_schema",
-        "responseschema",
-        "$ref",
-        "$defs",
-        "schema",
-        "json_schema",
-    )
-    return any(marker in lowered for marker in schema_markers)
+    return code == 400 or status in {"INVALID_ARGUMENT", "FAILED_PRECONDITION"}
 
 
 class BaseAIProvider:

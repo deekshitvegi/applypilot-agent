@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.3 - 2026-07-30
+
+- **The Gemini schemaless retry now actually fires.** 0.15.0 added a fallback
+  for structured-output schemas Gemini refuses, but it only triggered when the
+  error text named the schema. Google in practice returns a bare "Request
+  contains an invalid argument", so the retry never ran and every AI planning
+  pass still failed. Any `INVALID_ARGUMENT` on a schema-bearing request now
+  earns one schemaless retry; the reply is still validated against the same
+  Pydantic model. Key, quota and permission errors use other codes and still
+  fail fast.
+
 ## 0.15.2 - 2026-07-30
 
 - **Fields cleared by a form that rebuilds itself are now filled again.** On a

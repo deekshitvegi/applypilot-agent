@@ -521,13 +521,18 @@ def test_gemini_waits_for_a_short_reset_and_retries_once(monkeypatch) -> None:
 
 
 class _SchemaRejection(Exception):
-    """Mimics google-genai's 400 when a nested response_schema is refused."""
+    """Mimics google-genai's 400 for a refused response_schema.
+
+    Google reports only a bare "invalid argument" here, naming neither the
+    schema nor $ref. Keying the retry off such markers missed the real live
+    failure, so the message is deliberately uninformative.
+    """
 
     def __init__(self) -> None:
-        super().__init__("Invalid JSON payload received. Unknown name \"$ref\" at response_schema")
+        super().__init__("Request contains an invalid argument.")
         self.code = 400
         self.status = "INVALID_ARGUMENT"
-        self.message = 'Invalid value at response_schema: unknown name "$ref"'
+        self.message = "Request contains an invalid argument."
 
 
 def test_gemini_retries_without_schema_when_google_rejects_it(monkeypatch) -> None:
