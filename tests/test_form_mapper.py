@@ -498,13 +498,18 @@ def test_saved_short_question_answer_is_reused_instead_of_asked_again() -> None:
     # against the combined "label name" form and the fuzzy matcher dropped
     # every question shorter than six characters, so the answer could never
     # map and the same question was re-announced after every save.
+    # Field shapes copied from a live Ashby application form, where the name
+    # attribute widened the comparison label to "email systemfield email".
     fields = [
-        FormField(id="ap-1", label="Name", name="name", required=True),
-        FormField(id="ap-2", label="City", name="city", required=True),
+        FormField(id="ap-1", label="Name", name="_systemfield_name", required=True),
+        FormField(
+            id="ap-2", label="Email", name="_systemfield_email",
+            field_type="email", required=True,
+        ),
     ]
     answers = [
         ReusableAnswer(id="a1", question="Name", answer="Deekshitth Vegi"),
-        ReusableAnswer(id="a2", question="City", answer="Dallas"),
+        ReusableAnswer(id="a2", question="Email", answer="candidate@example.test"),
     ]
 
     plan = plan_form_fill(
@@ -512,7 +517,7 @@ def test_saved_short_question_answer_is_reused_instead_of_asked_again() -> None:
     )
 
     values = {action.field_id: action.value for action in plan.actions}
-    assert values == {"ap-1": "Deekshitth Vegi", "ap-2": "Dallas"}
+    assert values == {"ap-1": "Deekshitth Vegi", "ap-2": "candidate@example.test"}
     assert plan.unknown_fields == []
 
 
