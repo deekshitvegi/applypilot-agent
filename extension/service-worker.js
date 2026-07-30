@@ -1417,6 +1417,16 @@ async function runFormPass(actions) {
           result.message = `No dropdown option matched "${requested}".`;
           continue;
         }
+        // Idempotence: re-selecting the current value still fires `change`,
+        // and forms that rebuild an address block on country change would
+        // then discard fields filled moments earlier, on every pass.
+        if (control.value === option.value) {
+          result.status = "verified";
+          result.evidence = "native";
+          result.observed_value = option.textContent.trim();
+          result.message = "Already selected on the page; no change was needed.";
+          continue;
+        }
         control.value = option.value;
         dispatch(control);
         if (control.value === option.value) {
@@ -1511,6 +1521,13 @@ async function runFormPass(actions) {
         continue;
       }
       // Text-like inputs and textareas.
+      if (String(control.value) === requested) {
+        result.status = "verified";
+        result.evidence = "native";
+        result.observed_value = control.value;
+        result.message = "Already correct on the page; no change was needed.";
+        continue;
+      }
       const prototype = Object.getPrototypeOf(control);
       const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
       if (descriptor?.set) descriptor.set.call(control, requested);

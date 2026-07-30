@@ -669,3 +669,63 @@ def test_one_time_code_field_still_stops_for_the_user(page):
 
     assert login["login_page"] is True
     assert "CAPTCHA" in login["error"]
+
+
+# --- Forms that rebuild themselves mid-fill --------------------------------
+#
+# Live regression from a multi-step employer form: choosing Country rebuilt the
+# address block, discarding Address Line 1-3 and City that had just been
+# filled. The rescan honestly reported them empty, and the run reported
+# failures for fields it could simply have filled again.
+
+
+def rerender_fields(page) -> tuple[dict, dict]:
+    scanned = scan(page)
+    return (
+        field_by_label(scanned, "country", "select"),
+        field_by_label(scanned, "address line 1", "text"),
+    )
+
+
+def test_a_select_that_rebuilds_the_form_wipes_fields_filled_before_it(page):
+    load_worker_fixture(page, "rerender_on_select.html")
+    country, address = rerender_fields(page)
+
+    # Address first, then the country that rebuilds the block around it.
+    result = fill(page, [action_for(address, "1 Test Street"), action_for(country, "United States")])
+
+    statuses = {item["field_id"]: item["status"] for item in result["results"]}
+    assert statuses[country["id"]] == "verified"
+    assert statuses[address["id"]] == "failed"
+    assert page.evaluate("() => window.__rebuilds") == 1
+    assert page.evaluate("() => document.querySelector('#addr1').value") == ""
+
+
+def test_refilling_after_the_rebuild_settles_the_form(page):
+    load_worker_fixture(page, "rerender_on_select.html")
+    country, address = rerender_fields(page)
+    fill(page, [action_for(address, "1 Test Street"), action_for(country, "United States")])
+
+    # What fillUntilSettled does: re-plan against the rebuilt DOM and fill again.
+    country, address = rerender_fields(page)
+    second = fill(page, [action_for(address, "1 Test Street"), action_for(country, "United States")])
+
+    statuses = {item["field_id"]: item["status"] for item in second["results"]}
+    assert statuses[address["id"]] == "verified"
+    assert statuses[country["id"]] == "verified"
+    # Page-owned state, read independently of the executor's claim.
+    assert page.evaluate("() => document.querySelector('#addr1').value") == "1 Test Street"
+
+
+def test_reselecting_the_same_option_does_not_rebuild_the_form_again(page):
+    load_worker_fixture(page, "rerender_on_select.html")
+    country, _ = rerender_fields(page)
+    fill(page, [action_for(country, "United States")])
+    assert page.evaluate("() => window.__rebuilds") == 1
+
+    country, _ = rerender_fields(page)
+    again = fill(page, [action_for(country, "United States")])
+
+    assert again["results"][0]["status"] == "verified"
+    # Idempotence: no second rebuild, so a retry pass cannot thrash forever.
+    assert page.evaluate("() => window.__rebuilds") == 1

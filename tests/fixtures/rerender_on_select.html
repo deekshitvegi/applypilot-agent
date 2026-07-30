@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Address block rebuilt when country changes</title>
+    <style>
+      main { width: 640px; margin: 24px; font-family: sans-serif; }
+      label { display: block; margin: 10px 0 4px; }
+      input, select { width: 320px; padding: 6px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <form id="application">
+        <label for="first">First Name</label>
+        <input id="first" name="first_name" type="text" />
+
+        <label for="country">Country</label>
+        <select id="country" name="country">
+          <option value="">Select...</option>
+          <option value="US">United States</option>
+          <option value="CA">Canada</option>
+        </select>
+
+        <div id="address-block">
+          <label for="addr1">Address Line 1</label>
+          <input id="addr1" name="address_line_1" type="text" />
+          <label for="city">City</label>
+          <input id="city" name="city" type="text" />
+        </div>
+      </form>
+    </main>
+    <script>
+      // Reproduces a real multi-step employer form: choosing a country
+      // rebuilds the address section, discarding anything typed into it.
+      // A single fill pass therefore reports those fields as still empty.
+      const block = document.querySelector("#address-block");
+      const template = block.innerHTML;
+      window.__rebuilds = 0;
+      document.querySelector("#country").addEventListener("change", () => {
+        window.__rebuilds += 1;
+        // Replace the nodes wholesale, exactly as a framework re-render would.
+        block.innerHTML = template;
+      });
+    </script>
+  </body>
+</html>

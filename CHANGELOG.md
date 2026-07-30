@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.15.2 - 2026-07-30
+
+- **Fields cleared by a form that rebuilds itself are now filled again.** On a
+  multi-step employer form, choosing Country rebuilt the address block and
+  discarded Address Line 1-3 and City moments after they were filled. The
+  rescan reported them empty - which was truthful - but the run gave up
+  instead of simply filling them again. The agent now re-plans and re-fills
+  until the page stops changing, stopping if the same pending set repeats so a
+  page that genuinely rejects a value cannot cause a loop.
+- **Selects and text inputs are now idempotent.** Re-selecting a value that is
+  already chosen still fires `change`, so a form that rebuilds on country
+  change would discard the retry's own work on every pass. A control already
+  holding the requested value is left untouched and reported verified, which
+  is what makes the retry converge.
+
 ## 0.15.1 - 2026-07-30
 
 - **Stopped pausing on the invisible reCAPTCHA badge.** A run halted with

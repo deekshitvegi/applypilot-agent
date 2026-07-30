@@ -2030,15 +2030,13 @@ async function runCurrentApplicationPage() {
     return;
   }
   if (plan.actions.length) {
-    await fillForm({ throwOnError: true });
-    plan = await scanForm({ throwOnError: true });
+    plan = await fillUntilSettled(plan);
   }
   await attachConfiguredApplicationFiles();
   if (findResumeFileField() || findCoverLetterField()) {
     plan = await scanForm({ throwOnError: true });
     if (plan.actions.length) {
-      await fillForm({ throwOnError: true });
-      plan = await scanForm({ throwOnError: true });
+      plan = await fillUntilSettled(plan);
     }
   }
   plan = state.formPlan;
@@ -2099,6 +2097,31 @@ async function continueConsentedLogin() {
     login_page: true,
     error: "Login fields were not filled after waiting for the browser password manager.",
   };
+}
+
+// Dynamic forms re-render when a value like Country is chosen, which clears
+// fields that were filled moments earlier — the rescan then truthfully reports
+// them empty. Re-plan and re-fill until the page stops changing. Filling is
+// idempotent, so anything already correct is never touched again.
+async function fillUntilSettled(plan, maxPasses = 3) {
+  let current = plan;
+  const attempted = new Set();
+  for (let pass = 0; pass < maxPasses && current?.actions?.length; pass += 1) {
+    const signature = current.actions
+      .map((action) => `${action.field_id}=${action.value}`)
+      .sort()
+      .join("|");
+    // The same pending set twice means the page is rejecting it, not
+    // re-rendering; asking again would loop forever.
+    if (attempted.has(signature)) break;
+    attempted.add(signature);
+    if (pass > 0) {
+      reportActivity("The page rebuilt part of the form, so I'm filling the fields it reset…");
+    }
+    await fillForm({ throwOnError: true });
+    current = await scanForm({ throwOnError: true });
+  }
+  return current;
 }
 
 async function scanApplicationFormWithRetry() {
