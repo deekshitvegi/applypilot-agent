@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.15.4 - 2026-07-30
+
+- **A saved answer no longer hijacks an unrelated employer question.** On
+  Anthropic's Greenhouse form, a saved "Country -> United States" was filling
+  the visa-sponsorship question, because the phrase "the country in which this
+  role is based" contains "country" and the matcher's containment shortcut
+  scored any such overlap 0.95. Answering a sponsorship question with a
+  country name is both wrong and unsafe. The shortcut now applies only when
+  the two questions are of comparable length, so a short saved question cannot
+  claim a long one; genuinely similar questions still match.
+
 ## 0.15.3 - 2026-07-30
 
 - **The Gemini schemaless retry now actually fires.** 0.15.0 added a fallback

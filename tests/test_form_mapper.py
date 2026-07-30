@@ -541,3 +541,41 @@ def test_saved_answer_matches_the_group_label_the_panel_displayed() -> None:
     )
 
     assert {action.field_id: action.value for action in plan.actions} == {"ap-9": "He/him"}
+
+
+def test_short_saved_answer_does_not_hijack_a_long_employer_question() -> None:
+    # Live regression from Anthropic's Greenhouse form. A saved
+    # "Country -> United States" answered the sponsorship question, because
+    # the phrase "the country in which this role is based" contains "country"
+    # and the containment shortcut scored that 0.95. Answering a sponsorship
+    # question with a country name is both wrong and unsafe.
+    sponsorship = (
+        "Will you now or will you in the future require employment visa "
+        "sponsorship to work in the country in which this role is based?"
+    )
+    fields = [
+        FormField(id="ap-22", label=sponsorship, field_type="text", required=True),
+        FormField(id="ap-4", label="Country", field_type="text", required=True),
+    ]
+    answers = [ReusableAnswer(id="c1", question="Country", answer="United States")]
+
+    plan = plan_form_fill(
+        "https://job-boards.greenhouse.test/apply", fields, CandidateProfile(), answers
+    )
+
+    values = {action.field_id: action.value for action in plan.actions}
+    assert values.get("ap-4") == "United States"
+    assert "ap-22" not in values
+    assert [field.field_id for field in plan.unknown_fields] == ["ap-22"]
+
+
+def test_comparable_length_questions_still_match_loosely() -> None:
+    # The containment shortcut must still work where it is genuinely useful.
+    fields = [FormField(id="ap-1", label="Postal Code", field_type="text", required=True)]
+    answers = [ReusableAnswer(id="p1", question="Postal Code (ZIP)", answer="76208")]
+
+    plan = plan_form_fill(
+        "https://job-boards.greenhouse.test/apply", fields, CandidateProfile(), answers
+    )
+
+    assert {a.field_id: a.value for a in plan.actions} == {"ap-1": "76208"}

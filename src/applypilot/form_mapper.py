@@ -202,8 +202,15 @@ def map_reusable_answer(
         if candidate in {"select", "choose", "field", "question", "answer"} or len(candidate) < 6:
             continue
         score = SequenceMatcher(None, comparison_label, candidate).ratio()
+        # A containment boost is only meaningful when the two questions are of
+        # comparable length. Otherwise a short saved question hijacks any long
+        # employer question that happens to contain the word: "Country" was
+        # answering "...require visa sponsorship to work in the country in
+        # which this role is based?" with "United States".
         if candidate in comparison_label or comparison_label in candidate:
-            score = max(score, 0.95)
+            lengths = sorted((len(candidate), len(comparison_label)))
+            if lengths[1] and lengths[0] / lengths[1] >= 0.5:
+                score = max(score, 0.95)
         if best is None or score > best[0]:
             best = (score, answer)
     if best is None or best[0] < 0.72:
