@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.15.5 - 2026-07-30
+
+- **Sign-in pages built as web components are recognised again.** An ADP
+  application link redirects to a sign-in page whose entire form lives in a
+  shadow root, so the login check - which queried only the light DOM - found
+  nothing and the runner treated a credential form as an application form.
+  Login detection now traverses shadow roots, as the field scanner already did.
+- **Two-step sign-ins are detected.** ADP asks for a User ID first and only
+  requests the password on the next screen, so keying detection off a password
+  field missed it entirely. A visible username/user-ID field on a page whose
+  path or title says sign-in is now enough. Credentials are still never typed
+  or stored: the browser password manager owns them.
+
 ## 0.15.4 - 2026-07-30
 
 - **A saved answer no longer hijacks an unrelated employer question.** On

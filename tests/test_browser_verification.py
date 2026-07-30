@@ -729,3 +729,25 @@ def test_reselecting_the_same_option_does_not_rebuild_the_form_again(page):
     assert again["results"][0]["status"] == "verified"
     # Idempotence: no second rebuild, so a retry pass cannot thrash forever.
     assert page.evaluate("() => window.__rebuilds") == 1
+
+
+def test_two_step_sign_in_without_a_password_field_is_still_a_login_page(page):
+    # Live regression: an ADP application link redirects to "Sign in |
+    # WFNPortal", which asks for a User ID and only requests the password on
+    # the next screen. With no password input to find, the page was not
+    # recognised as a login, so the runner treated a sign-in form as an
+    # application form and filled it.
+    load_worker_fixture(page, "two_step_login.html")
+
+    login = page.evaluate("() => clickReadyLogin(false)")
+
+    assert login["login_page"] is True
+    assert login["clicked"] is False
+
+
+def test_an_ordinary_application_form_is_not_mistaken_for_a_login(page):
+    load_worker_fixture(page, "recaptcha_badge.html")
+
+    login = page.evaluate("() => clickReadyLogin(false)")
+
+    assert login["login_page"] is False

@@ -2062,11 +2062,21 @@ function clickReadyLogin(allowClick) {
     const rect = element.getBoundingClientRect();
     return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
   };
+  // Sign-in pages are increasingly web components: ADP renders its whole
+  // login form inside a shadow root, so a plain document query found nothing
+  // and the page was mistaken for an application form.
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const queryAll = (selector) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
   // Distinguish a real challenge from the invisible reCAPTCHA badge, which
   // requires nothing of the user. Pausing on the badge stopped applications
   // on ordinary employer forms that had presented no challenge at all.
-  const challenge = [...document.querySelectorAll("input[autocomplete='one-time-code']")].some(visible)
-    || [...document.querySelectorAll("iframe")].filter(visible).some((frame) => {
+  const challenge = queryAll("input[autocomplete='one-time-code']").some(visible)
+    || queryAll("iframe").filter(visible).some((frame) => {
       const source = (frame.getAttribute("src") || "").toLowerCase();
       if (!source.includes("captcha")) return false;
       if (source.includes("bframe") || source.includes("frame=challenge")) return true;
@@ -2081,13 +2091,26 @@ function clickReadyLogin(allowClick) {
       error: "CAPTCHA, MFA, or a verification code requires you.",
     };
   }
-  const password = [...document.querySelectorAll("input[type='password']")].find(visible);
-  const username = [...document.querySelectorAll(
-    "input[type='email'], input[autocomplete='username'], input[name*='email' i], input[name*='user' i]",
-  )].find(visible);
-  const loginPage = Boolean(
-    password || (username && /login|log-in|sign-in|signin|auth/i.test(location.pathname)),
+  const password = queryAll("input[type='password']").find(visible);
+  // Two-step sign-ins (ADP asks for a User ID first, password on the next
+  // screen) have no password field at all. Recognising only a password field
+  // meant such a page was mistaken for an application form and filled.
+  const usernameLike = (control) => /user\s*id|username|user name|e-?mail|login|account/i.test(
+    [
+      control.name,
+      control.id,
+      control.getAttribute("autocomplete"),
+      control.getAttribute("aria-label"),
+      control.getAttribute("placeholder"),
+      [...(control.labels || [])].map((label) => label.textContent).join(" "),
+    ].filter(Boolean).join(" "),
   );
+  const username = queryAll("input[type='text'], input[type='email'], input:not([type])")
+    .filter(visible)
+    .find(usernameLike);
+  const signInContext = /login|log-in|sign-in|signin|auth/i.test(location.pathname)
+    || /\bsign\s?in\b|\blog\s?in\b/i.test(document.title || "");
+  const loginPage = Boolean(password || (username && signInContext));
   if (!loginPage) return { clicked: false, login_page: false };
   if ((password && !password.value) || (username && !username.value)) {
     return {
@@ -2104,7 +2127,7 @@ function clickReadyLogin(allowClick) {
     };
   }
   const labels = ["sign in", "log in", "login", "continue", "next"];
-  const buttons = [...document.querySelectorAll("button, input[type='submit']")].filter((button) => {
+  const buttons = queryAll("button, input[type='submit']").filter((button) => {
     if (!visible(button) || button.disabled) return false;
     const label = (button.textContent || button.value || button.getAttribute("aria-label") || "")
       .replace(/\s+/g, " ")
