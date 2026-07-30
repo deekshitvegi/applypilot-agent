@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.17.1 - 2026-07-30
+
+- **The résumé now answers optional questions.** On a live Ashby form, School,
+  Degree, Field of Study, Location and Website were left blank and never even
+  asked about. Every one was optional, and the model pass was both gated on and
+  scoped to *required* unknowns, so on a form whose only gaps were optional the
+  résumé was never consulted at all - precisely what users upload it for. The
+  model is now offered every unanswered question. Verified against the live
+  Gemini key: Degree and Field of Study come back grounded in the résumé, while
+  a portfolio URL the résumé does not contain is still left empty rather than
+  invented.
+- **Demographic questions are never inferred.** Gender, race, veteran and
+  disability questions are excluded from the model pass and answered only from
+  a preference the user saved themselves.
+- Progress between model passes is measured over every question being worked
+  on, so an optional-only form no longer looks like zero progress and stop
+  after one pass.
+
 ## 0.17.0 - 2026-07-30
 
 - **Session sign-in details.** Settings now accepts a site, username and

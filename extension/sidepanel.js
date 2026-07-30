@@ -2143,7 +2143,11 @@ async function runCurrentApplicationPage() {
   }
   plan = state.formPlan;
   let unknown = unresolvedUnknowns();
-  if (unknown.length && state.provider?.configured) {
+  // Run the model whenever anything is unanswered — including optional
+  // questions like school, degree and portfolio. Gating this on required
+  // unknowns meant a form whose gaps were all optional never consulted the
+  // résumé at all, which is exactly what the résumé was uploaded for.
+  if (unresolvedFieldsForAgent().length && state.provider?.configured) {
     try {
       await runModelAutomationPass();
       plan = state.formPlan;
@@ -2756,14 +2760,26 @@ async function persistVerifiedAgentActions(actions, filledIds, fields) {
   return verified;
 }
 
+// Questions the model should attempt from the résumé and profile.
+//
+// This deliberately covers every unanswered question, not just the ones the
+// guided questionnaire would surface. School, degree, field of study and
+// portfolio are usually optional, so gating this on `required` meant the
+// résumé was never consulted for exactly the fields users expect it to fill.
 function unresolvedFieldsForAgent() {
-  const unknown = unresolvedUnknowns();
-  if (!unknown.length) return [];
-  const unknownIds = new Set(unknown.map((field) => field.field_id));
-  const unknownLabels = new Set(unknown.map((field) => normalizeQuestion(field.label)));
+  const plan = state.formPlan;
+  if (!plan?.unknown_fields?.length) return [];
+  const unknownIds = new Set(plan.unknown_fields.map((field) => field.field_id));
+  const blockedIds = new Set((plan.blocked_fields || []).map((field) => field.field_id));
+  // Demographic questions are never inferred: they are answered only from a
+  // preference the user saved themselves.
+  const demographic = /gender|race|ethnic|veteran|disabilit|sexual orientation|pronoun/i;
   return (state.formScan?.fields || []).filter((field) => (
     unknownIds.has(field.id)
-    || unknownLabels.has(normalizeQuestion(field.group_label || field.label))
+    && !blockedIds.has(field.id)
+    && !state.skippedFieldIds.has(field.id)
+    && field.field_type !== "file"
+    && !demographic.test(field.group_label || field.label || "")
   ));
 }
 
@@ -2974,11 +2990,14 @@ async function runModelAutomationPass() {
   for (let pass = 0; pass < 3; pass += 1) {
     const fields = unresolvedFieldsForAgent();
     if (!fields.length) return madeProgress;
-    const before = unresolvedUnknowns().length;
+    // Measure progress over everything the model is working on. Counting only
+    // the questionnaire's required unknowns made an optional-only form look
+    // like zero progress and stopped after a single pass.
+    const before = fields.length;
     const decision = await requestFormAgentDecision(instruction, [], "automation", fields);
     if (decision.actions?.length) {
       await executeFormAgentDecision(instruction, decision, 0, "automation");
-      const after = unresolvedUnknowns().length;
+      const after = unresolvedFieldsForAgent().length;
       madeProgress = madeProgress || after < before;
       if (after >= before) break;
       continue;
