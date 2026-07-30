@@ -208,7 +208,20 @@
           <input id="login-assistance" type="checkbox" />
           Continue sign-in for me when my browser fills the password
         </label>
-        <p class="field-help">I never see, store, or type your passwords — your browser’s password manager does the filling. CAPTCHAs and verification codes always come back to you.</p>
+        <p class="field-help">Your browser’s password manager does the filling. CAPTCHAs and verification codes always come back to you.</p>
+
+        <div class="field">
+          <label for="credential-host">Sign-in details for this session</label>
+          <p class="field-help">Optional. Give me a sign-in for a site and I’ll use it while this session lasts. It stays in memory on your computer, is never written to disk, and disappears when the local agent restarts. I only use it on that exact site’s sign-in page, and never to create a new account.</p>
+          <input id="credential-host" type="text" placeholder="Site, e.g. myworkdayjobs.com" autocomplete="off" />
+          <input id="credential-username" type="text" placeholder="Username or email" autocomplete="off" />
+          <input id="credential-password" type="password" placeholder="Password" autocomplete="new-password" />
+          <div class="row">
+            <button id="save-credential" type="button" class="secondary">Use for this session</button>
+            <button id="clear-credentials" type="button" class="secondary">Forget all</button>
+          </div>
+          <p id="credential-list" class="field-help"></p>
+        </div>
 
         <div id="automation-warning" class="automation-warning hidden">
           Automatic mode fills, submits, and moves to the next job without asking again. Logins, CAPTCHAs, unknown questions, and anything ambiguous still stop and wait for you.

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.17.0 - 2026-07-30
+
+- **Session sign-in details.** Settings now accepts a site, username and
+  password that the agent uses to sign in for the rest of the session. They are
+  held in memory by the local companion only: never written to the database,
+  never logged, never echoed in narration, and gone when the agent restarts.
+  They are released only on an exact host match - a lookalike such as
+  `myworkdayjobs.com.evil.test` gets nothing - and only on a page already
+  confirmed to be that site's sign-in form. Signing **in** only; creating an
+  account is still never automated, because it accepts an employer's terms on
+  the user's behalf.
+- The browser password manager remains the default path and is unchanged.
+
 ## 0.16.4 - 2026-07-30
 
 - **A country name is no longer written into a state dropdown.** Workday names

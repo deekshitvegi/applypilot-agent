@@ -61,9 +61,14 @@ This is the project's central rule; everything else is secondary to it.
   evidence only.
 - Never bypass CAPTCHA, MFA, verification codes, rate limits, or anti-bot
   systems. Those are always user handoffs.
-- Never store, read, or type passwords. The browser password manager owns
-  credentials; ApplyPilot may only detect that fields are filled and click an
-  allowed login control when the user enabled that.
+- Passwords: the browser password manager remains the default and preferred
+  path. The owner additionally authorised **session-scoped** sign-in details
+  (2026-07-30): held in memory by the local companion for one run, never
+  written to the database or logged, released only on an exact host match for
+  a page already confirmed to be that site's sign-in form, and used to sign
+  **in** only. Creating accounts is never automated, since it accepts an
+  employer's terms on the user's behalf. Never widen this: no persistence to
+  disk, no fuzzy host matching, no credential in any log or narration.
 - Never click final Submit outside the saved submission policy, and never
   report `submitted` without an on-page confirmation signal.
 - Never auto-answer demographic questions unless the user explicitly saved

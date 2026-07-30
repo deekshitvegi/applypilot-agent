@@ -74,6 +74,9 @@ from .models import (
     ResumeDocument,
     ResumeEvidence,
     ReusableAnswer,
+    SessionCredentialMatch,
+    SessionCredentialRequest,
+    SessionCredentialSummary,
     TailoredArtifact,
     TailoredArtifactRequest,
     TailoredResume,
@@ -82,9 +85,12 @@ from .models import (
 from .onboarding import get_onboarding_state
 from .resume import ResumeExtractionError, extract_resume
 from .routing import choose_application_route
+from .session_credentials import SessionCredentialVault
 from .store import ProfileStore
 
 store = ProfileStore(settings.database_path)
+# In memory only: sign-in details last for this run of the companion.
+session_credentials = SessionCredentialVault()
 ai_provider = AIProviderManager(store, settings)
 web_directory = Path(__file__).parent / "web"
 
@@ -588,6 +594,48 @@ def refine_application_answer(
 @app.post("/api/application-route", response_model=ApplicationRouteDecision)
 def application_route(options: JobApplicationOptions) -> ApplicationRouteDecision:
     return choose_application_route(options)
+
+
+@app.get("/api/session-credentials", response_model=list[SessionCredentialSummary])
+def list_session_credentials() -> list[SessionCredentialSummary]:
+    require_local_data_mode()
+    return [SessionCredentialSummary(**entry) for entry in session_credentials.hosts()]
+
+
+@app.put("/api/session-credentials", response_model=SessionCredentialSummary)
+def put_session_credential(request: SessionCredentialRequest) -> SessionCredentialSummary:
+    """Hold sign-in details for this session. Never written to disk."""
+    require_local_data_mode()
+    try:
+        host = session_credentials.save(request.host, request.username, request.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return SessionCredentialSummary(host=host, username=request.username)
+
+
+@app.delete("/api/session-credentials")
+def clear_session_credentials(host: str = "") -> dict[str, int]:
+    require_local_data_mode()
+    if host:
+        return {"removed": int(session_credentials.forget(host))}
+    return {"removed": session_credentials.clear()}
+
+
+@app.post("/api/session-credentials/resolve", response_model=SessionCredentialMatch)
+def resolve_session_credential(request: PageUnderstandingRequest) -> SessionCredentialMatch:
+    """Release the credential for this exact host, or nothing.
+
+    The extension calls this only when the current page has been confirmed a
+    sign-in page. A near-miss deliberately returns nothing: typing a password
+    into the wrong site's form is the failure that matters most here.
+    """
+    require_local_data_mode()
+    match = session_credentials.resolve(request.page_url)
+    if match is None:
+        return SessionCredentialMatch(found=False)
+    return SessionCredentialMatch(
+        found=True, host=match.host, username=match.username, password=match.password
+    )
 
 
 @app.post("/api/company-route", response_model=CompanyRouteResult)

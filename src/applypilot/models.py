@@ -433,6 +433,28 @@ class ApplicationTransition(BaseModel):
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
+class SessionCredentialRequest(BaseModel):
+    """Sign-in details for one site, kept in memory for this session only."""
+
+    host: str = Field(default="", max_length=253)
+    username: str = Field(default="", max_length=320)
+    password: str = Field(default="", max_length=512)
+
+
+class SessionCredentialSummary(BaseModel):
+    """A saved host. Never carries the password."""
+
+    host: str = ""
+    username: str = ""
+
+
+class SessionCredentialMatch(BaseModel):
+    found: bool = False
+    host: str = ""
+    username: str = ""
+    password: str = ""
+
+
 class CompanyRouteRequest(BaseModel):
     company: str = Field(default="", max_length=200)
     title: str = Field(default="", max_length=300)

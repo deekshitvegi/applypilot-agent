@@ -41,6 +41,12 @@ const elements = {
   automationPolicy: document.querySelector("#automation-policy"),
   routePreference: document.querySelector("#route-preference"),
   resumePolicy: document.querySelector("#resume-policy"),
+  credentialHost: document.querySelector("#credential-host"),
+  credentialUsername: document.querySelector("#credential-username"),
+  credentialPassword: document.querySelector("#credential-password"),
+  credentialList: document.querySelector("#credential-list"),
+  saveCredential: document.querySelector("#save-credential"),
+  clearCredentials: document.querySelector("#clear-credentials"),
   coverLetterPolicy: document.querySelector("#cover-letter-policy"),
   previewGeneratedCoverLetter: document.querySelector("#preview-generated-cover-letter"),
   minimumFit: document.querySelector("#minimum-fit"),
@@ -2166,6 +2172,85 @@ async function runCurrentApplicationPage() {
   await completeAutomationApplication();
 }
 
+// Sign in with the details supplied for this session, if any match this exact
+// site. Returns true when both fields (or the first step of a two-step form)
+// were filled, so the caller can submit.
+async function renderSessionCredentials() {
+  try {
+    const saved = await api("/api/session-credentials");
+    elements.credentialList.textContent = saved.length
+      ? `Active this session: ${saved.map((item) => `${item.host} (${item.username})`).join(", ")}`
+      : "No sign-in details held.";
+  } catch {
+    elements.credentialList.textContent = "";
+  }
+}
+
+async function saveSessionCredential() {
+  const host = elements.credentialHost.value.trim();
+  const username = elements.credentialUsername.value.trim();
+  const password = elements.credentialPassword.value;
+  if (!host || !username || !password) {
+    elements.credentialList.textContent = "Enter the site, username, and password.";
+    return;
+  }
+  try {
+    await api("/api/session-credentials", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ host, username, password }),
+    });
+    // Never leave the secret sitting in the panel.
+    elements.credentialPassword.value = "";
+    elements.credentialHost.value = "";
+    elements.credentialUsername.value = "";
+    appendMessage(
+      `I'll use those sign-in details for ${host} while this session lasts. They stay in memory on your computer and vanish when the local agent restarts.`,
+      "agent-message",
+    );
+    await renderSessionCredentials();
+  } catch (error) {
+    elements.credentialList.textContent = error.message;
+  }
+}
+
+async function clearSessionCredentials() {
+  try {
+    await api("/api/session-credentials", { method: "DELETE" });
+    appendMessage("Forgotten — I'm no longer holding any sign-in details.", "agent-message");
+    await renderSessionCredentials();
+  } catch (error) {
+    elements.credentialList.textContent = error.message;
+  }
+}
+
+async function fillSessionLoginIfAvailable() {
+  try {
+    const activeTab = await chrome.runtime.sendMessage({ action: "getActiveTab" });
+    if (!activeTab?.url) return false;
+    const match = await api("/api/session-credentials/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ page_url: activeTab.url }),
+    });
+    if (!match.found) return false;
+    const result = await chrome.runtime.sendMessage({
+      action: "fillSessionLogin",
+      username: match.username,
+      password: match.password,
+    });
+    if (result?.error) throw new Error(result.error);
+    const ready = result.filled_password || (result.two_step && result.filled_username);
+    if (ready) {
+      reportActivity(`Signing in to ${match.host} with the details you gave me for this session…`);
+    }
+    return ready;
+  } catch (error) {
+    reportActivity(`I couldn't use the saved sign-in details (${error.message}).`);
+    return false;
+  }
+}
+
 async function continueConsentedLogin() {
   let clicked = false;
   let last = { clicked: false, login_page: false };
@@ -2176,6 +2261,16 @@ async function continueConsentedLogin() {
     });
     if (last.error && /captcha|mfa|verification/i.test(last.error)) return last;
     if (!last.login_page) return { ...last, clicked };
+    // Only ever type credentials into a page already confirmed to be a login
+    // form, and only when the host matches exactly.
+    if (await fillSessionLoginIfAvailable()) {
+      last = await chrome.runtime.sendMessage({ action: "assistLogin", allowClick: true });
+      if (last.clicked) {
+        clicked = true;
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        continue;
+      }
+    }
     if (!state.loginAssistance) return last;
     if (last.clicked) {
       clicked = true;
@@ -3974,6 +4069,8 @@ elements.enableSiteAccess.addEventListener("click", async () => {
 elements.automationPolicy.addEventListener("change", changeAutomationPolicy);
 elements.routePreference.addEventListener("change", changeRoutePreference);
 elements.resumePolicy.addEventListener("change", changeResumePolicy);
+elements.saveCredential.addEventListener("click", saveSessionCredential);
+elements.clearCredentials.addEventListener("click", clearSessionCredentials);
 elements.coverLetterPolicy.addEventListener("change", changeCoverLetterPolicy);
 elements.previewGeneratedCoverLetter.addEventListener("click", () => {
   if (!state.generatedCoverLetter?.body) return;

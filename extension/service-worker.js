@@ -36,6 +36,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     loadJobContext,
     openApplicationForm: openActiveApplicationForm,
     assistLogin: () => assistActiveLogin(message.allowClick === true),
+    fillSessionLogin: () => fillActiveSessionLogin(message.username, message.password),
   };
   const action = actions[message.action];
   if (!action) return false;
@@ -364,6 +365,11 @@ async function openActiveApplicationForm() {
   await new Promise((resolve) => setTimeout(resolve, 500));
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
   return { ...result, tab_id: active?.id || tab.id, url: active?.url || tab.url };
+}
+
+async function fillActiveSessionLogin(username, password) {
+  const tab = await getActiveHttpTab();
+  return runInTab(tab.id, fillSessionLogin, [username || "", password || ""]);
 }
 
 async function assistActiveLogin(allowClick) {
@@ -2083,6 +2089,63 @@ function clickApplicationEntry(inspectOnly = false) {
   }
   if (applicationSurface) return { clicked: false, already_form: true };
   return { clicked: false, error: "No unique Apply button was found on this page." };
+}
+
+// Type session sign-in details into a page already confirmed to be that
+// site's login form. Values are never logged and never stored here; the
+// caller passes them in and they live only for the running session.
+function fillSessionLogin(username, password) {
+  const visible = (element) => {
+    if (!element) return false;
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden"
+      && rect.width > 0 && rect.height > 0;
+  };
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const queryAll = (selector) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
+  const setValue = (control, value) => {
+    const setter = Object.getOwnPropertyDescriptor(
+      Object.getPrototypeOf(control), "value",
+    )?.set;
+    if (setter) setter.call(control, value);
+    else control.value = value;
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  const identityOf = (control) => [
+    control.name, control.id, control.getAttribute("autocomplete"),
+    control.getAttribute("aria-label"), control.getAttribute("placeholder"),
+    [...(control.labels || [])].map((label) => label.textContent).join(" "),
+  ].filter(Boolean).join(" ");
+
+  const passwordField = queryAll("input[type='password']").find(visible);
+  const usernameField = queryAll("input[type='text'], input[type='email'], input:not([type])")
+    .filter(visible)
+    .find((control) => /user\s*id|username|user name|e-?mail|login|account/i.test(identityOf(control)));
+
+  let filledUsername = false;
+  let filledPassword = false;
+  if (usernameField && username) {
+    setValue(usernameField, username);
+    filledUsername = usernameField.value === username;
+  }
+  if (passwordField && password) {
+    setValue(passwordField, password);
+    filledPassword = passwordField.value.length > 0;
+  }
+  return {
+    filled_username: filledUsername,
+    filled_password: filledPassword,
+    // A two-step sign-in shows only the username on this screen.
+    two_step: Boolean(usernameField) && !passwordField,
+  };
 }
 
 function clickReadyLogin(allowClick) {
