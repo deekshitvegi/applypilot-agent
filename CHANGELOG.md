@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.14.3 - 2026-07-30
+
+- **The panel now shows the local agent's version and warns when it does not
+  match.** A companion left running on older code silently ignores every
+  backend fix, with no visible signal — which made a fixed answer-matching bug
+  look unfixed. The header now reads "Local agent connected · v0.14.3", turns
+  amber on a mismatch, and the agent says in chat that it needs restarting.
+
 ## 0.14.2 - 2026-07-30
 
 - **Fixed the AI field planner dying on Gemini.** `FormAgentDecision` nests

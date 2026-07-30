@@ -314,8 +314,24 @@ async function loadState() {
     state.localMode = health.mode === "local";
     document.body.classList.remove("agent-offline");
     elements.offlineCard.classList.add("hidden");
-    elements.connection.textContent = `${health.mode === "local" ? "Local" : "Demo"} agent connected`;
+    // Show both versions. A companion left running on older code silently
+    // ignores every backend fix, which is impossible to spot otherwise.
+    const panelVersion = chrome.runtime.getManifest().version;
+    const agentVersion = health.version || "unknown";
+    const mismatch = agentVersion !== panelVersion;
+    elements.connection.textContent = mismatch
+      ? `${health.mode === "local" ? "Local" : "Demo"} agent ${agentVersion} · panel ${panelVersion} — restart the agent to match`
+      : `${health.mode === "local" ? "Local" : "Demo"} agent connected · v${agentVersion}`;
     elements.connection.classList.add("connected");
+    elements.connection.classList.toggle("version-mismatch", mismatch);
+    if (mismatch) {
+      appendMessage(
+        `Heads up: the local agent is running v${agentVersion} but this panel is v${panelVersion}. `
+        + "Backend fixes won't take effect until the agent is restarted — stop it and start it again, "
+        + "then reload me from chrome://extensions.",
+        "agent-message",
+      );
+    }
 
     [state.provider, state.reasoningProvider] = await Promise.all([
       api("/api/provider"),

@@ -74,6 +74,8 @@ h2 { margin-bottom: 8px; font-size: 16px; font-weight: 700; line-height: 1.3; le
 .status { margin: 0; font-size: 11px; }
 .status.connected { color: var(--success); }
 .status.connected::before { content: "● "; font-size: 8px; vertical-align: 1px; }
+/* A companion running older code than the panel silently drops backend fixes. */
+.status.connected.version-mismatch { color: var(--warning, #d98324); }
 
 /* ---------- Main layout: the agent surface owns the panel ---------- */
 
