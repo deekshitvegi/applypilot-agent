@@ -958,3 +958,53 @@ def test_a_real_sign_in_page_is_not_mistaken_for_registration(page):
     login = page.evaluate("() => clickReadyLogin(false)")
 
     assert login.get("signup_page") is not True
+
+
+def test_session_credentials_are_never_typed_into_a_registration_form(page):
+    # Live incident: the credential filler entered the user's password into a
+    # "Choose Password" / "Retype Password" account-creation form on an
+    # employer portal. The function holding the password enforces this itself,
+    # rather than trusting the caller to have classified the page.
+    load_worker_fixture(page, "account_registration.html")
+
+    result = page.evaluate(
+        "() => fillSessionLogin('candidate@example.test', 'a-real-password')"
+    )
+
+    assert result["filled_password"] is False
+    assert result["filled_username"] is False
+    assert "account-creation" in result["refused"]
+    # Page-owned state: nothing was written into either password field.
+    assert page.evaluate("() => document.querySelector('#pw').value") == ""
+    assert page.evaluate("() => document.querySelector('#pw2').value") == ""
+    assert page.evaluate("() => document.querySelector('#email').value") == ""
+
+
+def test_session_credentials_still_fill_a_genuine_sign_in(page):
+    load_worker_fixture(page, "two_step_login.html")
+
+    result = page.evaluate("() => fillSessionLogin('candidate@example.test', 'secret')")
+
+    assert result.get("refused") is None
+    assert result["filled_username"] is True
+    assert page.evaluate("() => document.querySelector('#uid').value") == "candidate@example.test"
+
+
+def test_a_password_the_user_typed_is_not_reported_as_our_own_sign_in(page):
+    # The filler reported success whenever the field was non-empty, so a
+    # password the user had typed themselves produced "signing in with the
+    # details you gave me" — a claim about our own action we never verified.
+    load_worker_fixture(page, "recaptcha_checkbox.html")
+    page.evaluate(
+        """() => {
+             document.querySelector('#password').value = 'typed-by-the-user';
+             document.querySelector('.g-recaptcha').remove();
+           }"""
+    )
+
+    result = page.evaluate("() => fillSessionLogin('candidate@example.test', 'a-different-secret')")
+
+    assert result["filled_password"] is False
+    assert "already held a different value" in result["refused"]
+    # The user's own value is untouched.
+    assert page.evaluate("() => document.querySelector('#password').value") == "typed-by-the-user"

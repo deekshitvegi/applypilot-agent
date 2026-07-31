@@ -2291,6 +2291,10 @@ async function fillSessionLoginIfAvailable() {
       password: match.password,
     });
     if (result?.error) throw new Error(result.error);
+    if (result?.refused) {
+      reportActivity(`I did not enter your sign-in details here: ${result.refused}`);
+      return false;
+    }
     const ready = result.filled_password || (result.two_step && result.filled_username);
     if (ready) {
       reportActivity(`Signing in to ${match.host} with the details you gave me for this session…`);

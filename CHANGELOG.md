@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.19.3 - 2026-07-30
+
+- **The credential filler no longer claims a sign-in it did not perform.** It
+  reported success whenever a password field was non-empty, so a password the
+  user had typed themselves produced "signing in with the details you gave me
+  for this session". It now reports only what it actually wrote, verified by
+  reading the value back, and refuses to overwrite a password field that
+  already holds something different.
+- **Credentials are never entered into an account-creation form.** The runner
+  already treats registration as a handoff; the function that holds the
+  password now enforces the same rule itself, so a "Choose Password" /
+  "Retype Password" pair is refused regardless of how it was reached.
+
 ## 0.19.2 - 2026-07-30
 
 - **An account-registration page is now recognised and handed over.** A Bausch

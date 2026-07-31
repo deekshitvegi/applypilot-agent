@@ -2180,20 +2180,50 @@ function fillSessionLogin(username, password) {
     [...(control.labels || [])].map((label) => label.textContent).join(" "),
   ].filter(Boolean).join(" ");
 
-  const passwordField = queryAll("input[type='password']").find(visible);
+  const passwordFields = queryAll("input[type='password']").filter(visible);
+  // Refuse to type a credential into an account-creation form. The caller
+  // already classifies the page, but this is the function that actually holds
+  // the password, so it enforces the rule itself: a "Choose Password" /
+  // "Retype Password" pair means registering, which is never automated.
+  const confirming = queryAll("input[type='text'], input[type='email']")
+    .filter(visible)
+    .some((control) => /re-?type|confirm|verify/i.test(identityOf(control)));
+  if (passwordFields.length >= 2 || (passwordFields.length === 1 && confirming)) {
+    return {
+      filled_username: false,
+      filled_password: false,
+      two_step: false,
+      refused: "This is an account-creation form, so no credential was entered.",
+    };
+  }
+  const passwordField = passwordFields[0];
   const usernameField = queryAll("input[type='text'], input[type='email'], input:not([type])")
     .filter(visible)
     .find((control) => /user\s*id|username|user name|e-?mail|login|account/i.test(identityOf(control)));
 
   let filledUsername = false;
   let filledPassword = false;
+  // Report only what this function actually wrote. Treating a non-empty field
+  // as success meant a password the user had typed themselves was reported as
+  // "signed in with the details you gave me", which is a claim about our own
+  // action that we had not verified.
   if (usernameField && username) {
-    setValue(usernameField, username);
+    const alreadyCorrect = usernameField.value === username;
+    if (!alreadyCorrect) setValue(usernameField, username);
     filledUsername = usernameField.value === username;
   }
   if (passwordField && password) {
+    if (passwordField.value && passwordField.value !== password) {
+      // Something else owns this field; do not overwrite it.
+      return {
+        filled_username: filledUsername,
+        filled_password: false,
+        two_step: false,
+        refused: "The password field already held a different value, so it was left alone.",
+      };
+    }
     setValue(passwordField, password);
-    filledPassword = passwordField.value.length > 0;
+    filledPassword = passwordField.value === password;
   }
   return {
     filled_username: filledUsername,
