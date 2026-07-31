@@ -1,0 +1,57 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Apply</title>
+<!--
+  A combobox that opens a list, lets its own text box be typed into, and then
+  quietly does not commit the selection.
+
+  The executor typed into the box to narrow the list; the rescan read that text
+  back and reported "verified" for an option the page had never accepted, then
+  overwrote the failure it had already recorded.
+
+  Correct behaviour here is "attempted, not verified": there is nothing this
+  page owns that reports a selection.
+-->
+<main>
+  <h1>Apply for Research Engineer</h1>
+  <div><label for="fn">First Name *</label><input id="fn" name="first" required></div>
+  <div><label for="ln">Last Name *</label><input id="ln" name="last" required></div>
+  <div><label for="em">Email *</label><input id="em" name="email" type="email" required></div>
+  <div><label for="ph">Phone *</label><input id="ph" name="phone" type="tel" required></div>
+  <div><label for="cv">Resume *</label><input id="cv" name="resume" type="file" required></div>
+
+  <div class="field">
+    <span id="country-label">Country</span>
+    <div class="select-container">
+      <input id="country" role="combobox" aria-expanded="false" aria-controls="country-list"
+             aria-autocomplete="list" aria-labelledby="country-label" autocomplete="off">
+      <!-- Nothing is here until something is typed, so the executor has to use
+           the filter box, which is exactly the situation that went wrong. -->
+      <ul id="country-list" role="listbox" hidden></ul>
+    </div>
+  </div>
+  <button type="button">Submit Application</button>
+</main>
+<script>
+  const COUNTRIES = ["United States", "Canada", "United States Minor Outlying Islands"];
+  const box = document.getElementById("country");
+  const list = document.getElementById("country-list");
+  const open = () => { list.hidden = false; box.setAttribute("aria-expanded", "true"); };
+  box.addEventListener("pointerdown", open);
+  box.addEventListener("focus", open);
+  box.addEventListener("input", () => {
+    const needle = box.value.toLowerCase();
+    list.innerHTML = "";
+    if (!needle) return;
+    for (const name of COUNTRIES) {
+      if (!name.toLowerCase().includes(needle)) continue;
+      const row = document.createElement("li");
+      row.setAttribute("role", "option");
+      row.textContent = name;
+      list.appendChild(row);
+    }
+    open();
+  });
+  // The page never records a choice: no backing value, no aria-selected, no
+  // rendered value node. Clicking an option does nothing at all.
+</script>

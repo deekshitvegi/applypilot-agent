@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Apply -- Questions</title>
+<!--
+  Two segmented Yes/No controls drawn out of divs.
+
+  The first writes a hidden backing input and sets aria-checked, both of which
+  the page owns, so a choice there is verifiable. The second records nothing
+  anywhere: clicking it only changes how it looks, and there is no honest way to
+  call that verified.
+-->
+<main>
+  <h1>Additional Questions</h1>
+  <div><label for="fn">First Name *</label><input id="fn" name="first" required></div>
+  <div><label for="ln">Last Name *</label><input id="ln" name="last" required></div>
+  <div><label for="em">Email *</label><input id="em" name="email" type="email" required></div>
+  <div><label for="cv">Resume *</label><input id="cv" name="resume" type="file" required></div>
+
+  <div class="field">
+    <span id="q1">Are you 18 years of age or older?</span>
+    <div id="backed" role="combobox" tabindex="0" aria-labelledby="q1" aria-expanded="false"></div>
+    <ul id="backed-list" role="listbox" hidden>
+      <li role="option" data-value="Y">Yes</li>
+      <li role="option" data-value="N">No</li>
+    </ul>
+    <input type="hidden" id="backed-value" name="over18" value="">
+  </div>
+
+  <div class="field">
+    <span id="q2">Are you willing to relocate?</span>
+    <div id="silent" role="combobox" tabindex="0" aria-labelledby="q2" aria-expanded="false"></div>
+    <ul id="silent-list" role="listbox" hidden>
+      <li role="option">Yes</li>
+      <li role="option">No</li>
+    </ul>
+  </div>
+  <button type="button">Submit Application</button>
+</main>
+<script>
+  function wire(triggerId, listId, onPick) {
+    const trigger = document.getElementById(triggerId);
+    const list = document.getElementById(listId);
+    trigger.setAttribute("aria-controls", listId);
+    trigger.addEventListener("pointerdown", () => {
+      list.hidden = false;
+      trigger.setAttribute("aria-expanded", "true");
+    });
+    list.addEventListener("click", (event) => {
+      const row = event.target.closest("[role=option]");
+      if (!row) return;
+      onPick(row);
+      list.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+    });
+  }
+  const backedValue = document.getElementById("backed-value");
+  wire("backed", "backed-list", (row) => {
+    backedValue.value = row.dataset.value;
+    for (const other of document.querySelectorAll("#backed-list [role=option]")) {
+      other.setAttribute("aria-selected", other === row ? "true" : "false");
+    }
+  });
+  // Records nothing: only a colour changes, and colour is not state.
+  wire("silent", "silent-list", (row) => { row.style.fontWeight = "bold"; });
+</script>

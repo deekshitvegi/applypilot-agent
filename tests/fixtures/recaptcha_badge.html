@@ -1,0 +1,36 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Senior ML Engineer -- Application</title>
+<!--
+  An ordinary application carrying the invisible reCAPTCHA badge. The badge is a
+  256x60 iframe that asks nothing of anyone and sits on a large share of career
+  sites. Treating it as a challenge blocked every application on every such site.
+-->
+<main>
+  <h1>Apply for Senior Machine Learning Engineer</h1>
+  <form id="application">
+    <p><label for="fn">First Name *</label><input id="fn" name="first_name" required></p>
+    <p><label for="ln">Last Name *</label><input id="ln" name="last_name" required></p>
+    <p><label for="em">Email *</label><input id="em" name="email" type="email" required></p>
+    <p><label for="ph">Phone</label><input id="ph" name="phone" type="tel"></p>
+    <p><label for="rs">Resume *</label><input id="rs" name="resume" type="file" required></p>
+    <p><label for="li">LinkedIn Profile</label><input id="li" name="linkedin"></p>
+    <p>
+      <label for="ctry">Country</label>
+      <select id="ctry" name="country">
+        <option value="">- Select -</option>
+        <option>United States</option>
+        <option>Canada</option>
+      </select>
+    </p>
+    <button type="submit">Submit Application</button>
+  </form>
+</main>
+
+<div class="grecaptcha-badge" data-style="bottomright"
+     style="width:256px;height:60px;position:fixed;bottom:14px;right:14px;overflow:hidden;">
+  <div class="grecaptcha-logo">
+    <iframe title="reCAPTCHA" width="256" height="60"
+            src="https://www.google.com/recaptcha/api2/anchor?ar=1&amp;k=6Ld_test&amp;size=invisible"></iframe>
+  </div>
+</div>

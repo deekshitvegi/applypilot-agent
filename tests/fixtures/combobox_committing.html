@@ -1,0 +1,59 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Apply</title>
+<!--
+  The same widget, but this one commits: it writes a hidden backing input and
+  renders the chosen label. Both are state the page owns, so a selection here is
+  verifiable.
+-->
+<main>
+  <h1>Apply for Research Engineer</h1>
+  <div><label for="fn">First Name *</label><input id="fn" name="first" required></div>
+  <div><label for="ln">Last Name *</label><input id="ln" name="last" required></div>
+  <div><label for="em">Email *</label><input id="em" name="email" type="email" required></div>
+  <div><label for="ph">Phone *</label><input id="ph" name="phone" type="tel" required></div>
+  <div><label for="cv">Resume *</label><input id="cv" name="resume" type="file" required></div>
+
+  <div class="field">
+    <span id="country-label">Country</span>
+    <div class="select-container">
+      <span class="select__singleValue" id="shown"></span>
+      <input id="country" role="combobox" aria-expanded="false" aria-controls="country-list"
+             aria-autocomplete="list" aria-labelledby="country-label" autocomplete="off">
+      <input type="hidden" id="backing" name="country" value="">
+      <ul id="country-list" role="listbox" hidden>
+        <li role="option" data-value="US">United States</li>
+        <li role="option" data-value="CA">Canada</li>
+        <li role="option" data-value="UM">United States Minor Outlying Islands</li>
+      </ul>
+    </div>
+  </div>
+  <button type="button">Submit Application</button>
+</main>
+<script>
+  const box = document.getElementById("country");
+  const list = document.getElementById("country-list");
+  const shown = document.getElementById("shown");
+  const backing = document.getElementById("backing");
+  const open = () => { list.hidden = false; box.setAttribute("aria-expanded", "true"); };
+  box.addEventListener("pointerdown", open);
+  box.addEventListener("focus", open);
+  box.addEventListener("input", () => {
+    const needle = box.value.toLowerCase();
+    for (const row of list.querySelectorAll("[role=option]")) {
+      row.hidden = needle ? !row.textContent.toLowerCase().includes(needle) : false;
+    }
+  });
+  list.addEventListener("click", (event) => {
+    const row = event.target.closest("[role=option]");
+    if (!row) return;
+    backing.value = row.dataset.value;
+    shown.textContent = row.textContent;
+    for (const other of list.querySelectorAll("[role=option]")) {
+      other.setAttribute("aria-selected", other === row ? "true" : "false");
+    }
+    box.value = "";
+    list.hidden = true;
+    box.setAttribute("aria-expanded", "false");
+  });
+</script>

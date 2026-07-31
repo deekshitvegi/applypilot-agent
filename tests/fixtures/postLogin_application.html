@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Application</title>
+<!--
+  A real application served from a URL called postLogin.html. It has an email
+  field and no password field. It was detected as a sign-in page and the runner
+  looped waiting for a password manager that had nothing to do.
+
+  Nothing here may be decided from the URL.
+-->
+<main>
+  <h2>Candidate Details</h2>
+  <div class="row"><label for="a">First Name *</label><input id="a" name="fname" required></div>
+  <div class="row"><label for="b">Last Name *</label><input id="b" name="lname" required></div>
+  <div class="row"><label for="c">Email Address *</label><input id="c" name="email" type="email" required></div>
+  <div class="row"><label for="d">Mobile Phone *</label><input id="d" name="mobile" type="tel" required></div>
+  <div class="row"><label for="e">Address Line 1</label><input id="e" name="addr1"></div>
+  <div class="row"><label for="f">Address Line 2</label><input id="f" name="addr2"></div>
+  <div class="row"><label for="g">City</label><input id="g" name="city"></div>
+  <div class="row"><label for="h">State</label>
+    <select id="h" name="countryRegion">
+      <option value="">- Select -</option>
+      <option>Texas</option>
+      <option>Utah</option>
+    </select>
+  </div>
+  <div class="row"><label for="i">ZIP Code</label><input id="i" name="zip"></div>
+  <div class="row"><label for="j">Resume *</label><input id="j" name="resume" type="file" required></div>
+  <div class="row"><label for="k">Why do you want this role?</label><textarea id="k" name="why"></textarea></div>
+  <button type="button">Save and Continue</button>
+</main>

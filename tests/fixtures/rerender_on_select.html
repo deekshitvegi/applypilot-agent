@@ -1,0 +1,49 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Apply</title>
+<!--
+  Choosing a country rebuilds the address block and discards whatever was
+  already typed into it. The run reported those fields empty instead of filling
+  them again, and a retry that was not idempotent undid its own work.
+-->
+<main>
+  <h1>Apply for Software Engineer</h1>
+  <div><label for="fn">First Name *</label><input id="fn" name="first" required></div>
+  <div><label for="ln">Last Name *</label><input id="ln" name="last" required></div>
+  <div><label for="em">Email *</label><input id="em" name="email" type="email" required></div>
+  <div><label for="ph">Phone *</label><input id="ph" name="phone" type="tel" required></div>
+  <div><label for="cv">Resume *</label><input id="cv" name="resume" type="file" required></div>
+
+  <div>
+    <label for="country">Country *</label>
+    <select id="country" name="country" required>
+      <option value="">- Select -</option>
+      <option>United States</option>
+      <option>United States Minor Outlying Islands</option>
+      <option>Canada</option>
+    </select>
+  </div>
+
+  <div id="address"></div>
+  <button type="button">Submit Application</button>
+</main>
+<script>
+  const address = document.getElementById("address");
+  function render() {
+    address.innerHTML = `
+      <div><label for="street">Address Line 1</label><input id="street" name="street"></div>
+      <div><label for="apt">Address Line 2</label><input id="apt" name="apt"></div>
+      <div><label for="city">City</label><input id="city" name="city"></div>
+      <div><label for="state">State</label>
+        <select id="state" name="countryRegion">
+          <option value="">- Select -</option>
+          <option>Texas</option>
+          <option>Utah</option>
+        </select>
+      </div>
+      <div><label for="zip">ZIP Code</label><input id="zip" name="zip"></div>`;
+  }
+  render();
+  // Every country change throws the block away and builds a fresh one.
+  document.getElementById("country").addEventListener("change", render);
+</script>

@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Create your account</title>
+<!--
+  An account-creation page. It was treated as a sign-in, so the run stalled
+  waiting for a password manager to fill an account that did not exist yet.
+
+  Everything on it except the two credential fields can be filled; creating the
+  account accepts the employer's terms and is the applicant's to do.
+-->
+<main>
+  <h1>Create an Account to Apply</h1>
+  <form>
+    <p><label for="fn">First Name *</label><input id="fn" name="firstName" required></p>
+    <p><label for="ln">Last Name *</label><input id="ln" name="lastName" required></p>
+    <p><label for="em">Email Address *</label><input id="em" name="email" type="email" required></p>
+    <p><label for="ph">Phone Number</label><input id="ph" name="phone" type="tel"></p>
+    <p><label for="p1">Choose Password *</label><input id="p1" name="password" type="password" required></p>
+    <p><label for="p2">Retype Password *</label><input id="p2" name="password2" type="password" required></p>
+    <p><label><input type="checkbox" name="terms"> I accept the Terms of Use</label></p>
+    <button type="submit">Create Account</button>
+  </form>
+</main>

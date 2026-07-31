@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Apply -- History</title>
+<!--
+  A repeating employment section. Pressing "Add another" must be confirmed by
+  the form actually growing, not by the click returning without an error.
+
+  The two blocks are built identically, so which entry a control belongs to
+  comes from its position among its sibling blocks rather than from a name.
+-->
+<main>
+  <h1>Work Experience</h1>
+  <div id="blocks">
+    <div class="entry">
+      <h3>Employment</h3>
+      <div><label>Company<input name="company"></label></div>
+      <div><label>Title<input name="title"></label></div>
+      <div><label>Location<input name="location"></label></div>
+      <div><label>Start Date<input name="start"></label></div>
+      <div><label>End Date<input name="end"></label></div>
+    </div>
+  </div>
+  <button id="add" type="button">Add another</button>
+
+  <h2>Personal</h2>
+  <div><label for="fn">First Name *</label><input id="fn" name="first" required></div>
+  <div><label for="ln">Last Name *</label><input id="ln" name="last" required></div>
+  <div><label for="em">Email *</label><input id="em" name="email" type="email" required></div>
+  <button type="button">Submit Application</button>
+</main>
+<script>
+  document.getElementById("add").addEventListener("click", () => {
+    const blocks = document.getElementById("blocks");
+    const copy = blocks.firstElementChild.cloneNode(true);
+    copy.querySelectorAll("input").forEach((input) => { input.value = ""; });
+    blocks.appendChild(copy);
+  });
+</script>

@@ -1,0 +1,49 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Search results -- 412 jobs</title>
+<!--
+  A job board's search results. Its filter controls were counted as application
+  fields (eleven of them on one site, five on another) and its Apply button was
+  reported as the way in to a posting that is not even on this page.
+
+  Nothing on a list of results is a question about the applicant.
+-->
+<header>
+  <nav aria-label="Main"><a href="/">Home</a> <a href="/saved">Saved jobs</a></nav>
+</header>
+
+<form role="search" class="search-form" aria-label="Search jobs">
+  <label for="kw">Keywords</label><input id="kw" name="keywords" type="search">
+  <label for="loc">Position Location</label><input id="loc" name="location">
+  <label for="rad">Distance</label>
+  <select id="rad" name="radius"><option>10 miles</option><option>25 miles</option></select>
+  <label for="sort">Sort by</label>
+  <select id="sort" name="sortBy"><option>Relevance</option><option>Date</option></select>
+  <button type="submit">Search</button>
+</form>
+
+<aside class="facets">
+  <label for="f1">Department</label>
+  <select id="f1" name="facet_dept"><option>Engineering</option><option>Sales</option></select>
+  <label for="f2">Job Type</label>
+  <select id="f2" name="facet_type"><option>Full time</option><option>Contract</option></select>
+  <label><input type="checkbox" name="facet_remote"> Remote only</label>
+</aside>
+
+<section class="results">
+  <ul>
+    <li><a href="/careers/job/10001">Machine Learning Engineer</a></li>
+    <li><a href="/careers/job/10002">Senior Data Scientist</a></li>
+    <li><a href="/careers/job/10003">MLOps Engineer</a></li>
+    <li><a href="/careers/job/10004">Research Engineer</a></li>
+    <li><a href="/careers/job/10005">Applied Scientist</a></li>
+    <li><a href="/careers/job/10006">AI Platform Engineer</a></li>
+    <li><a href="/careers/job/10007">Data Engineer</a></li>
+  </ul>
+  <button type="button">Apply</button>
+</section>
+
+<div class="subscribe">
+  <label for="alert">Get job alerts</label><input id="alert" name="alert_email" type="email">
+  <button type="button">Subscribe</button>
+</div>

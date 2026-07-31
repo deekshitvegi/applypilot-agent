@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Apply -- verification required</title>
+<!-- The interactive v2 checkbox: about 304x78, on screen, waiting for a person.
+     This agent never ticks it. -->
+<main>
+  <h1>Apply for Data Scientist</h1>
+  <form>
+    <p><label for="fn">First Name *</label><input id="fn" name="first_name" required></p>
+    <p><label for="ln">Last Name *</label><input id="ln" name="last_name" required></p>
+    <p><label for="em">Email *</label><input id="em" name="email" type="email" required></p>
+    <p><label for="ph">Phone *</label><input id="ph" name="phone" type="tel" required></p>
+    <p><label for="cv">Resume *</label><input id="cv" name="resume" type="file" required></p>
+    <div style="width:304px;height:78px;">
+      <iframe title="reCAPTCHA" width="304" height="78"
+              src="https://www.google.com/recaptcha/api2/anchor?ar=1&amp;k=6Ld_test"></iframe>
+    </div>
+    <button type="submit">Submit Application</button>
+  </form>
+</main>
