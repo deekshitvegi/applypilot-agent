@@ -800,7 +800,9 @@ def test_address_line_1_answer_does_not_fill_address_line_2() -> None:
     plan = plan_form_fill("https://careers.example.test/apply", fields, CandidateProfile(), answers)
 
     assert {a.field_id: a.value for a in plan.actions} == {"a1": "1710 Northstar Rd"}
-    assert [f.field_id for f in plan.unknown_fields] == ["a2"]
+    # Address Line 2 is optional and supplementary, so it is left blank rather
+    # than asked about — but it must never inherit line 1's value.
+    assert plan.unknown_fields == []
 
 
 def test_conditional_follow_up_fields_are_left_for_the_user() -> None:
@@ -809,14 +811,15 @@ def test_conditional_follow_up_fields_are_left_for_the_user() -> None:
     profile = CandidateProfile(country="United States")
     fields = [
         FormField(id="country", label="Country", required=True),
+        # Optional follow-ups are left blank silently; a required one is asked.
         FormField(id="dept", label="If yes, what department and what country?"),
-        FormField(id="visa", label="If yes, please indicate Visa status"),
+        FormField(id="visa", label="If yes, please indicate Visa status", required=True),
     ]
 
     plan = plan_form_fill("https://careers.example.test/apply", fields, profile, [])
 
     assert {a.field_id: a.value for a in plan.actions} == {"country": "United States"}
-    assert sorted(f.field_id for f in plan.unknown_fields) == ["dept", "visa"]
+    assert [f.field_id for f in plan.unknown_fields] == ["visa"]
 
 
 def test_a_placeholder_option_is_never_selected() -> None:
@@ -912,3 +915,34 @@ def test_numbered_history_blocks_still_match() -> None:
         "c1": "HCLTech",
         "c2": "Innomatics Research Labs",
     }
+
+
+def test_supplementary_optional_fields_are_left_blank_not_asked() -> None:
+    # Turning on optional questions in 0.17.3 over-corrected: a 13-question
+    # form became a 30-question interrogation asking for Middle Name, Home
+    # Phone and "If source is not listed". A form is complete without them.
+    profile = CandidateProfile(legal_name="Deekshitth Vegi")
+    fields = [
+        FormField(id="mid", label="Middle Name"),
+        FormField(id="home", label="Home Phone"),
+        FormField(id="ext", label="Phone Extension"),
+        FormField(id="county", label="County"),
+        FormField(id="src", label="If source is not listed, enter here"),
+        FormField(id="essay", label="Why do you want to work here?", field_type="textarea"),
+    ]
+
+    plan = plan_form_fill("https://careers.example.test/apply", fields, profile, [])
+
+    assert [field.field_id for field in plan.unknown_fields] == ["essay"]
+
+
+def test_a_required_supplementary_field_is_still_asked() -> None:
+    # However minor it looks, an employer marking it required means asking.
+    fields = [
+        FormField(id="mid", label="Middle Name", required=True),
+        FormField(id="src", label="If source is not listed, enter here", required=True),
+    ]
+
+    plan = plan_form_fill("https://careers.example.test/apply", fields, CandidateProfile(), [])
+
+    assert sorted(f.field_id for f in plan.unknown_fields) == ["mid", "src"]

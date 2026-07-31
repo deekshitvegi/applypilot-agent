@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.19.8 - 2026-07-30
+
+- **Stopped asking about optional fields that do not matter.** Including every
+  optional blank in 0.17.3 over-corrected: a 13-question form became a
+  30-question interrogation covering Middle Name, Home Phone, Phone Extension,
+  County and "If source is not listed, enter here". Supplementary optional
+  fields are now left blank, and an optional conditional follow-up is no longer
+  raised at all. Anything the employer marks required is still always asked,
+  however minor it looks.
+
 ## 0.19.7 - 2026-07-30
 
 - **Stopped learning meaningless values from the page.** The answer-learning

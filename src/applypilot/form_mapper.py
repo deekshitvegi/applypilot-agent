@@ -76,7 +76,10 @@ def plan_form_fill(
                         confidence=confidence,
                     )
                 )
-            elif not field.value and field.field_type != "file":
+            elif field.required and not field.value and field.field_type != "file":
+                # Only surface a conditional follow-up the employer insists on.
+                # An optional one applies just when a related answer was yes,
+                # so asking about it every time is noise.
                 unknown.append(
                     UnknownField(
                         field_id=field.id,
@@ -143,6 +146,10 @@ def plan_form_fill(
                 )
             )
         elif not field.value and field.field_type != "file":
+            # An optional supplementary field is left blank rather than asked
+            # about. A required one is always surfaced, however minor it looks.
+            if not field.required and SKIPPABLE_OPTIONAL.match(normalize(field.label)):
+                continue
             unknown_key = normalize(field.group_label) if field.field_type == "checkbox" else ""
             if unknown_key and unknown_key in seen_checkbox_unknowns:
                 continue
@@ -404,6 +411,17 @@ def map_exact_reusable_answer(
 # so filling them unconditionally puts data into questions that do not apply.
 CONDITIONAL_FOLLOW_UP = re.compile(
     r"^if\s+(?:yes|no|so|any|other|applicable|selected|checked|source|above|referred|not)"
+)
+
+# Optional fields worth leaving blank rather than interrupting for. Each is
+# supplementary: a form is complete without it, and a candidate who wants one
+# filled can say so. Asking about every optional blank turned a 13-question
+# form into a 30-question interrogation.
+SKIPPABLE_OPTIONAL = re.compile(
+    r"^(middle (name|initial)|preferred (first )?name|suffix|prefix|title of courtesy"
+    r"|home phone|alternate phone|phone extension|extension|fax"
+    r"|address line (2|3)|apartment|apt|suite|unit|county"
+    r"|other|comments?|additional (information|comments?)|notes?)\b"
 )
 
 PLACEHOLDER_OPTIONS = {
