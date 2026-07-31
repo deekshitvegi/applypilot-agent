@@ -147,6 +147,14 @@ class FieldObservation(BaseModel):
         return bool(self.label.strip())
 
 
+class PageControl(BaseModel):
+    """A button or link the page offers, identified by what it reads."""
+
+    text: str = ""
+    fingerprint: str = ""
+    href: str = ""
+
+
 class PageObservation(BaseModel):
     url: str = ""
     title: str = ""
@@ -154,10 +162,12 @@ class PageObservation(BaseModel):
     adapter: str = "generic"
     host_role: HostRole = HostRole.THIRD_PARTY
     fields: list[FieldObservation] = Field(default_factory=list)
-    submit_controls: list[str] = Field(default_factory=list)
-    apply_controls: list[str] = Field(default_factory=list)
-    next_controls: list[str] = Field(default_factory=list)
+    submit_controls: list[PageControl] = Field(default_factory=list)
+    apply_controls: list[PageControl] = Field(default_factory=list)
+    next_controls: list[PageControl] = Field(default_factory=list)
+    add_controls: list[PageControl] = Field(default_factory=list)
     captcha: Literal["none", "badge_only", "challenge"] = "none"
+    hints: list[str] = Field(default_factory=list)
     signature: str = ""
     observed_at: datetime = Field(default_factory=_now)
     notes: list[str] = Field(default_factory=list)

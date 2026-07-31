@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ApplyPilot</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="bar-main">
+      <button id="run" class="run">Start</button>
+      <span id="activity" class="activity">Not running.</span>
+    </div>
+    <button id="settings" class="ghost" title="Settings">Settings</button>
+  </header>
+
+  <div id="alerts"></div>
+
+  <main>
+    <!-- Onboarding takes over the panel until the questions everyone asks are
+         answered, because with nothing saved every form asks them again. -->
+    <section id="onboarding" class="card hidden">
+      <h2>Set up your answers</h2>
+      <p id="onboarding-progress" class="muted"></p>
+      <div id="onboarding-notes"></div>
+      <div class="upload">
+        <label for="resume-file">Start from your resume (.docx)</label>
+        <input id="resume-file" type="file" accept=".docx">
+        <p id="resume-result" class="muted"></p>
+      </div>
+      <div id="onboarding-step"></div>
+      <button id="onboarding-skip" class="ghost">Answer the rest later</button>
+    </section>
+
+    <section id="page" class="card">
+      <h2 id="page-kind">No page scanned yet</h2>
+      <p id="page-detail" class="muted"></p>
+      <div class="row">
+        <button id="rescan" class="ghost">Rescan this page</button>
+        <button id="fill" class="primary">Fill what you can</button>
+      </div>
+    </section>
+
+    <!-- One question at a time. A wall of them is how a thirteen-question form
+         turned into thirty. -->
+    <section id="question" class="card hidden">
+      <h2>One thing I need from you</h2>
+      <p id="question-label" class="question-label"></p>
+      <p id="question-reason" class="muted"></p>
+      <div id="question-input"></div>
+      <div class="row">
+        <button id="question-save" class="primary">Save and continue</button>
+        <button id="question-skip" class="ghost">Leave it blank</button>
+        <button id="question-show" class="ghost">Show me on the page</button>
+      </div>
+      <p id="question-remaining" class="muted"></p>
+    </section>
+
+    <section id="checklist-card" class="card">
+      <h2>Checklist <span id="checklist-count" class="muted"></span></h2>
+      <ul id="checklist" class="checklist"></ul>
+      <p class="muted tiny">
+        Click any row to scroll to that field and highlight it on the page.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Chat</h2>
+      <div id="log" class="log"></div>
+      <form id="chat-form" class="chat">
+        <input id="chat-input" type="text" autocomplete="off"
+               placeholder="e.g. state texas, middle name Kumar, change my last answer to No">
+        <button type="submit" class="primary">Send</button>
+      </form>
+    </section>
+  </main>
+
+  <footer class="bar tiny">
+    <span id="versions"></span>
+    <span id="applications" class="muted"></span>
+  </footer>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

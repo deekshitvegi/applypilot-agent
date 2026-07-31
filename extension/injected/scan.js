@@ -222,6 +222,40 @@
     return fields;
   }
 
+  /**
+   * Clues about which hiring system is serving this page.
+   *
+   * Some systems are served from the employer's own domain -- careers.<company>
+   * .com is very common for large employers -- so the URL alone cannot identify
+   * them and the page has to say. The service decides what these mean; this
+   * only reports what is here.
+   */
+  function adapterHints() {
+    const hints = [];
+    for (const el of D.deepQuery("script[src],link[href]", document).slice(0, 200)) {
+      const raw = el.getAttribute("src") || el.getAttribute("href") || "";
+      try {
+        hints.push(new URL(raw, location.href).hostname);
+      } catch (err) {
+        /* not a URL we can read */
+      }
+    }
+    const markers = [
+      ["[data-automation-id]", "workday"],
+      ["[data-ph-at-id],[data-ph-id]", "phenom"],
+      ["#grnhse_app,#grnhse_iframe", "greenhouse"],
+      ["#icims_content,iframe[src*='icims']", "icims"],
+      [".posting-page,.lever-application", "lever"],
+      ["[class*='ashby' i],[data-testid*='ashby' i]", "ashby"],
+      ["[data-sr-job-id],[class*='smartrecruiters' i]", "smartrecruiters"],
+      ["[class*='whr-' i]", "workable"],
+    ];
+    for (const [selector, name] of markers) {
+      if (D.deepQuery(selector, document).length) hints.push("marker:" + name);
+    }
+    return Array.from(new Set(hints)).slice(0, 40);
+  }
+
   function pageSignature(kind, fields) {
     const parts = [location.href.split("#")[0], kind]
       .concat(fields.map((f) => f.fingerprint + ":" + (f.value ? "1" : "0")))
@@ -253,9 +287,30 @@
       next_controls: kind === "application" ? S.matchingControls(S.NEXT_TEXT) : [],
       add_controls: kind === "application" ? S.matchingControls(S.ADD_TEXT) : [],
       captcha: S.captchaState(),
+      hints: adapterHints(),
       signature: pageSignature(kind, fields),
       notes: notes,
     };
+  }
+
+  /**
+   * The page's own confirmation that an application was received, if it says so.
+   *
+   * Returns "" when it does not. Nothing is ever recorded as submitted without
+   * this: pressing a button is not evidence that anything arrived.
+   */
+  function confirmationText() {
+    const body = document.body ? document.body.innerText || "" : "";
+    const pattern = new RegExp(
+      "[^.\\n]*(?:thank you for applying" +
+        "|your application (?:has been |was )?(?:submitted|received)" +
+        "|we (?:have )?received your application" +
+        "|application (?:submitted|complete|received)" +
+        "|thanks for applying)[^.\\n]*",
+      "i"
+    );
+    const match = body.match(pattern);
+    return match ? match[0].replace(/\s+/g, " ").trim().slice(0, 200) : "";
   }
 
   /** Find a control again by fingerprint. Never by position. */
@@ -295,6 +350,8 @@
   }
 
   AP.scan = {
+    adapterHints,
+    confirmationText,
     controlKind,
     findByFingerprint,
     groupLabel,

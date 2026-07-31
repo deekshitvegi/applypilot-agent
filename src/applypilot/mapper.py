@@ -378,8 +378,9 @@ def resolve_field(
     # follow-up conditional never buries an answer already provided.
     learned_value = learned.get(label_key)
     if learned_value:
+        known = best_fact(field)
         answer = _shape_answer(
-            field, learned_value, AnswerSource.LEARNED, "", 0.95,
+            field, learned_value, AnswerSource.LEARNED, known.spec.key if known else "", 0.95,
             "you answered this exact question before",
         )
         if answer:
@@ -458,7 +459,9 @@ def _shape_answer(
 ) -> Answer | None:
     """Turn a saved value into something this control can actually accept."""
     if field.control in CHOICE_CONTROLS and field.options:
-        chosen = best_option(value, field.options)
+        # The fact decides which extra vocabulary is in play: "MS" is a state to
+        # an address field and a Master's degree to an education one.
+        chosen = best_option(value, field.options, fact_key)
         if chosen is None:
             return None
         value = chosen.option.label

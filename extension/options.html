@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ApplyPilot settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main>
+  <h1>ApplyPilot</h1>
+  <p id="health" class="muted"></p>
+
+  <section>
+    <h2>Model key</h2>
+    <p class="muted">
+      Matching your saved answers to a form works without a key. A key is only
+      used for wording: describing a page, and picking between options the page
+      itself offered. It is stored encrypted on this computer and is never sent
+      anywhere except to the model provider.
+    </p>
+    <label for="api-key">Gemini API key</label>
+    <input id="api-key" type="password" autocomplete="off" placeholder="paste your key here">
+    <div class="row">
+      <button id="save-key" class="primary">Save key</button>
+      <span id="key-state" class="muted"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>How I should behave</h2>
+    <label for="submission">Final Submit</label>
+    <select id="submission">
+      <option value="never">Never press Submit — I will do it myself</option>
+      <option value="confirm">Ask me first, every time</option>
+      <option value="auto">Press it once everything required is verified</option>
+    </select>
+    <label class="check">
+      <input id="easy-apply" type="checkbox">
+      Prefer a job board's quick apply over the employer's own site
+    </label>
+    <label class="check">
+      <input id="demographics" type="checkbox">
+      Answer the voluntary questions (gender, race, veteran, disability) from my saved answers
+    </label>
+    <p class="muted tiny">
+      Left off, those four are always handed back to you. Nothing is ever filled
+      in for them on your behalf.
+    </p>
+    <button id="save-behaviour" class="primary">Save</button>
+  </section>
+
+  <section>
+    <h2>Your answers</h2>
+    <p class="muted">Anything blank here is something a form will stop and ask you about.</p>
+    <div id="facts" class="grid"></div>
+    <button id="save-facts" class="primary">Save answers</button>
+  </section>
+
+  <section>
+    <h2>Education</h2>
+    <div id="education"></div>
+    <button id="add-education" class="ghost">Add an entry</button>
+  </section>
+
+  <section>
+    <h2>Work history</h2>
+    <div id="experience"></div>
+    <button id="add-experience" class="ghost">Add an entry</button>
+  </section>
+
+  <section>
+    <h2>Answers learned from forms</h2>
+    <p class="muted">
+      Things you typed on an application that I kept so you would not have to
+      type them again. Delete anything that looks wrong.
+    </p>
+    <table id="learned"><tbody></tbody></table>
+    <button id="forget-all" class="ghost">Forget all of them</button>
+  </section>
+
+  <section>
+    <h2>Applications</h2>
+    <table id="applications"><tbody></tbody></table>
+    <div class="row">
+      <button id="export" class="ghost">Export as CSV</button>
+    </div>
+  </section>
+
+  <section class="danger">
+    <h2>Erase everything</h2>
+    <p class="muted">
+      Deletes your profile, saved answers, documents and history from this
+      computer. The encryption key file stays where it is.
+    </p>
+    <button id="reset" class="bad">Erase everything</button>
+  </section>
+</main>
+<script src="options.js"></script>
+</body>
+</html>

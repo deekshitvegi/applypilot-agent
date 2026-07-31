@@ -413,6 +413,52 @@
     };
   }
 
+  /**
+   * Attach a document to a file input.
+   *
+   * The bytes arrive from the service worker, whose origin is the extension's
+   * own; the page is never handed a way to reach the local service. Success is
+   * the input's own file list naming the file, not the assignment returning.
+   */
+  async function attachFile(fingerprint, base64, filename, mime) {
+    const found = AP.scan.findByFingerprint(fingerprint);
+    if (!found) {
+      return {
+        fingerprint: fingerprint,
+        outcome: "failed",
+        signal: "none",
+        observed: "",
+        requested: filename,
+        evidence: "the file control is no longer on the page",
+      };
+    }
+    const el = found.element;
+    const already = AP.verify.observe(el, "file", null);
+    if (AP.verify.same(already.value, filename)) {
+      return {
+        fingerprint: fingerprint,
+        outcome: "verified",
+        signal: already.signal,
+        observed: already.value,
+        requested: filename,
+        evidence: "already attached; nothing was clicked",
+      };
+    }
+
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    const file = new File([bytes], filename, { type: mime || "application/octet-stream" });
+
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    el.files = transfer.files;
+    fireInput(el);
+    await sleep(200);
+
+    return AP.verify.check(fingerprint, filename, already.value);
+  }
+
   function highlight(fingerprint) {
     const found = AP.scan.findByFingerprint(fingerprint);
     if (!found) return { ok: false };
@@ -502,6 +548,7 @@
 
   AP.act = {
     addRepeat,
+    attachFile,
     chooseFromPopup,
     chooseNativeOption,
     chooseRadio,
