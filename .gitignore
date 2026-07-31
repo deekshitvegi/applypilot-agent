@@ -1,31 +1,39 @@
-# Python
+# Local environment
+.venv/
+venv/
 __pycache__/
 *.py[cod]
+*.egg-info/
+build/
+dist/
 .pytest_cache/
 .ruff_cache/
-.venv/
-dist/
-build/
-*.egg-info/
+.mypy_cache/
 
-# Local configuration and secrets
+# Secrets and personal data -- this repository is public.
 .env
 .env.*
 !.env.example
-*.pem
 *.key
-
-# Personal and generated application data
+applypilot.key
 data/
-resumes/
-applications/
-tmp/
-browser-profiles/
+*.sqlite
 *.sqlite3
 *.db
+profile.json
+documents/
+resumes/
+*.docx
+*.pdf
+!tests/fixtures/**/*.pdf
 
-# Editors / operating systems
-.idea/
+# Extension packaging output
+extension.zip
+*.crx
+*.pem
+
+# Editors / OS
 .vscode/
+.idea/
 .DS_Store
 Thumbs.db

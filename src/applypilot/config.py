@@ -1,34 +1,65 @@
+"""Where things live and how the service is configured.
+
+Everything personal lands in a per-user data directory outside the repository,
+so a public checkout can never contain a profile, a database or a key.
+"""
+
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-
-def env_flag(name: str, default: bool = False) -> bool:
-    value = os.getenv(name)
-    if value is None:
-        return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+DEFAULT_PORT = 8765
+DEFAULT_HOST = "127.0.0.1"
 
 
-@dataclass(frozen=True, slots=True)
+def default_data_dir() -> Path:
+    """The per-user directory holding the database, key file and documents."""
+    override = os.environ.get("APPLYPILOT_DATA_DIR")
+    if override:
+        return Path(override).expanduser()
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(base) / "ApplyPilot"
+    xdg = os.environ.get("XDG_DATA_HOME")
+    if xdg:
+        return Path(xdg) / "applypilot"
+    return Path.home() / ".local" / "share" / "applypilot"
+
+
+@dataclass(frozen=True)
 class Settings:
-    host: str = os.getenv("APPLYPILOT_HOST", "127.0.0.1")
-    port: int = int(os.getenv("APPLYPILOT_PORT", "8765"))
-    database_path: Path = Path(
-        os.getenv("APPLYPILOT_DATABASE_PATH", "data/applypilot.sqlite3")
+    data_dir: Path
+    host: str = DEFAULT_HOST
+    port: int = DEFAULT_PORT
+    model_provider: str = "gemini"
+    model_name: str = "gemini-2.0-flash"
+
+    @property
+    def db_path(self) -> Path:
+        return self.data_dir / "applypilot.sqlite3"
+
+    @property
+    def key_path(self) -> Path:
+        """The encryption key lives beside the database but never inside it."""
+        return self.data_dir / "applypilot.key"
+
+    @property
+    def documents_dir(self) -> Path:
+        return self.data_dir / "documents"
+
+    def ensure_dirs(self) -> None:
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.documents_dir.mkdir(parents=True, exist_ok=True)
+
+
+def load_settings() -> Settings:
+    port = int(os.environ.get("APPLYPILOT_PORT", DEFAULT_PORT))
+    return Settings(
+        data_dir=default_data_dir(),
+        host=os.environ.get("APPLYPILOT_HOST", DEFAULT_HOST),
+        port=port,
+        model_provider=os.environ.get("APPLYPILOT_MODEL_PROVIDER", "gemini"),
+        model_name=os.environ.get("APPLYPILOT_MODEL_NAME", "gemini-2.0-flash"),
     )
-    demo_mode: bool = env_flag("APPLYPILOT_DEMO_MODE")
-    ai_provider: str = os.getenv("APPLYPILOT_AI_PROVIDER", "gemini")
-    ai_model: str = os.getenv("APPLYPILOT_AI_MODEL", "")
-    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
-    anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
-
-
-settings = Settings()
