@@ -28,6 +28,7 @@ from .models import (
     PageActionRequest,
     PageUnderstanding,
     PageUnderstandingRequest,
+    ProfileFacts,
     ProviderConfigRequest,
     ProviderStatus,
     ResumeDocument,
@@ -352,6 +353,33 @@ JOB:
         draft = self._structured(prompt, CoverLetterDraft)
         draft.body = concise_cover_letter(draft.body)
         return draft
+
+    def extract_profile_facts(self, resume: ResumeDocument) -> ProfileFacts:
+        """Pull structured education and work history out of a résumé.
+
+        Employer forms ask for these entry by entry ("1 of 2 Education"), so
+        they have to exist as records, not prose. Only what the résumé states
+        may be returned: no inferred dates, titles, or employers.
+        """
+        prompt = f"""
+You are ApplyPilot's résumé history extractor.
+
+Return the candidate's education and work history exactly as the résumé states it.
+Copy names, degrees, titles and dates verbatim. Do not infer, complete, or reformat a
+date that is not written. Leave a field empty rather than guessing it. Do not invent an
+employer, school, degree, or role that does not appear. Order both lists most recent
+first. Set current=true for a role the résumé shows as ongoing.
+
+RÉSUMÉ:
+{resume.extracted_text[:40000]}
+"""
+        facts = self._structured(prompt, ProfileFacts)
+        # Drop entries with nothing identifying, which models sometimes pad.
+        facts.education = [item for item in facts.education if item.school.strip()]
+        facts.experience = [
+            item for item in facts.experience if item.company.strip() or item.title.strip()
+        ]
+        return facts
 
     def understand_page(self, request: PageUnderstandingRequest) -> PageUnderstanding:
         """Classify the page before any action is planned.
@@ -1098,6 +1126,15 @@ class AIProviderManager:
             if fallback is None:
                 raise
             return fallback.draft_cover_letter(profile, resume, job)
+
+    def extract_profile_facts(self, resume: ResumeDocument) -> ProfileFacts:
+        preferred, fallback = self._reasoning_providers()
+        try:
+            return preferred.extract_profile_facts(resume)
+        except AIProviderError:
+            if fallback is None:
+                raise
+            return fallback.extract_profile_facts(resume)
 
     def understand_page(self, request: PageUnderstandingRequest) -> PageUnderstanding:
         preferred, fallback = self._reasoning_providers()

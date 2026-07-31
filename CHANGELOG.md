@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.18.0 - 2026-07-30
+
+- **Education and work history are now part of the profile, and repeating
+  application sections are filled from them.** This was the gap behind every
+  "why didn't it fill my education" report: the profile held no history at all,
+  so an employer's "1 of 2 Education" and "1 of 5 Experience" blocks could
+  never be completed by any path. `CandidateProfile` now carries ordered
+  education and experience entries, `POST /api/profile/from-resume` extracts
+  them from the saved résumé verbatim, and the planner fills the nth block from
+  the nth saved entry. A form with more blocks than saved history asks rather
+  than reusing the wrong entry.
+- Extraction copies what the résumé states and leaves a field empty rather than
+  inferring a date, employer, degree, or title that is not written.
+
 ## 0.17.3 - 2026-07-30
 
 - **Every blank question is now worked through, one at a time.** Optional blank

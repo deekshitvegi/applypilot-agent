@@ -69,6 +69,7 @@ from .models import (
     PageActionRequest,
     PageUnderstanding,
     PageUnderstandingRequest,
+    ProfileFacts,
     ProviderConfigRequest,
     ProviderStatus,
     ResumeDocument,
@@ -684,6 +685,28 @@ def form_plan(request: FormPlanRequest) -> FormFillPlan:
         resume_text=resume.extracted_text if resume else "",
         adapter=request.adapter,
     )
+
+
+@app.post("/api/profile/from-resume", response_model=ProfileFacts)
+def profile_from_resume() -> ProfileFacts:
+    """Extract education and work history from the saved résumé and store it.
+
+    Employer forms ask for these entry by entry, so they must exist as records
+    on the profile rather than only as résumé prose.
+    """
+    require_local_data_mode()
+    resume = store.get_active_resume()
+    if resume is None:
+        raise HTTPException(status_code=404, detail="Upload a résumé first.")
+    try:
+        facts = ai_provider.extract_profile_facts(resume)
+    except AIProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    profile = store.load()
+    profile.education = facts.education
+    profile.experience = facts.experience
+    store.save(profile)
+    return facts
 
 
 @app.post("/api/pages/understand", response_model=PageUnderstanding)

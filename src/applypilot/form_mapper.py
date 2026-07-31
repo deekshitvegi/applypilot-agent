@@ -52,6 +52,7 @@ def plan_form_fill(
         )
     }
 
+    history_occurrences: dict[str, int] = {}
     for field in fields:
         label = normalize(f"{field.label} {field.name}")
         if field.field_type == "password" or any(pattern in label for pattern in BLOCKED_PATTERNS):
@@ -69,6 +70,17 @@ def plan_form_fill(
         mapped = map_source_field(label, field, source_url)
         if mapped is None:
             mapped = map_profile_field(label, field, profile)
+        if mapped is None:
+            # Repeating history blocks: the nth "School" belongs to the nth
+            # saved school. Counting per attribute keeps the blocks aligned
+            # even when a form orders their fields differently.
+            for patterns, attribute in (*EDUCATION_PATTERNS, *EXPERIENCE_PATTERNS):
+                if any(pattern_matches(label, pattern) for pattern in patterns):
+                    occurrence = history_occurrences.get(attribute, 0)
+                    mapped = map_history_field(label, field, profile, occurrence)
+                    if mapped is not None:
+                        history_occurrences[attribute] = occurrence + 1
+                    break
         if mapped is None:
             # Reusable answers handle employer-specific questions. Canonical
             # profile fields remain the source of truth so a bad page mapping
@@ -186,6 +198,62 @@ def map_profile_field(
         if any(pattern_matches(label, pattern) for pattern in patterns) and raw_value not in (None, ""):
             value = boolean_value(raw_value, field)
             return value, source, 0.98
+    return None
+
+
+EDUCATION_PATTERNS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("school", "university", "college", "institution"), "school"),
+    (("degree", "qualification"), "degree"),
+    (("field of study", "major", "discipline", "concentration"), "field_of_study"),
+    (("start date", "from date", "attended from"), "start_date"),
+    (("end date", "graduation", "completion", "attended to", "to date"), "end_date"),
+    (("gpa", "grade point"), "gpa"),
+)
+
+EXPERIENCE_PATTERNS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("company", "employer", "organization", "organisation"), "company"),
+    (("job title", "title", "position", "role"), "title"),
+    (("location",), "location"),
+    (("start date", "from date"), "start_date"),
+    (("end date", "to date"), "end_date"),
+    (("description", "responsibilities", "duties", "summary"), "description"),
+)
+
+
+def map_history_field(
+    label: str, field: FormField, profile: CandidateProfile, occurrence: int
+) -> tuple[str, str, float] | None:
+    """Fill one entry of a repeating education or work-history section.
+
+    Employer forms ask for these one block at a time ("1 of 2 Education"), so
+    the nth occurrence of a school field belongs to the nth saved school. This
+    is what lets a résumé's history reach the form instead of leaving every
+    education and experience block blank.
+    """
+    education_context = any(
+        token in label
+        for token in (
+            "school", "university", "college", "degree", "education", "major", "gpa",
+            "graduat", "field of study", "discipline", "concentration", "institution",
+        )
+    )
+    experience_context = any(
+        token in label for token in ("company", "employer", "job title", "position", "role", "experience", "work history")
+    )
+    if education_context and occurrence < len(profile.education):
+        entry = profile.education[occurrence]
+        for patterns, attribute in EDUCATION_PATTERNS:
+            if any(pattern_matches(label, pattern) for pattern in patterns):
+                value = getattr(entry, attribute, "")
+                if value:
+                    return value, f"profile.education[{occurrence}].{attribute}", 0.95
+    if experience_context and occurrence < len(profile.experience):
+        entry = profile.experience[occurrence]
+        for patterns, attribute in EXPERIENCE_PATTERNS:
+            if any(pattern_matches(label, pattern) for pattern in patterns):
+                value = getattr(entry, attribute, "")
+                if isinstance(value, str) and value:
+                    return value, f"profile.experience[{occurrence}].{attribute}", 0.95
     return None
 
 

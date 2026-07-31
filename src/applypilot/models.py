@@ -7,9 +7,47 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
+class EducationEntry(BaseModel):
+    """One school, as an employer's education section asks for it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    school: str = ""
+    degree: str = ""
+    field_of_study: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    gpa: str = ""
+
+
+class ExperienceEntry(BaseModel):
+    """One role, as an employer's work-history section asks for it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company: str = ""
+    title: str = ""
+    location: str = ""
+    start_date: str = ""
+    end_date: str = ""
+    current: bool = False
+    description: str = ""
+
+
+class ProfileFacts(BaseModel):
+    """Structured history extracted from a résumé, for review before saving."""
+
+    education: list[EducationEntry] = Field(default_factory=list, max_length=20)
+    experience: list[ExperienceEntry] = Field(default_factory=list, max_length=30)
+
+
 class CandidateProfile(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    # Repeating history, so education and work sections can be filled entry by
+    # entry rather than left blank. Populated from the résumé and editable.
+    education: list[EducationEntry] = Field(default_factory=list, max_length=20)
+    experience: list[ExperienceEntry] = Field(default_factory=list, max_length=30)
     legal_name: str = ""
     preferred_name: str = ""
     pronouns: str = ""

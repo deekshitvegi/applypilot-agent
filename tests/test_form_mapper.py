@@ -685,3 +685,65 @@ def test_workday_state_field_is_not_filled_with_the_country() -> None:
 
     assert {a.field_id: a.value for a in plan.actions} == {"state": "TX", "country": "USA"}
     assert plan.unknown_fields == []
+
+
+def history_profile() -> CandidateProfile:
+    from applypilot.models import EducationEntry, ExperienceEntry
+
+    return CandidateProfile(
+        education=[
+            EducationEntry(school="University of North Texas", degree="M.S.",
+                           field_of_study="Artificial Intelligence"),
+            EducationEntry(school="IIITDM Kurnool", degree="B.Tech.",
+                           field_of_study="Mechanical Engineering"),
+        ],
+        experience=[
+            ExperienceEntry(company="HCLTech", title="Artificial Intelligence Engineer"),
+            ExperienceEntry(company="Innomatics Research Labs", title="Data Scientist Trainee"),
+        ],
+    )
+
+
+def test_repeating_education_and_experience_blocks_are_filled_in_order() -> None:
+    # The gap against a mature autofill tool: employer forms ask for history
+    # one block at a time ("1 of 2 Education"), and every block was left blank
+    # because the profile had no structured history at all.
+    fields = []
+    for index in (1, 2):
+        fields += [
+            FormField(id=f"edu{index}-school", label="School"),
+            FormField(id=f"edu{index}-degree", label="Degree"),
+            FormField(id=f"edu{index}-field", label="Field of Study"),
+        ]
+    for index in (1, 2):
+        fields += [
+            FormField(id=f"exp{index}-company", label="Company"),
+            FormField(id=f"exp{index}-title", label="Job Title"),
+        ]
+
+    plan = plan_form_fill("https://jobs.ashbyhq.test/x", fields, history_profile(), [])
+
+    assert {a.field_id: a.value for a in plan.actions} == {
+        "edu1-school": "University of North Texas",
+        "edu1-degree": "M.S.",
+        "edu1-field": "Artificial Intelligence",
+        "edu2-school": "IIITDM Kurnool",
+        "edu2-degree": "B.Tech.",
+        "edu2-field": "Mechanical Engineering",
+        "exp1-company": "HCLTech",
+        "exp1-title": "Artificial Intelligence Engineer",
+        "exp2-company": "Innomatics Research Labs",
+        "exp2-title": "Data Scientist Trainee",
+    }
+    assert plan.unknown_fields == []
+
+
+def test_more_blocks_than_saved_history_are_asked_not_invented() -> None:
+    # A third education block has no third school to draw on, so it must come
+    # back as a question rather than be filled with someone else's data.
+    fields = [FormField(id=f"edu{i}-school", label="School", required=True) for i in (1, 2, 3)]
+
+    plan = plan_form_fill("https://jobs.ashbyhq.test/x", fields, history_profile(), [])
+
+    assert [a.field_id for a in plan.actions] == ["edu1-school", "edu2-school"]
+    assert [u.field_id for u in plan.unknown_fields] == ["edu3-school"]
