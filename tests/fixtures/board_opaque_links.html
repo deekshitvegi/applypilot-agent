@@ -1,0 +1,35 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Careers</title>
+<!--
+  A board whose postings live at /company/<uuid>. Nothing in those paths says
+  "job", so the page looked as though it had no postings at all -- and its four
+  filter dropdowns became the questions it was asking. Two other boards did the
+  same thing with five controls and eleven.
+
+  Filters on a list of jobs narrow the list. They are never questions.
+-->
+<main>
+  <h1>Open roles</h1>
+
+  <div class="filters">
+    <label for="dept">Department</label>
+    <select id="dept" name="departmentId"><option>All</option><option>Engineering</option></select>
+    <label for="emp">Employment</label>
+    <select id="emp" name="employmentType"><option>All</option><option>Full time</option></select>
+    <label for="loc">Location</label>
+    <select id="loc" name="locationId"><option>All</option><option>Austin</option></select>
+    <label for="wpt">Location Type</label>
+    <select id="wpt" name="workplaceType"><option>All</option><option>Remote</option></select>
+  </div>
+
+  <ul>
+    <li><a href="/acme/cc0af88a-2a19-493d-93cf-c5090f986f1f">Machine Learning Engineer</a></li>
+    <li><a href="/acme/f2ad6068-02e7-4986-967e-804ecef9e043">Senior Data Scientist</a></li>
+    <li><a href="/acme/16fb536d-fe10-4ea7-8956-d6d0cbddd6f5">MLOps Engineer</a></li>
+    <li><a href="/acme/1b6a5a22-d6ed-4591-987d-6cc5b7bca8e1">Research Engineer</a></li>
+    <li><a href="/acme/e577622f-6657-4e53-8941-b3a774b04448">Applied Scientist</a></li>
+    <li><a href="/acme/9c1d33f0-71b8-4b26-9a55-2c0f9a1c77aa">AI Platform Engineer</a></li>
+    <li><a href="/acme/4ab2c9de-05f1-4a77-b1e0-6d2a41c8f912">Data Engineer</a></li>
+  </ul>
+</main>

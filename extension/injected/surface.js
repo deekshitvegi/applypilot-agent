@@ -67,6 +67,9 @@
 
   const POSTING_HREF = /\/(job|jobs|career|careers|position|positions|opening|openings|vacancy|vacancies|opportunit)/i;
 
+  /* A requisition id: a uuid, a long hash, or a run of digits. */
+  const IDENTIFIER = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f-]+|[0-9a-zA-Z_-]*\d{4,}[0-9a-zA-Z_-]*|[0-9a-f]{12,})$/i;
+
   function insideFurniture(el) {
     return Boolean(D.closestDeep(el, FURNITURE));
   }
@@ -146,14 +149,47 @@
     };
   }
 
+  /**
+   * How many links on this page lead to a posting.
+   *
+   * The word "job" is not always in the path. Boards that link to
+   * ``/<company>/<uuid>`` were read as having no postings at all, so their
+   * filter controls became the page's "questions" -- four of them on one board,
+   * five on another, eleven on a third.
+   */
   function postingLinks() {
     const seen = new Set();
     for (const link of D.deepQuery("a[href]", document)) {
       if (!D.isVisible(link)) continue;
       const href = link.getAttribute("href") || "";
-      if (POSTING_HREF.test(href) && D.textOf(link)) seen.add(href);
+      const text = D.textOf(link);
+      if (!href || !text || text.length > 120) continue;
+      if (POSTING_HREF.test(href) || opaquePostingPath(href)) seen.add(href);
     }
     return seen.size;
+  }
+
+  /** A same-site path ending in something that reads as a requisition id. */
+  function opaquePostingPath(href) {
+    if (/^(https?:)?\/\//i.test(href)) {
+      try {
+        if (new URL(href, location.href).host !== location.host) return false;
+      } catch (err) {
+        return false;
+      }
+    } else if (href.startsWith("#") || href.startsWith("mailto:")) {
+      return false;
+    }
+    let path;
+    try {
+      path = new URL(href, location.href).pathname;
+    } catch (err) {
+      return false;
+    }
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length < 2) return false;
+    const last = segments[segments.length - 1];
+    return IDENTIFIER.test(last);
   }
 
   /* ------------------------------------------------------------- captcha */
@@ -275,8 +311,15 @@
 
     // Judged by the controls present, not by whether there is a <form>: a
     // complete 21-field application rendered without one was seen and refused.
+    const textareas = D.deepQuery("textarea", document).filter((el) => D.isVisible(el)).length;
     const applicationShaped = labelled.length >= 5 || (hasFileInput && labelled.length >= 2);
-    if (applicationShaped) {
+
+    // A page listing dozens of other jobs, with nowhere to attach anything and
+    // nothing to write in, is a list however many controls it has. Its controls
+    // narrow that list; they are not questions about the applicant.
+    const listOfJobs = postings >= 6 && !hasFileInput && !textareas;
+
+    if (applicationShaped && !listOfJobs) {
       notes.push(`${labelled.length} labelled controls${hasFileInput ? " and a file input" : ""}`);
       return { kind: "application", notes: notes };
     }

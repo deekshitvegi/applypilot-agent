@@ -74,6 +74,17 @@ def test_a_search_results_page_offers_no_fields(scan):
     assert observation["fields"] == []
 
 
+def test_a_board_linking_to_opaque_urls_still_reads_as_a_list(scan):
+    """The word "job" is not always in the path.
+
+    A board whose postings live at /company/<uuid> looked as though it had no
+    postings, and its four filter dropdowns became the questions it was asking.
+    """
+    _, observation = scan("board_opaque_links.html")
+    assert observation["kind"] in {"board", "search"}, observation["notes"]
+    assert observation["fields"] == []
+
+
 def test_an_apply_control_on_a_search_page_is_ignored(scan):
     _, observation = scan("board_search_page.html")
     assert observation["apply_controls"] == []

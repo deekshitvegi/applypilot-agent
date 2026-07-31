@@ -1,0 +1,64 @@
+name: checks
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Lint
+        run: python -m ruff check src tests
+
+      - name: Install headless Chromium
+        run: python -m playwright install --with-deps chromium
+
+      # The browser tests drive the extension's own injected files, so a change
+      # to them is covered here and not only by whatever someone remembered to
+      # click through.
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Versions move together
+        run: |
+          python - <<'PY'
+          import json, pathlib, re
+          manifest = json.loads(pathlib.Path("extension/manifest.json").read_text())["version"]
+          init = re.search(r'__version__ = "([^"]+)"',
+                           pathlib.Path("src/applypilot/__init__.py").read_text()).group(1)
+          project = re.search(r'^version = "([^"]+)"',
+                              pathlib.Path("pyproject.toml").read_text(), re.M).group(1)
+          assert manifest == init == project, (manifest, init, project)
+          print("all three on", manifest)
+          PY
+
+      # Fails the build if anything personal ever gets committed.
+      - name: Nothing personal in the tree
+        run: |
+          python - <<'PY'
+          import pathlib, sys
+          forbidden = [".env", "applypilot.key"]
+          patterns = ["*.sqlite", "*.sqlite3", "*.key", "*.docx", "*.pdf"]
+          root = pathlib.Path(".")
+          found = [str(p) for name in forbidden for p in root.rglob(name)]
+          for pattern in patterns:
+              found += [str(p) for p in root.rglob(pattern) if ".git" not in p.parts]
+          if found:
+              print("these must never be committed:", *found, sep="\n  ")
+              sys.exit(1)
+          print("clean")
+          PY

@@ -158,6 +158,10 @@
 
   const LABEL_HINT = "label,[class*='label' i],[class*='Label'],[data-automation-id*='label' i]";
 
+  /* Chrome around a form. Never the name of anything inside it. */
+  const NAVIGATIONAL =
+    "nav,header,footer,[role='tablist'],[role='tab'],[role='navigation'],[role='menu'],[role='menubar']";
+
   function referencedText(el, attribute) {
     const ids = (el.getAttribute(attribute) || "").split(/\s+/).filter(Boolean);
     if (!ids.length) return "";
@@ -200,17 +204,22 @@
     const aria = (el.getAttribute("aria-label") || "").trim();
     if (aria) return aria;
 
-    // A label element sitting immediately before the control inside the same
-    // field row: the common shape when a form does not use <label for>.
+    // A label sitting just before the control inside the same field row: the
+    // common shape when a form does not use <label for>. The walk stops as soon
+    // as it meets navigation, because a tab bar several levels up is not a
+    // label -- one was read as the name of a file input.
     let node = el;
-    for (let depth = 0; depth < 4 && node; depth += 1) {
+    for (let depth = 0; depth < 3 && node; depth += 1) {
       let sibling = node.previousElementSibling;
       while (sibling) {
-        if (!sibling.matches("input,select,textarea,button")) {
-          const hint = sibling.matches(LABEL_HINT) ? sibling : sibling.querySelector(LABEL_HINT);
-          const text = textOf(hint || sibling);
-          if (text && text.length <= 200) return text;
+        if (sibling.matches("input,select,textarea,button")) {
+          sibling = sibling.previousElementSibling;
+          continue;
         }
+        if (sibling.matches(NAVIGATIONAL) || sibling.querySelector("a[href]")) return "";
+        const hint = sibling.matches(LABEL_HINT) ? sibling : sibling.querySelector(LABEL_HINT);
+        const text = textOf(hint || sibling);
+        if (text) return text.length <= 200 ? text : "";
         sibling = sibling.previousElementSibling;
       }
       node = node.parentElement;
@@ -256,7 +265,13 @@
     return "";
   }
 
-  /** The nearest heading above the control, used to scope history fields. */
+  /**
+   * The nearest heading above the control, used to scope history fields.
+   *
+   * Bounded to a few levels on purpose. A heading far enough up the page to be
+   * about something else can put a field in the wrong section, and the section
+   * is what decides whether an employment record may answer a label.
+   */
   function sectionOf(el) {
     const group = closestDeep(el, "fieldset,[role='group']");
     if (group) {
@@ -264,7 +279,9 @@
       if (legend && textOf(legend)) return textOf(legend);
     }
     let node = el;
-    while (node) {
+    let depth = 0;
+    while (node && depth < 5) {
+      depth += 1;
       let sibling = node.previousElementSibling;
       while (sibling) {
         if (sibling.matches("h1,h2,h3,h4,h5,legend,[role='heading']")) {
