@@ -1,3 +1,3 @@
 """ApplyPilot local agent service."""
 
-__version__ = "0.19.4"
+__version__ = "0.19.5"

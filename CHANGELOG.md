@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.19.5 - 2026-07-30
+
+- **A search filter is no longer mistaken for a work-history field.** On a
+  SuccessFactors careers search page, "Position Location" was filled with the
+  candidate's current job title because "position" prefixed the job-title
+  pattern. A history label *is* the field name - "Company", "Job Title",
+  "School", optionally with a block number - so only an exact label, or one
+  followed by an index, now matches.
+
 ## 0.19.4 - 2026-07-30
 
 - **A registration page is now filled, not just refused.** Recognising that an

@@ -870,3 +870,45 @@ def test_registration_passwords_are_always_blocked() -> None:
 
     assert sorted(f.field_id for f in plan.blocked_fields) == ["pw", "pw2"]
     assert {a.field_id for a in plan.actions} == {"email", "first"}
+
+
+def test_a_search_filter_is_not_mistaken_for_a_history_field() -> None:
+    # Live regression from a SuccessFactors careers search page: "Position
+    # Location" is a filter, but "position" prefixed the job-title pattern, so
+    # it was filled with the candidate's current job title.
+    from applypilot.models import ExperienceEntry
+
+    profile = CandidateProfile(
+        experience=[ExperienceEntry(company="HCLTech", title="Artificial Intelligence Engineer")]
+    )
+    fields = [
+        FormField(id="posloc", label="Position Location", field_type="select"),
+        FormField(id="reqid", label="Requisition ID"),
+        FormField(id="title", label="Job Title"),
+    ]
+
+    plan = plan_form_fill("https://career2.successfactors.test/careers", fields, profile, [])
+
+    assert {a.field_id: a.value for a in plan.actions} == {
+        "title": "Artificial Intelligence Engineer"
+    }
+    assert sorted(f.field_id for f in plan.unknown_fields) == ["posloc", "reqid"]
+
+
+def test_numbered_history_blocks_still_match() -> None:
+    from applypilot.models import ExperienceEntry
+
+    profile = CandidateProfile(
+        experience=[
+            ExperienceEntry(company="HCLTech", title="AI Engineer"),
+            ExperienceEntry(company="Innomatics Research Labs", title="Data Scientist Trainee"),
+        ]
+    )
+    fields = [FormField(id="c1", label="Company 1"), FormField(id="c2", label="Company 2")]
+
+    plan = plan_form_fill("https://careers.example.test/apply", fields, profile, [])
+
+    assert {a.field_id: a.value for a in plan.actions} == {
+        "c1": "HCLTech",
+        "c2": "Innomatics Research Labs",
+    }

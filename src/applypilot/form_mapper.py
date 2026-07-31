@@ -260,18 +260,28 @@ def map_history_field(
     # answers to legal questions, which must never reach an employer.
     if "?" in (field.label or "") or len(label.split()) > 5:
         return None
+    # A history label *is* the field name — "Company", "Job Title", "School",
+    # or the same with a block number. Prefix matching let "Position Location",
+    # a search filter, be treated as a job title. Only an exact label, or one
+    # followed by a block index, counts.
+    def names_field(token: str) -> bool:
+        if label == token:
+            return True
+        remainder = label[len(token):].strip() if label.startswith(token) else ""
+        return bool(remainder) and remainder.isdigit()
+
     education_context = any(
-        token == label or anchored_containment(token, label)
+        names_field(token)
         for token in (
             "school", "university", "college", "degree", "education", "major", "gpa",
             "field of study", "discipline", "concentration", "institution",
         )
     )
     experience_context = any(
-        token == label or anchored_containment(token, label)
+        names_field(token)
         for token in (
             "company", "employer", "organization", "organisation", "job title",
-            "position", "role", "experience", "work history",
+            "title", "position", "role", "experience", "work history",
         )
     )
     if education_context and occurrence < len(profile.education):
