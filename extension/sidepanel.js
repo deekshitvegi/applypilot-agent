@@ -3003,12 +3003,18 @@ async function runModelAutomationPass() {
       continue;
     }
     if (decision.question) {
+      // Small models are inconsistent here: the same request returns grounded
+      // actions on one call and an empty list with an explanation claiming it
+      // filled them on the next. Try once more before handing the question
+      // back, so a single flaky reply does not cost the user a question.
+      if (pass === 0) continue;
       state.pendingAgentQuestion = decision.question;
       if (!renderChoiceCardsForMessage(decision.question, fields[0]?.group_label || fields[0]?.label || "")) {
         appendMessage(`${decision.question}\n\nReply with your answer, or ask me what the question means.`, "agent-message");
       }
       return true;
     }
+    if (pass === 0) continue;
     break;
   }
   const remaining = unresolvedFieldsForAgent();

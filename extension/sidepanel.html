@@ -329,10 +329,10 @@
             <button id="scan-form" type="button">Analyze visible fields</button>
             <button id="fill-form" class="secondary-button" type="button" disabled>Fill known fields</button>
             <label class="check-row" for="include-optional-questions">
-              <input id="include-optional-questions" type="checkbox" />
-              Also review optional blank fields
+              <input id="include-optional-questions" type="checkbox" checked />
+              Also ask me about optional blank fields
             </label>
-            <p class="field-help">Required unanswered questions are shown first. Optional blanks stay untouched unless selected.</p>
+            <p class="field-help">On by default, so I work through every blank question on the page one at a time instead of leaving optional ones behind. Turn it off to be asked only about required questions.</p>
             <form id="unknown-answer-form" class="questionnaire hidden">
               <p id="unknown-progress" class="question-progress">Question 1 of 1</p>
               <label id="unknown-question" for="unknown-answer">Application question</label>

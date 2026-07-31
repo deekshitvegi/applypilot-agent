@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.17.3 - 2026-07-30
+
+- **Every blank question is now worked through, one at a time.** Optional blank
+  fields were excluded from the guided questionnaire by default, so questions
+  like School, Degree, Field of Study and Location were neither filled nor
+  asked - they were silently skipped and the page was left incomplete. The
+  agent now covers every blank question by default, still one at a time, and
+  the setting to restrict it to required questions remains available.
+- **A flaky model reply no longer costs a question.** Measured against the
+  configured provider, the identical planning request returned grounded
+  actions on four of six attempts and an empty list with an explanation
+  claiming it had filled them on the other two. The pass now retries once
+  before handing a question back to the user, which lifts the chance of
+  answering from roughly two thirds to about nine in ten.
+
 ## 0.17.2 - 2026-07-30
 
 - **A dropdown no longer claims the whole page as its options.** When a custom
