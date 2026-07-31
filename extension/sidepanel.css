@@ -657,3 +657,10 @@ main > .manual-workflow { display: none; }
 .check-list li::before { position: absolute; left: 0; font-size: 11px; }
 .check-list li.completed::before { content: "✓"; color: var(--success); }
 .check-list li.needs-review::before { content: "!"; color: var(--warning, #d98324); font-weight: 700; }
+.check-list li .jump-to-field {
+  width: auto; min-height: 0; margin: 0; padding: 0;
+  border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; text-decoration: underline dotted;
+  text-underline-offset: 2px; cursor: pointer;
+}
+.check-list li .jump-to-field:hover { color: var(--teal-deep); text-decoration-style: solid; }

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.2 - 2026-07-30
+
+- **Outstanding questions are clickable.** Each entry under "Needs you" now
+  jumps to that field on the page and highlights it, so a long multi-step form
+  does not have to be scrolled through to find what is missing. Verified on a
+  live Ashby form: selecting School scrolled the page 1391px and outlined the
+  control. Answering it there is then learned like any other answer typed by
+  hand.
+
 ## 0.18.1 - 2026-07-30
 
 - **Answers you type on the page yourself are now learned.** A rescan sees the

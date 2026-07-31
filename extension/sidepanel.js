@@ -1200,11 +1200,20 @@ async function replanForm() {
   const listItems = (items, className) => items
     .map((text) => `<li class="${className}">${escapeHtml(String(text).slice(0, 70))}</li>`)
     .join("");
+  // Outstanding questions are clickable: jump to the field on the page and
+  // highlight it, so a long form does not have to be hunted through.
+  const reviewItems = reviewUnknown
+    .map((field) => (
+      `<li class="needs-review"><button type="button" class="jump-to-field"`
+      + ` data-field-id="${escapeHtml(field.field_id)}">`
+      + `${escapeHtml(String(field.label).slice(0, 70))}</button></li>`
+    ))
+    .join("");
   elements.formStatus.textContent = `${state.formScan.fields.length} fields found · ${answered.length} answered · ${reviewUnknown.length} need you`;
   elements.formResult.innerHTML = `
     <strong>Needs you (${reviewUnknown.length})</strong>
     ${reviewUnknown.length
-      ? `<ul class="check-list">${listItems(reviewUnknown.map((field) => field.label), "needs-review")}</ul>`
+      ? `<ul class="check-list">${reviewItems}</ul>`
       : "<p>Nothing outstanding.</p>"}
     <strong>Answered (${answered.length})</strong>
     ${answered.length
@@ -4161,6 +4170,28 @@ elements.enableSiteAccess.addEventListener("click", async () => {
 elements.automationPolicy.addEventListener("change", changeAutomationPolicy);
 elements.routePreference.addEventListener("change", changeRoutePreference);
 elements.resumePolicy.addEventListener("change", changeResumePolicy);
+
+// Clicking an outstanding question jumps to it on the page and highlights it.
+elements.formResult.addEventListener("click", async (event) => {
+  const trigger = event.target.closest(".jump-to-field");
+  if (!trigger) return;
+  const fieldId = trigger.dataset.fieldId;
+  if (!fieldId) return;
+  const scanned = state.formScan?.fields.find((field) => field.id === fieldId);
+  const result = await chrome.runtime.sendMessage({
+    action: "highlightField",
+    fieldId,
+    frameId: state.formScan?.frame_id ?? 0,
+  }).catch(() => ({ highlighted: false }));
+  if (result?.highlighted) {
+    // Make it the question the panel is holding, so answering it is one step.
+    state.lastReferencedFieldLabel = scanned?.group_label || scanned?.label || "";
+    reportActivity(`Jumped to “${(scanned?.group_label || scanned?.label || "that question").slice(0, 50)}” on the page and highlighted it.`);
+  } else {
+    reportActivity("That field is no longer on the page — rescanning may help.");
+  }
+});
+
 elements.saveCredential.addEventListener("click", saveSessionCredential);
 elements.clearCredentials.addEventListener("click", clearSessionCredentials);
 elements.coverLetterPolicy.addEventListener("change", changeCoverLetterPolicy);
