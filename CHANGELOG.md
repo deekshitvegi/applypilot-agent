@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.19.0 - 2026-07-30
+
+- **"Add another" is now pressed for each saved education and work entry.**
+  Forms render one empty block and expect the button per further entry, so a
+  saved history of two schools and five roles could only ever fill the first of
+  each. The runner now adds the blocks the history needs and fills them, and
+  each click is confirmed by the form actually growing rather than assumed.
+  Verified on a live Ashby application: "+ Add Education" took the form from 21
+  fields to 24. A bare "Add another" belonging to an unrelated section is never
+  clicked.
+- **Multi-page applications wait for the next step to render.** After pressing
+  Save and Continue the runner scanned immediately, re-read the step it had
+  just completed, and reported filling the same answers again before stalling.
+  It now waits until the page presents questions it has not already handled.
+
 ## 0.18.2 - 2026-07-30
 
 - **Outstanding questions are clickable.** Each entry under "Needs you" now

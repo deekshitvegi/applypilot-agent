@@ -37,6 +37,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     openApplicationForm: openActiveApplicationForm,
     assistLogin: () => assistActiveLogin(message.allowClick === true),
     fillSessionLogin: () => fillActiveSessionLogin(message.username, message.password),
+    addHistorySection: () => addActiveHistorySection(message.kind, message.frameId),
   };
   const action = actions[message.action];
   if (!action) return false;
@@ -365,6 +366,11 @@ async function openActiveApplicationForm() {
   await new Promise((resolve) => setTimeout(resolve, 500));
   const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
   return { ...result, tab_id: active?.id || tab.id, url: active?.url || tab.url };
+}
+
+async function addActiveHistorySection(kind, frameId) {
+  const tab = await getActiveHttpTab();
+  return runInFrame(tab.id, frameId ?? 0, clickAddHistorySection, [kind || "education"]);
 }
 
 async function fillActiveSessionLogin(username, password) {
@@ -2098,6 +2104,51 @@ function clickApplicationEntry(inspectOnly = false) {
 // Type session sign-in details into a page already confirmed to be that
 // site's login form. Values are never logged and never stored here; the
 // caller passes them in and they live only for the running session.
+// Add another education or work-history block, the way a candidate would.
+//
+// Forms render one empty block and expect "Add another" to be pressed for each
+// further entry, so a saved history of five roles could only ever fill the
+// first. Returns whether the page actually grew, judged by counting the
+// section's own controls before and after — never by assuming the click worked.
+function clickAddHistorySection(kind) {
+  const visible = (element) => {
+    if (!element) return false;
+    const style = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return style.display !== "none" && style.visibility !== "hidden"
+      && rect.width > 0 && rect.height > 0;
+  };
+  const roots = [document];
+  for (let index = 0; index < roots.length; index += 1) {
+    [...roots[index].querySelectorAll("*")].forEach((element) => {
+      if (element.shadowRoot && !roots.includes(element.shadowRoot)) roots.push(element.shadowRoot);
+    });
+  }
+  const queryAll = (selector) => roots.flatMap((root) => [...root.querySelectorAll(selector)]);
+  const tidy = (value) => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+
+  const subject = kind === "education"
+    ? /education|school|degree|qualification/
+    : /experience|employment|work history|position|job/;
+  const control = queryAll("button, a, [role='button']")
+    .filter(visible)
+    .filter((element) => !element.disabled && element.getAttribute("aria-disabled") !== "true")
+    .find((element) => {
+      const label = tidy(element.textContent || element.getAttribute("aria-label"));
+      if (!/^\+?\s*(add|add another|add more)\b/.test(label)) return false;
+      // "Add another" with no subject is only safe inside a matching section.
+      if (subject.test(label)) return true;
+      const section = tidy(element.closest("section, fieldset, div[class*='section' i]")?.textContent);
+      return /^\+?\s*add (another|more)?\s*$/.test(label) && subject.test(section);
+    });
+  if (!control) return { clicked: false, reason: "No add-another control was found for this section." };
+
+  const countControls = () => queryAll("input, select, textarea").filter(visible).length;
+  const before = countControls();
+  control.click();
+  return { clicked: true, controls_before: before, label: tidy(control.textContent) };
+}
+
 function fillSessionLogin(username, password) {
   const visible = (element) => {
     if (!element) return false;

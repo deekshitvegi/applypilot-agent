@@ -2169,6 +2169,9 @@ async function runCurrentApplicationPage() {
   if (plan.actions.length) {
     plan = await fillUntilSettled(plan);
   }
+  // Create the extra education/work blocks the saved history needs, then fill
+  // them, before deciding what is still unanswered.
+  plan = (await expandHistorySections(plan)) || plan;
   await attachConfiguredApplicationFiles();
   if (findResumeFileField() || findCoverLetterField()) {
     plan = await scanForm({ throwOnError: true });
@@ -2354,6 +2357,64 @@ async function fillUntilSettled(plan, maxPasses = 3) {
   return current;
 }
 
+// Add the education and work blocks a saved history needs.
+//
+// Forms render one empty block and expect "Add another" per further entry, so
+// five saved roles could only ever fill the first. Each click is confirmed by
+// the page actually growing before another is attempted.
+// Wait until the page shows a genuinely different set of questions.
+//
+// A multi-page application needs a moment to render the next step, and
+// scanning too early re-read the step just completed — which is why a Workday
+// run reported filling the same three answers again and then stalled.
+async function waitForDifferentStep(previousFingerprints, timeoutMs = 8000) {
+  const started = Date.now();
+  let last = 0;
+  while (Date.now() - started < timeoutMs) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const scan = await chrome.runtime.sendMessage({ action: "scanForm" }).catch(() => null);
+    const fields = scan?.fields || [];
+    if (!fields.length) continue;
+    const fresh = fields.filter((field) => !previousFingerprints.has(field.fingerprint)).length;
+    // Any question we have not already handled means the step moved on.
+    if (fresh > 0) return true;
+    if (fields.length !== last) last = fields.length;
+  }
+  return false;
+}
+
+async function expandHistorySections(plan) {
+  const sections = [
+    { kind: "education", entries: state.profile?.education || [], match: /school|university|college|institution/i },
+    { kind: "experience", entries: state.profile?.experience || [], match: /company|employer|job title|position/i },
+  ];
+  let current = plan;
+  for (const section of sections) {
+    if (section.entries.length < 2) continue;
+    for (let added = 0; added < section.entries.length - 1; added += 1) {
+      const blocks = (state.formScan?.fields || []).filter(
+        (field) => section.match.test(field.group_label || field.label || ""),
+      ).length;
+      if (blocks >= section.entries.length) break;
+      const before = (state.formScan?.fields || []).length;
+      const result = await chrome.runtime.sendMessage({
+        action: "addHistorySection",
+        kind: section.kind,
+        frameId: state.formScan?.frame_id ?? 0,
+      }).catch(() => ({ clicked: false }));
+      if (!result?.clicked) break;
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      current = await scanForm({ throwOnError: true });
+      if ((state.formScan?.fields || []).length <= before) break;  // the page did not grow
+      reportActivity(
+        `Added another ${section.kind} block so all ${section.entries.length} of your entries fit…`,
+      );
+      if (current?.actions?.length) current = await fillUntilSettled(current);
+    }
+  }
+  return current;
+}
+
 async function scanApplicationFormWithRetry() {
   let lastError = new Error("No fillable fields were found on this page.");
   for (let attempt = 0; attempt < 16; attempt += 1) {
@@ -2396,11 +2457,16 @@ async function completeAutomationApplication() {
       throw new Error("Application paused after 15 form steps to prevent an unintended loop.");
     }
     reportActivity(`I clicked “${step.label}” — moving to the next step of the application…`);
+    const previousFields = new Set(
+      (state.formScan?.fields || []).map((field) => field.fingerprint).filter(Boolean),
+    );
     state.formPlan = null;
     state.formScan = null;
     state.questionnaireTotal = 0;
     state.skippedFieldIds = new Set();
-    await new Promise((resolve) => setTimeout(resolve, 750));
+    // Wait for the next step to actually render. Scanning too early saw the
+    // step just completed and re-filled its answers instead of moving on.
+    await waitForDifferentStep(previousFields);
     await runCurrentApplicationPage();
     return;
   }

@@ -874,3 +874,64 @@ def test_a_dropdown_never_reports_unrelated_page_items_as_its_options(page):
     field = field_by_label(page.evaluate("() => runFormPass('enumerate')"), "work authorization", "select")
 
     assert field["options"] == []
+
+
+# --- Repeating history sections --------------------------------------------
+#
+# Employer forms render one empty education/work block and expect "Add another"
+# per further entry, so a saved history of several schools or roles could only
+# ever fill the first one.
+
+
+def count_inputs(page, name: str) -> int:
+    return page.evaluate(
+        "(field) => document.querySelectorAll(`input[name=${field}]`).length", name
+    )
+
+
+def test_add_another_creates_a_further_education_block(page):
+    load_worker_fixture(page, "repeating_history.html")
+    assert count_inputs(page, "school") == 1
+
+    result = page.evaluate("() => clickAddHistorySection('education')")
+    page.wait_for_timeout(200)
+
+    assert result["clicked"] is True
+    # Page-owned state: the form really grew.
+    assert count_inputs(page, "school") == 2
+    assert count_inputs(page, "company") == 1
+
+
+def test_add_another_creates_a_further_experience_block(page):
+    load_worker_fixture(page, "repeating_history.html")
+
+    result = page.evaluate("() => clickAddHistorySection('experience')")
+    page.wait_for_timeout(200)
+
+    assert result["clicked"] is True
+    assert count_inputs(page, "company") == 2
+    assert count_inputs(page, "school") == 1
+
+
+def test_a_bare_add_another_in_an_unrelated_section_is_never_clicked(page):
+    # "Add another" under References must not be mistaken for education.
+    load_worker_fixture(page, "repeating_history.html")
+    page.evaluate("() => document.querySelector('#add-education').remove()")
+
+    result = page.evaluate("() => clickAddHistorySection('education')")
+
+    assert result["clicked"] is False
+    assert page.evaluate("() => window.__referenceClicks") == 0
+
+
+def test_the_new_block_is_scanned_and_fillable(page):
+    load_worker_fixture(page, "repeating_history.html")
+    page.evaluate("() => clickAddHistorySection('education')")
+    page.wait_for_timeout(200)
+
+    scanned = scan(page)
+    schools = [f for f in scanned["fields"] if "school" in (f["label"] or "").lower()]
+
+    assert len(schools) == 2
+    # Distinct fingerprints, so the second block is addressable on its own.
+    assert schools[0]["fingerprint"] != schools[1]["fingerprint"]

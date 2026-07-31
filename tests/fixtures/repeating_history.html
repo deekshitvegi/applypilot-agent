@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Application with repeating history sections</title>
+    <style>
+      main { width: 640px; margin: 24px; font-family: sans-serif; }
+      section { border-top: 1px solid #ddd; margin-top: 16px; padding-top: 12px; }
+      label { display: block; margin: 8px 0 3px; }
+      input { width: 300px; padding: 5px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <form>
+        <section id="education-section">
+          <h2>Education History</h2>
+          <div class="education-block">
+            <label>School <input name="school" type="text" /></label>
+            <label>Degree <input name="degree" type="text" /></label>
+          </div>
+          <button type="button" id="add-education">+ Add Education</button>
+        </section>
+
+        <section id="experience-section">
+          <h2>Work Experience</h2>
+          <div class="experience-block">
+            <label>Company <input name="company" type="text" /></label>
+            <label>Job Title <input name="title" type="text" /></label>
+          </div>
+          <button type="button" id="add-experience">Add another</button>
+        </section>
+
+        <section id="reference-section">
+          <h2>References</h2>
+          <!-- A bare "Add another" that must never be clicked for education. -->
+          <button type="button" id="add-reference">Add another</button>
+        </section>
+      </form>
+    </main>
+    <script>
+      const clone = (sectionId, blockClass) => {
+        const section = document.querySelector(sectionId);
+        const block = section.querySelector(blockClass);
+        const copy = block.cloneNode(true);
+        copy.querySelectorAll("input").forEach((input) => { input.value = ""; });
+        block.after(copy);
+      };
+      window.__referenceClicks = 0;
+      document.querySelector("#add-education")
+        .addEventListener("click", () => clone("#education-section", ".education-block"));
+      document.querySelector("#add-experience")
+        .addEventListener("click", () => clone("#experience-section", ".experience-block"));
+      document.querySelector("#add-reference")
+        .addEventListener("click", () => { window.__referenceClicks += 1; });
+    </script>
+  </body>
+</html>
