@@ -647,3 +647,13 @@ main > .manual-workflow { display: none; }
   .image-preview button { border-color: var(--canvas); background: var(--navy-soft); color: #121a25; }
   .automation-warning { border-color: #8a6116; background: #2c2513; color: #f3cd7c; }
 }
+
+/* Per-question checklist: what is answered versus what still needs the user. */
+.check-list { list-style: none; margin: 4px 0 10px; padding: 0; }
+.check-list li {
+  position: relative; padding-left: 18px; margin: 2px 0;
+  font-size: 12px; line-height: 1.4; color: var(--muted);
+}
+.check-list li::before { position: absolute; left: 0; font-size: 11px; }
+.check-list li.completed::before { content: "✓"; color: var(--success); }
+.check-list li.needs-review::before { content: "!"; color: var(--warning, #d98324); font-weight: 700; }

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.1 - 2026-07-30
+
+- **Answers you type on the page yourself are now learned.** A rescan sees the
+  finished page but not who filled it, so anything answered that ApplyPilot did
+  not write is saved as a reusable answer and fills itself on the next
+  application. Values ApplyPilot wrote are tracked by fingerprint so it never
+  learns its own writing back, and demographic questions are excluded because
+  those stay the user's to give each time.
+- **The form panel now lists questions instead of counting them.** "Needs you"
+  and "Answered" are shown per question, so it is obvious which ones are
+  outstanding rather than only how many.
+
 ## 0.18.0 - 2026-07-30
 
 - **Education and work history are now part of the profile, and repeating

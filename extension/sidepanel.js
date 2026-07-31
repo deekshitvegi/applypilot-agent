@@ -142,6 +142,9 @@ const state = {
   lastStepFingerprint: "",
   // Pages the planner already failed to get past, so a resume cannot loop.
   stuckPages: new Map(),
+  // Fingerprints ApplyPilot filled itself, so a later scan does not
+  // "learn" its own writing back as the user's answer.
+  filledFingerprints: new Set(),
   minimumFit: 60,
   siteAccessGranted: false,
   loginAssistance: false,
@@ -1154,6 +1157,7 @@ async function scanForm(options = {}) {
       adapter: scan.adapter,
       field_count: String(scan.fields.length),
     });
+    await learnAnswersFromPage(scan.fields);
     await replanForm();
     return state.formPlan;
   } catch (error) {
@@ -1187,12 +1191,28 @@ async function replanForm() {
   if (state.questionnaireActive && state.questionnaireTotal === 0) {
     state.questionnaireTotal = reviewUnknown.length;
   }
-  elements.formStatus.textContent = `${state.formScan.fields.length} fields found · ${state.formPlan.actions.length} known`;
+  // A per-question checklist: what is answered on the page versus what still
+  // needs the user. A single count hid which questions were actually left.
+  const answered = state.formScan.fields.filter(
+    (field) => String(field.value_label || field.value || "").trim()
+      && !["file", "password"].includes(field.field_type),
+  );
+  const listItems = (items, className) => items
+    .map((text) => `<li class="${className}">${escapeHtml(String(text).slice(0, 70))}</li>`)
+    .join("");
+  elements.formStatus.textContent = `${state.formScan.fields.length} fields found · ${answered.length} answered · ${reviewUnknown.length} need you`;
   elements.formResult.innerHTML = `
-    <strong>${state.formPlan.actions.length} fields ready</strong>
-    <p>${requiredUnknown.length} required question${requiredUnknown.length === 1 ? "" : "s"} need review.</p>
-    <p>${optionalUnknown.length} optional blank field${optionalUnknown.length === 1 ? " is" : "s are"} ${elements.includeOptionalQuestions.checked ? "included for review" : "left untouched"}.</p>
-    <p>${state.formPlan.blocked_fields.length} sensitive/authentication fields will be left alone.</p>
+    <strong>Needs you (${reviewUnknown.length})</strong>
+    ${reviewUnknown.length
+      ? `<ul class="check-list">${listItems(reviewUnknown.map((field) => field.label), "needs-review")}</ul>`
+      : "<p>Nothing outstanding.</p>"}
+    <strong>Answered (${answered.length})</strong>
+    ${answered.length
+      ? `<ul class="check-list">${listItems(answered.map((field) => field.group_label || field.label), "completed")}</ul>`
+      : "<p>Nothing filled yet.</p>"}
+    ${state.formPlan.blocked_fields.length
+      ? `<p>${state.formPlan.blocked_fields.length} sensitive/authentication field${state.formPlan.blocked_fields.length === 1 ? " is" : "s are"} left alone.</p>`
+      : ""}
     <p>The final Submit button will not be clicked.</p>
   `;
   elements.fillForm.disabled = state.formPlan.actions.length === 0;
@@ -1715,6 +1735,9 @@ async function fillForm(options = {}) {
         ? `${trimmed.slice(0, 4).join(", ")} and ${trimmed.length - 4} more`
         : trimmed.join(", ");
     };
+    (result.results || [])
+      .filter((item) => item.status === "verified" && item.fingerprint)
+      .forEach((item) => state.filledFingerprints.add(item.fingerprint));
     const verifiedLabels = (result.results || [])
       .filter((item) => item.status === "verified")
       .map((item) => {
@@ -1871,7 +1894,10 @@ async function startAutomation() {
   );
   state.jobsProcessed = 0;
   state.applicationsSubmitted = 0;
-  if (!resumeCapturedJob) state.stuckPages = new Map();
+  if (!resumeCapturedJob) {
+    state.stuckPages = new Map();
+    state.filledFingerprints = new Set();
+  }
   state.seenJobUrls = new Set();
   if (!resumeCapturedJob) state.jobQueue = [];
   setAutomationRunning(
@@ -2654,6 +2680,47 @@ function escapeRegularExpression(value) {
 
 function normalizeChoicePhrase(value) {
   return normalizeQuestion(value).replace(/\bexpereinced\b/g, "experienced");
+}
+
+// Learn from answers the user typed on the page themselves.
+//
+// A rescan sees the finished page, not who filled it. Anything now answered
+// that ApplyPilot did not write is the user's own answer, so it is worth
+// keeping — that is the difference between asking the same question on every
+// application and asking it once.
+async function learnAnswersFromPage(fields) {
+  if (!state.localMode) return 0;
+  // Demographic and identity answers are the user's to give each time; and a
+  // value ApplyPilot itself wrote is already known, so neither is "learned".
+  const demographic = /gender|race|ethnic|veteran|disabilit|sexual orientation/i;
+  const learned = [];
+  for (const field of fields || []) {
+    const question = (field.group_label || field.label || "").trim();
+    const value = String(field.value_label || field.value || "").trim();
+    if (!question || !value || question.length < 3) continue;
+    if (["file", "password"].includes(field.field_type)) continue;
+    if (field.state_readable === false) continue;
+    if (demographic.test(question)) continue;
+    if (state.filledFingerprints.has(field.fingerprint)) continue;
+    const known = state.answers.find(
+      (item) => normalizeQuestion(item.question) === normalizeQuestion(question),
+    );
+    if (known && normalizeQuestion(known.answer) === normalizeQuestion(value)) continue;
+    try {
+      await savePageAnswer(question, value, field.field_type === "textarea" ? "text" : "choice");
+      learned.push(question);
+    } catch {
+      // A single unsavable answer must not interrupt the run.
+    }
+  }
+  if (learned.length) {
+    state.answers = await api("/api/answers").catch(() => state.answers);
+    const shown = learned.slice(0, 3).map((item) => `“${item.slice(0, 40)}”`).join(", ");
+    reportActivity(
+      `I noticed you answered ${shown}${learned.length > 3 ? ` and ${learned.length - 3} more` : ""} yourself — saved so I can fill ${learned.length === 1 ? "it" : "them"} next time.`,
+    );
+  }
+  return learned.length;
 }
 
 async function savePageAnswer(question, answer, fieldType = "choice") {
