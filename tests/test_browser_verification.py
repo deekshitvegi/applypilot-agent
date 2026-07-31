@@ -935,3 +935,26 @@ def test_the_new_block_is_scanned_and_fillable(page):
     assert len(schools) == 2
     # Distinct fingerprints, so the second block is addressable on its own.
     assert schools[0]["fingerprint"] != schools[1]["fingerprint"]
+
+
+def test_an_account_registration_page_is_a_handoff_not_a_login(page):
+    # Live regression from a Bausch + Lomb application: the page asks for
+    # "Choose Password" and "Retype Password" to create a NEW account. Seeing a
+    # password field, the runner treated it as a sign-in and stalled on "Login
+    # fields were not filled after waiting for the browser password manager".
+    load_worker_fixture(page, "account_registration.html")
+
+    login = page.evaluate("() => clickReadyLogin(true)")
+
+    assert login["signup_page"] is True
+    assert login["clicked"] is False
+    assert "never creates accounts" in login["error"]
+
+
+def test_a_real_sign_in_page_is_not_mistaken_for_registration(page):
+    # One password field and no confirmation is an ordinary sign-in.
+    load_worker_fixture(page, "recaptcha_checkbox.html")
+
+    login = page.evaluate("() => clickReadyLogin(false)")
+
+    assert login.get("signup_page") is not True

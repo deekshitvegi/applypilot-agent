@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.19.2 - 2026-07-30
+
+- **An account-registration page is now recognised and handed over.** A Bausch
+  + Lomb application opens a "Choose Password / Retype Password" form to create
+  a new account. Seeing a password field, the runner treated it as a sign-in
+  and stalled on "Login fields were not filled after waiting for the browser
+  password manager" - waiting for a manager to fill an account that does not
+  exist yet. Two password fields, or one alongside a confirming email or an
+  "already registered? sign in" link, now stop the run with a plain
+  explanation and what to do next. Verified against the live page: detected,
+  and no credential field touched. Creating the account stays the user's
+  decision, since registering accepts the employer's terms on their behalf.
+
 ## 0.19.1 - 2026-07-30
 
 Found by running the pipeline against a live Bausch + Lomb application.

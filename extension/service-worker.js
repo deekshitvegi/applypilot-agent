@@ -2238,7 +2238,32 @@ function clickReadyLogin(allowClick) {
       error: "CAPTCHA, MFA, or a verification code requires you.",
     };
   }
-  const password = queryAll("input[type='password']").find(visible);
+  // Creating an account is not signing in. An employer portal that asks for
+  // "Choose Password" and "Retype Password" wants a NEW account, and waiting
+  // for the browser password manager to fill one that does not exist yet
+  // stalled the run with a misleading message. ApplyPilot never registers an
+  // account: doing so accepts an employer's terms on the user's behalf.
+  const passwordFields = queryAll("input[type='password']").filter(visible);
+  const confirmingField = queryAll("input[type='text'], input[type='email']")
+    .filter(visible)
+    .some((control) => /re-?type|confirm|verify/i.test([
+      control.name, control.id, control.getAttribute("aria-label"),
+      control.getAttribute("placeholder"),
+      [...(control.labels || [])].map((label) => label.textContent).join(" "),
+    ].filter(Boolean).join(" ")));
+  const signInElsewhere = [...document.querySelectorAll("a, button")]
+    .filter(visible)
+    .some((element) => /already (a )?registered|already have an account|sign in here|please sign in/i
+      .test(String(element.textContent || "")));
+  if (passwordFields.length >= 2 || (passwordFields.length === 1 && (confirmingField || signInElsewhere))) {
+    return {
+      clicked: false,
+      login_page: true,
+      signup_page: true,
+      error: "This employer wants a new account created before applying. ApplyPilot never creates accounts, because that accepts the employer's terms on your behalf.",
+    };
+  }
+  const password = passwordFields[0];
   // Two-step sign-ins (ADP asks for a User ID first, password on the next
   // screen) have no password field at all. Recognising only a password field
   // meant such a page was mistaken for an application form and filled.

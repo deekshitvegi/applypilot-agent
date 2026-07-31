@@ -2143,6 +2143,15 @@ async function runCurrentApplicationPage() {
   }
 
   const login = await continueConsentedLogin();
+  if (login.signup_page) {
+    setAutomationRunning(false, "Paused: this employer requires an account before applying.");
+    appendMessage(
+      `${login.error}\n\nCreate the account on this page yourself, then press **Start applying** again — `
+      + "I'll sign in and fill the application from there. If you'd rather move on, say “skip”.",
+      "agent-message",
+    );
+    return;
+  }
   if (login.login_page) {
     throw new Error(login.error || "Login requires your attention.");
   }
@@ -2302,6 +2311,9 @@ async function continueConsentedLogin() {
       allowClick: state.loginAssistance,
     });
     if (last.error && /captcha|mfa|verification/i.test(last.error)) return last;
+    // A registration page is a handoff, not something to wait on: no password
+    // manager will fill an account that does not exist yet.
+    if (last.signup_page) return last;
     if (!last.login_page) return { ...last, clicked };
     // Only ever type credentials into a page already confirmed to be a login
     // form, and only when the host matches exactly.
