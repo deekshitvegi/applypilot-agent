@@ -2144,10 +2144,29 @@ async function runCurrentApplicationPage() {
 
   const login = await continueConsentedLogin();
   if (login.signup_page) {
-    setAutomationRunning(false, "Paused: this employer requires an account before applying.");
+    // A registration page still collects name, phone, address and a résumé.
+    // Stopping dead left the user to type all of it; fill everything except
+    // the credentials, so only the password and the button remain. Password
+    // fields are blocked by the planner, so they are never touched.
+    let filled = 0;
+    try {
+      const signupPlan = await scanForm({ throwOnError: true });
+      if (signupPlan?.actions?.length) {
+        await fillUntilSettled(signupPlan);
+        filled = (state.formPlan?.actions || []).length;
+      }
+      await attachConfiguredApplicationFiles();
+    } catch (error) {
+      reportActivity(`I could not fill this registration form (${error.message}).`);
+    }
+    setAutomationRunning(false, "Paused: choose a password and create the account to continue.");
     appendMessage(
-      `${login.error}\n\nCreate the account on this page yourself, then press **Start applying** again — `
-      + "I'll sign in and fill the application from there. If you'd rather move on, say “skip”.",
+      `${login.error}\n\n`
+      + (filled
+        ? "I've filled everything on this page except the password — that one is yours to choose.\n\n"
+        : "")
+      + "Set a password, press **Create Account**, then press **Start applying** again and I'll "
+      + "carry on with the application itself. If you'd rather move on, say “skip”.",
       "agent-message",
     );
     return;

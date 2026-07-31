@@ -835,3 +835,38 @@ def test_a_placeholder_option_is_never_selected() -> None:
     plan = plan_form_fill("https://careers.example.test/apply", [field], profile, [])
 
     assert plan.actions[0].value == "No"
+
+
+def test_country_region_code_is_not_filled_with_the_state() -> None:
+    # Live regression from a SuccessFactors registration form: the label
+    # "Country/Region Code" matched the state mapping on the word "region" and
+    # was filled with "Texas".
+    profile = CandidateProfile(country="United States", region="Texas", phone="9408436087")
+    fields = [
+        FormField(id="cc", label="Country/Region Code:", field_type="select", required=True),
+        FormField(id="state", label="State", field_type="text", required=True),
+    ]
+
+    plan = plan_form_fill("https://career2.successfactors.test/careers", fields, profile, [])
+
+    values = {action.field_id: action.value for action in plan.actions}
+    assert values["state"] == "Texas"
+    # A country/region code is the dialling or country code, never the state.
+    assert values["cc"] in {"+1", "US", "United States"}
+
+
+def test_registration_passwords_are_always_blocked() -> None:
+    # The agent fills a registration form so only the password and the button
+    # remain, but must never touch a credential field.
+    profile = CandidateProfile(legal_name="Deekshitth Vegi", email="candidate@example.test")
+    fields = [
+        FormField(id="email", label="Email Address:", required=True),
+        FormField(id="pw", label="Choose Password:", field_type="password", required=True),
+        FormField(id="pw2", label="Retype Password:", field_type="password", required=True),
+        FormField(id="first", label="First Name:", required=True),
+    ]
+
+    plan = plan_form_fill("https://career2.successfactors.test/careers", fields, profile, [])
+
+    assert sorted(f.field_id for f in plan.blocked_fields) == ["pw", "pw2"]
+    assert {a.field_id for a in plan.actions} == {"email", "first"}

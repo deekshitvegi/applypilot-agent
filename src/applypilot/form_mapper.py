@@ -155,6 +155,13 @@ def map_profile_field(
     label: str, field: FormField, profile: CandidateProfile
 ) -> tuple[str, str, float] | None:
     first_name, last_name = split_name(profile.legal_name)
+    # "Country/Region Code" is a country selector, not a state one. Matching it
+    # on the word "region" filled it with "Texas".
+    if "country" in label and "code" in label:
+        country_code = phone_country_code(profile.phone, profile.country)
+        if country_code:
+            return country_code, "profile.phone", 0.98
+        return (profile.country, "profile.country", 0.9) if profile.country else None
     if any(
         pattern_matches(label, pattern)
         for pattern in ("phone country code", "mobile country code", "country calling code")

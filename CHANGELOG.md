@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.19.4 - 2026-07-30
+
+- **A registration page is now filled, not just refused.** Recognising that an
+  employer wanted an account created, the runner stopped dead and left the user
+  to type their own name, phone and address into it. Those pages collect the
+  same details as an application, so everything except the credentials is now
+  filled and the résumé attached, leaving only a password to choose and the
+  button to press. Password fields remain blocked by the planner and are never
+  touched, and the account is still never created automatically.
+- **"Country/Region Code" is no longer filled with the state.** The label
+  matched the state mapping on the word "region", so a phone country code
+  selector received "Texas".
+
 ## 0.19.3 - 2026-07-30
 
 - **The credential filler no longer claims a sign-in it did not perform.** It
