@@ -29,15 +29,17 @@ read back out: the settings page learns whether a key is set, never what it is.
 
 ## Passwords and sign-in
 
-**The browser's own password manager is the default path and stays the default.**
+**ApplyPilot does not type passwords.** The browser's own password manager is
+the path, and there is no code here that puts a password on a page.
 
-If you choose to use session-scoped sign-in details instead, they live in the
-side panel's memory for as long as the panel is open and go nowhere else. They
-are never written to disk, never sent to the local service, and never logged.
-Closing the panel forgets them.
+What it does instead: it recognises a sign-in page, tells you which host wants
+you signed in, waits, and picks up from whatever the page looks like once you
+have. Sign-in is reported as done only when the sign-in form is no longer there.
 
-The service holds no secret at all. It answers one question — *may sign-in
-details be released for the page in front of us?* — and answers it strictly:
+The authorisation machinery for session-scoped details is built and tested, so
+the guard rails exist if that path is ever added. The service holds no secret at
+all — it answers one question, *may sign-in details be released for the page in
+front of us?*, and answers it strictly:
 
 - the host must match **exactly**, label for label, so `example.com.evil.test`
   gets nothing from an authorisation for `example.com`;

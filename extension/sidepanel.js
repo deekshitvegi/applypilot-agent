@@ -4,9 +4,16 @@
  * It talks to the local service over http://127.0.0.1 and to the page only by
  * asking the service worker. It never injects anything itself.
  *
- * Sign-in details, if the applicant chooses to use them at all, live in the
- * `sessionSignIn` variable below and nowhere else: not in storage, not in the
- * service, not in a log. Closing the panel forgets them.
+ * There is no code here that types a password into a page, and that is on
+ * purpose. What exists instead is the part that decides whether a sign-in could
+ * ever be released -- exact host match, confirmed sign-in form, never a
+ * registration page -- and the hand-off: the panel says which page wants you
+ * signed in, you sign in with your password manager, and the run picks up from
+ * whatever the page looks like afterwards. Sign-in is only ever reported as
+ * done when the sign-in form is no longer there.
+ *
+ * If session-scoped details are added later they belong in a variable in this
+ * file and nowhere else: not in storage, not in the service, not in a log.
  */
 
 const SERVICE = "http://127.0.0.1:8765";
@@ -24,9 +31,6 @@ const state = {
   serviceVersion: "",
   onboarding: null,
 };
-
-/** Sign-in details for this session only. Never persisted, never sent away. */
-const sessionSignIn = new Map();
 
 /* ------------------------------------------------------------------ plumbing */
 
