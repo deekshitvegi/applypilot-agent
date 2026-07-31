@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.19.1 - 2026-07-30
+
+Found by running the pipeline against a live Bausch + Lomb application.
+
+- **Work history no longer answers legal questions.** The repeating-history
+  mapper claimed any label containing "company", "position" or "degree", so a
+  sponsorship question was answered "HCLTech", a non-compete question with a
+  past employer, a confidentiality question with a university, and "Do you have
+  a Bachelor's degree?" with "M.S." History now matches only short field
+  labels, never sentence questions.
+- **A dropdown's placeholder row is never selected.** "No Selection" was chosen
+  for a required sponsorship question, submitting a non-answer that reads as
+  deliberate.
+- **Conditional follow-ups are left for the user.** "If yes, what department
+  and what country?" was filled with the saved country although it only applies
+  when a previous answer was yes.
+- **"Address Line 1" no longer answers "Address Line 2."** The labels are 93%
+  similar, so the street address was copied into both.
+
+On that application the plan went from 21 fills, several of them wrong answers
+to legal questions, to 13 that are all correct.
+
 ## 0.19.0 - 2026-07-30
 
 - **"Add another" is now pressed for each saved education and work entry.**

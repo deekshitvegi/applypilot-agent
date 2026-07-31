@@ -8,6 +8,7 @@ from .models import (
     FormField,
     FormFillAction,
     FormFillPlan,
+    FormOption,
     ReusableAnswer,
     UnknownField,
 )
@@ -55,6 +56,21 @@ def plan_form_fill(
     history_occurrences: dict[str, int] = {}
     for field in fields:
         label = normalize(f"{field.label} {field.name}")
+        # "If yes, what department and what country?" only applies when a
+        # previous answer was yes, and its wording borrows words from ordinary
+        # profile fields. Filling it unconditionally put a country name into a
+        # follow-up that should have stayed empty.
+        if CONDITIONAL_FOLLOW_UP.match(normalize(field.label)):
+            if not field.value and field.field_type != "file":
+                unknown.append(
+                    UnknownField(
+                        field_id=field.id,
+                        label=field.group_label or field.label,
+                        required=field.required,
+                        reason="This only applies if a related answer was yes.",
+                    )
+                )
+            continue
         if field.field_type == "password" or any(pattern in label for pattern in BLOCKED_PATTERNS):
             blocked.append(
                 UnknownField(
@@ -230,15 +246,26 @@ def map_history_field(
     is what lets a résumé's history reach the form instead of leaving every
     education and experience block blank.
     """
+    # History blocks carry short field labels ("Company", "School", "Job
+    # Title"), never sentence questions. Without this guard "Do you now or will
+    # you in the future require company sponsorship?" was answered with an
+    # employer name and a non-compete question with a past employer — wrong
+    # answers to legal questions, which must never reach an employer.
+    if "?" in (field.label or "") or len(label.split()) > 5:
+        return None
     education_context = any(
-        token in label
+        token == label or anchored_containment(token, label)
         for token in (
             "school", "university", "college", "degree", "education", "major", "gpa",
-            "graduat", "field of study", "discipline", "concentration", "institution",
+            "field of study", "discipline", "concentration", "institution",
         )
     )
     experience_context = any(
-        token in label for token in ("company", "employer", "job title", "position", "role", "experience", "work history")
+        token == label or anchored_containment(token, label)
+        for token in (
+            "company", "employer", "organization", "organisation", "job title",
+            "position", "role", "experience", "work history",
+        )
     )
     if education_context and occurrence < len(profile.education):
         entry = profile.education[occurrence]
@@ -255,6 +282,20 @@ def map_history_field(
                 if isinstance(value, str) and value:
                     return value, f"profile.experience[{occurrence}].{attribute}", 0.95
     return None
+
+
+def differs_only_by_index(left: str, right: str) -> bool:
+    """True for labels that differ only in a trailing number.
+
+    "Address Line 1" and "Address Line 2" are 93% similar, so a saved answer
+    for the first was being copied into the second. The digit is the entire
+    meaning of such a pair.
+    """
+    left_match = re.fullmatch(r"(.*?)\s*(\d+)", left.strip())
+    right_match = re.fullmatch(r"(.*?)\s*(\d+)", right.strip())
+    if not left_match or not right_match:
+        return False
+    return left_match.group(1) == right_match.group(1) and left_match.group(2) != right_match.group(2)
 
 
 def anchored_containment(shorter: str, longer: str) -> bool:
@@ -292,6 +333,9 @@ def map_reusable_answer(
         if candidate in {"select", "choose", "field", "question", "answer"} or len(candidate) < 6:
             continue
         for comparison_label in comparison_labels:
+            # "Address Line 1" must never answer "Address Line 2".
+            if differs_only_by_index(comparison_label, candidate):
+                continue
             score = SequenceMatcher(None, comparison_label, candidate).ratio()
             if (
                 anchored_containment(candidate, comparison_label)
@@ -323,7 +367,32 @@ def map_exact_reusable_answer(
     return None
 
 
+# Follow-up fields that only apply when a previous answer was yes. Their
+# wording borrows words from ordinary profile fields ("...and what country?"),
+# so filling them unconditionally puts data into questions that do not apply.
+CONDITIONAL_FOLLOW_UP = re.compile(
+    r"^if\s+(?:yes|no|so|any|other|applicable|selected|checked|source|above|referred|not)"
+)
+
+PLACEHOLDER_OPTIONS = {
+    "", "select", "select one", "select...", "no selection", "choose", "choose one",
+    "please select", "none selected", "pick one", "select an option",
+}
+
+
+def is_placeholder_option(option: FormOption) -> bool:
+    """A dropdown's own "choose something" row is not an answer."""
+    return normalize(option.label or option.value) in PLACEHOLDER_OPTIONS
+
+
 def coerce_option(value: str, field: FormField) -> str:
+    if not field.options:
+        return value
+    # A placeholder row must never be chosen: selecting "No Selection" for a
+    # sponsorship question submits a non-answer that reads as deliberate.
+    field = field.model_copy(
+        update={"options": [o for o in field.options if not is_placeholder_option(o)]}
+    ) if any(is_placeholder_option(o) for o in field.options) else field
     if not field.options:
         return value
     normalized_value = normalize(value)

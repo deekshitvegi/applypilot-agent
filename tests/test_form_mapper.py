@@ -747,3 +747,91 @@ def test_more_blocks_than_saved_history_are_asked_not_invented() -> None:
 
     assert [a.field_id for a in plan.actions] == ["edu1-school", "edu2-school"]
     assert [u.field_id for u in plan.unknown_fields] == ["edu3-school"]
+
+
+def test_history_never_answers_a_legal_or_eligibility_question() -> None:
+    # Live regression from a Bausch + Lomb application: the repeating-history
+    # mapper claimed any label containing "company", "position" or "degree",
+    # so a sponsorship question was answered "HCLTech", a non-compete question
+    # with a past employer, and a "Bachelor's degree?" question with "M.S.".
+    # Wrong answers to legal questions must never reach an employer.
+    from applypilot.models import EducationEntry, ExperienceEntry
+
+    profile = CandidateProfile(
+        education=[EducationEntry(school="University of North Texas", degree="M.S.")],
+        experience=[
+            ExperienceEntry(company="HCLTech", title="AI Engineer"),
+            ExperienceEntry(company="Innomatics Research Labs", title="Data Scientist Trainee"),
+        ],
+    )
+    yes_no = [FormOption(value="Yes", label="Yes"), FormOption(value="No", label="No")]
+    questions = [
+        "Do you now or will you in the future require company sponsorship for employment?",
+        "Are you under any non-compete agreement with a previous employer?",
+        "Are you under any confidentiality agreement?",
+        "Do you have a Bachelor's degree or higher?",
+    ]
+    fields = [
+        FormField(id=f"q{i}", label=text, field_type="select", required=True, options=yes_no)
+        for i, text in enumerate(questions)
+    ]
+    # Real history labels alongside them must still fill.
+    fields += [
+        FormField(id="company", label="Company"),
+        FormField(id="school", label="School"),
+    ]
+
+    plan = plan_form_fill("https://careers.example.test/apply", fields, profile, [])
+
+    values = {action.field_id: action.value for action in plan.actions}
+    assert values == {"company": "HCLTech", "school": "University of North Texas"}
+    assert [field.field_id for field in plan.unknown_fields] == ["q0", "q1", "q2", "q3"]
+
+
+def test_address_line_1_answer_does_not_fill_address_line_2() -> None:
+    # Live regression: "Address Line 1" and "Address Line 2" are 93% similar,
+    # so the saved street address was copied into the second line too.
+    fields = [
+        FormField(id="a1", label="Address Line 1"),
+        FormField(id="a2", label="Address Line 2"),
+    ]
+    answers = [ReusableAnswer(id="a", question="Address Line 1", answer="1710 Northstar Rd")]
+
+    plan = plan_form_fill("https://careers.example.test/apply", fields, CandidateProfile(), answers)
+
+    assert {a.field_id: a.value for a in plan.actions} == {"a1": "1710 Northstar Rd"}
+    assert [f.field_id for f in plan.unknown_fields] == ["a2"]
+
+
+def test_conditional_follow_up_fields_are_left_for_the_user() -> None:
+    # "If yes, what department and what country?" only applies when a previous
+    # answer was yes; it was being filled with the saved country.
+    profile = CandidateProfile(country="United States")
+    fields = [
+        FormField(id="country", label="Country", required=True),
+        FormField(id="dept", label="If yes, what department and what country?"),
+        FormField(id="visa", label="If yes, please indicate Visa status"),
+    ]
+
+    plan = plan_form_fill("https://careers.example.test/apply", fields, profile, [])
+
+    assert {a.field_id: a.value for a in plan.actions} == {"country": "United States"}
+    assert sorted(f.field_id for f in plan.unknown_fields) == ["dept", "visa"]
+
+
+def test_a_placeholder_option_is_never_selected() -> None:
+    # A dropdown's "No Selection" row is not an answer; choosing it submits a
+    # non-answer that reads as a deliberate one.
+    profile = CandidateProfile(requires_sponsorship=False)
+    field = FormField(
+        id="sponsor",
+        label="Do you now or will you in the future require company sponsorship?",
+        field_type="select", required=True,
+        options=[FormOption(value="", label="No Selection"),
+                 FormOption(value="Yes", label="Yes"),
+                 FormOption(value="No", label="No")],
+    )
+
+    plan = plan_form_fill("https://careers.example.test/apply", [field], profile, [])
+
+    assert plan.actions[0].value == "No"
