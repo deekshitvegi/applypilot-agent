@@ -61,7 +61,22 @@ def plan_form_fill(
         # profile fields. Filling it unconditionally put a country name into a
         # follow-up that should have stayed empty.
         if CONDITIONAL_FOLLOW_UP.match(normalize(field.label)):
-            if not field.value and field.field_type != "file":
+            # Never *infer* a value for a conditional follow-up, but an answer
+            # the user gave for this exact question must still be used —
+            # otherwise answering it can never satisfy it and the panel asks
+            # for it again on every pass.
+            explicit = map_exact_reusable_answer(label, field, answers)
+            if explicit is not None:
+                value, source, confidence = explicit
+                actions.append(
+                    FormFillAction(
+                        field_id=field.id,
+                        value=coerce_option(value, field),
+                        source=source,
+                        confidence=confidence,
+                    )
+                )
+            elif not field.value and field.field_type != "file":
                 unknown.append(
                     UnknownField(
                         field_id=field.id,

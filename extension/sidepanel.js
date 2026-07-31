@@ -41,7 +41,6 @@ const elements = {
   automationPolicy: document.querySelector("#automation-policy"),
   routePreference: document.querySelector("#route-preference"),
   resumePolicy: document.querySelector("#resume-policy"),
-  credentialHost: document.querySelector("#credential-host"),
   credentialUsername: document.querySelector("#credential-username"),
   credentialPassword: document.querySelector("#credential-password"),
   credentialList: document.querySelector("#credential-list"),
@@ -1682,6 +1681,16 @@ async function skipUnknownQuestion() {
 }
 
 async function continueQuestionnaire() {
+  // Write answers to the page as they are given. Waiting until every question
+  // was answered left each field empty in the meantime, so a rescan saw it
+  // unanswered and asked for it again.
+  if (state.formPlan?.actions?.length) {
+    try {
+      await fillForm({ throwOnError: true });
+    } catch (error) {
+      reportActivity(`I could not apply that answer to the page yet (${error.message}).`);
+    }
+  }
   if (unresolvedUnknowns().length) return;
   state.questionnaireActive = false;
   elements.unknownAnswerForm.classList.add("hidden");
@@ -2257,25 +2266,33 @@ async function renderSessionCredentials() {
 }
 
 async function saveSessionCredential() {
-  const host = elements.credentialHost.value.trim();
   const username = elements.credentialUsername.value.trim();
   const password = elements.credentialPassword.value;
-  if (!host || !username || !password) {
-    elements.credentialList.textContent = "Enter the site, username, and password.";
+  if (!username || !password) {
+    elements.credentialList.textContent = "Enter a username and password.";
+    return;
+  }
+  // Bind to the site actually open, rather than asking the user to type a
+  // host. Dropping the host entirely would let one credential be offered to
+  // any site, which is the failure that matters most here.
+  const activeTab = await chrome.runtime.sendMessage({ action: "getActiveTab" }).catch(() => null);
+  const host = activeTab?.url || "";
+  if (!host) {
+    elements.credentialList.textContent =
+      "Open the employer's sign-in page first so I know which site these belong to.";
     return;
   }
   try {
-    await api("/api/session-credentials", {
+    const saved = await api("/api/session-credentials", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ host, username, password }),
     });
     // Never leave the secret sitting in the panel.
     elements.credentialPassword.value = "";
-    elements.credentialHost.value = "";
     elements.credentialUsername.value = "";
     appendMessage(
-      `I'll use those sign-in details for ${host} while this session lasts. They stay in memory on your computer and vanish when the local agent restarts.`,
+      `I'll use those sign-in details for ${saved.host} while this session lasts. They stay in memory on your computer and vanish when the local agent restarts.`,
       "agent-message",
     );
     await renderSessionCredentials();

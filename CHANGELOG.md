@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.19.6 - 2026-07-30
+
+- **Fixed a question being asked over and over after it was answered.** Making
+  "If yes, ..." fields conditional in 0.19.1 skipped every mapping for them,
+  including the user's own saved answer, so answering one could never satisfy
+  it: "Saved OPT for If yes, please indicate Visa status" was followed
+  immediately by the same question again. A conditional follow-up is still
+  never inferred, but an answer given for that exact question is now used.
+- **Answers reach the page as they are given.** The questionnaire only wrote
+  anything once every question had been answered, so each field stayed empty in
+  the meantime and a rescan asked for it again.
+- **The sign-in form no longer asks for a site.** It is taken from the tab you
+  are on, so the credential is still bound to one exact host - a lookalike or
+  another employer gets nothing - without anything to type.
+
 ## 0.19.5 - 2026-07-30
 
 - **A search filter is no longer mistaken for a work-history field.** On a
