@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.19.7 - 2026-07-30
+
+- **Stopped learning meaningless values from the page.** The answer-learning
+  added in 0.18.1 stored whatever a control held, so an employer's internal
+  option ids ("Country -> 28468", "Are you legally authorized... -> 30104"),
+  dropdown placeholders ("- Select -"), page furniture ("Current Date", the
+  language selector) and one mis-scanned pairing ("Email Address: ->
+  Notification:") all became reusable answers - and were then written back into
+  later applications, which is why a country dropdown was being set to a
+  number. Only a control's human-readable label is learned now; numeric values
+  are rejected for dropdowns but still allowed for phone and postal codes,
+  which are legitimately numeric.
+
 ## 0.19.6 - 2026-07-30
 
 - **Fixed a question being asked over and over after it was answered.** Making

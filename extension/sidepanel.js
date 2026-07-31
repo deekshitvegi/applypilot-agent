@@ -2820,14 +2820,30 @@ async function learnAnswersFromPage(fields) {
   // Demographic and identity answers are the user's to give each time; and a
   // value ApplyPilot itself wrote is already known, so neither is "learned".
   const demographic = /gender|race|ethnic|veteran|disabilit|sexual orientation/i;
+  // Page furniture is not an application answer.
+  const furniture = /current date|language|keyword|search|requisition id|^select/i;
+  const placeholder = /^(-\s*select\s*-|select|select one|select\.\.\.|no selection|choose|please select|none)$/i;
   const learned = [];
   for (const field of fields || []) {
     const question = (field.group_label || field.label || "").trim();
-    const value = String(field.value_label || field.value || "").trim();
+    // Only the human-readable label is an answer. A control's raw value is
+    // often an internal option id ("28468"), and storing that taught the agent
+    // to write meaningless ids back into later applications.
+    const value = String(field.value_label || "").trim()
+      || (field.field_type === "select" || field.field_type === "radio"
+        ? ""
+        : String(field.value || "").trim());
     if (!question || !value || question.length < 3) continue;
     if (["file", "password"].includes(field.field_type)) continue;
     if (field.state_readable === false) continue;
     if (demographic.test(question)) continue;
+    if (furniture.test(question) || placeholder.test(value)) continue;
+    // A numeric-only value from a dropdown is an option id. Phone numbers and
+    // postal codes are legitimately numeric, so only choices are rejected.
+    if (/^\d+$/.test(value) && ["select", "radio", "checkbox"].includes(field.field_type)) continue;
+    // A control echoing its own label ("English US" -> "English US") is a
+    // widget's current display, not something the user answered.
+    if (normalizeQuestion(question) === normalizeQuestion(value)) continue;
     if (state.filledFingerprints.has(field.fingerprint)) continue;
     const known = state.answers.find(
       (item) => normalizeQuestion(item.question) === normalizeQuestion(question),
