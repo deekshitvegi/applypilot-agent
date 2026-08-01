@@ -214,29 +214,41 @@ async function refresh() {
   }
 }
 
-el("resume-file").addEventListener("change", async (event) => {
-  const file = event.target.files[0];
+/** Both imports behave the same way: read the file, report what came out. */
+async function importFrom(path, inputId, resultId) {
+  const input = el(inputId);
+  const file = input.files[0];
   if (!file) return;
-  el("resume-result").textContent = "Reading…";
+  el(resultId).textContent = "Reading…";
   const form = new FormData();
   form.append("file", file);
   try {
-    const response = await fetch(SERVICE + "/resume", { method: "POST", body: form });
+    const response = await fetch(SERVICE + path, { method: "POST", body: form });
     const body = await response.json();
     if (!response.ok) throw new Error(body.detail || "that file could not be read");
     const parts = [
-      `${body.education.length} education entries`,
+      `${body.education.length} education`,
       `${body.experience.length} work entries`,
       `${body.skills.length} skills`,
     ];
-    el("resume-result").textContent =
-      "Read " + parts.join(", ") + ". Check them below and correct anything I got wrong." +
+    el(resultId).textContent =
+      "Read " + parts.join(", ") + ". Check them below." +
       (body.notes.length ? " " + body.notes.join(" ") : "");
     refresh();
   } catch (err) {
-    el("resume-result").textContent = String(err.message);
+    el(resultId).textContent = String(err.message);
+  } finally {
+    input.value = "";
   }
-});
+}
+
+el("linkedin-file").addEventListener("change", () =>
+  importFrom("/import/linkedin", "linkedin-file", "linkedin-result")
+);
+
+el("resume-file").addEventListener("change", () =>
+  importFrom("/resume", "resume-file", "resume-result")
+);
 
 el("save-key").addEventListener("click", async () => {
   const key = el("api-key").value.trim();

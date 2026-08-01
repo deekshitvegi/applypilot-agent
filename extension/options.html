@@ -10,6 +10,45 @@
   <h1>ApplyPilot</h1>
   <p id="health" class="muted"></p>
 
+  <section class="feature">
+    <h2>Fill this in for me</h2>
+    <p class="muted">
+      Rather than typing all of it. Both routes only add what the file actually
+      says &mdash; nothing is guessed at, and nothing you have already entered is
+      overwritten.
+    </p>
+
+    <div class="import-grid">
+      <div class="import-card">
+        <strong>From your r&eacute;sum&eacute;</strong>
+        <p class="muted tiny">
+          A .docx. Reads your name, email, phone, location, education and work
+          history.
+        </p>
+        <input id="resume-file" type="file" accept=".docx">
+        <p id="resume-result" class="muted tiny"></p>
+      </div>
+
+      <div class="import-card">
+        <strong>From your LinkedIn export</strong>
+        <p class="muted tiny">
+          The .zip LinkedIn emails you: <em>Settings and Privacy &rarr; Data
+          privacy &rarr; Get a copy of your data</em>. Usually has more detail
+          than a r&eacute;sum&eacute;, including every position and skill.
+        </p>
+        <input id="linkedin-file" type="file" accept=".zip">
+        <p id="linkedin-result" class="muted tiny"></p>
+      </div>
+    </div>
+
+    <p class="muted tiny">
+      There is no "Sign in with LinkedIn" button here on purpose: that only
+      returns a name, an email and a picture, so it would not save you anything,
+      and reading your profile page instead is against LinkedIn's terms. The
+      export is the same data by the route they provide for it.
+    </p>
+  </section>
+
   <section>
     <h2>Model key</h2>
     <p class="muted">
@@ -47,19 +86,6 @@
       in for them on your behalf.
     </p>
     <button id="save-behaviour" class="primary">Save</button>
-  </section>
-
-  <section>
-    <h2>Start from your r&eacute;sum&eacute;</h2>
-    <p class="muted">
-      Upload a .docx and I will read your education and work history into the
-      records below, along with your name, email, phone and location. I take only
-      what the document says &mdash; anything it does not state stays blank, and
-      nothing you have already entered is overwritten.
-    </p>
-    <label for="resume-file">R&eacute;sum&eacute; (.docx)</label>
-    <input id="resume-file" type="file" accept=".docx">
-    <p id="resume-result" class="muted"></p>
   </section>
 
   <section>

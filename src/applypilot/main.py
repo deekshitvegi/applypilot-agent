@@ -19,7 +19,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from . import __version__, ai, applications, chat, documents, learning, onboarding, resume, runloop
+from . import (
+    __version__,
+    ai,
+    applications,
+    chat,
+    documents,
+    learning,
+    linkedin,
+    onboarding,
+    resume,
+    runloop,
+)
 from .adapters import classify_host
 from .config import load_settings
 from .facts import BY_KEY
@@ -230,6 +241,39 @@ async def upload_resume(file: UploadFile) -> dict[str, Any]:
 
     return {
         "document": stored,
+        "added": added,
+        "notes": extracted.notes,
+        "education": [record.model_dump() for record in extracted.education],
+        "experience": [record.model_dump() for record in extracted.experience],
+        "skills": extracted.skills,
+        "onboarding": get_onboarding(),
+    }
+
+
+@app.post("/import/linkedin")
+async def import_linkedin(file: UploadFile) -> dict[str, Any]:
+    """Import LinkedIn's own data export.
+
+    This reads the archive LinkedIn sends when you ask for a copy of your data.
+    It does not sign in to LinkedIn and it does not read any page: signing in
+    with LinkedIn returns a name, an email and a picture and nothing else, and
+    reading a profile page is against their terms.
+    """
+    data = await file.read()
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(
+            400,
+            "Upload the .zip LinkedIn emails you. Get it from Settings and Privacy "
+            "-> Data privacy -> Get a copy of your data.",
+        )
+    try:
+        extracted = linkedin.extract(data)
+    except linkedin.NotALinkedInExport as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    profile, added = onboarding.apply_resume(store.get_profile(), extracted)
+    store.save_profile(profile)
+    return {
         "added": added,
         "notes": extracted.notes,
         "education": [record.model_dump() for record in extracted.education],

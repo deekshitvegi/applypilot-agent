@@ -101,9 +101,16 @@ class ResumeExtract:
             found["first_name"] = first
             found["last_name"] = last.split()[-1]
         if self.location and "," in self.location:
-            city, _, region = self.location.partition(",")
-            found["city"] = city.strip()
-            found["state"] = expand_state(region.strip())
+            # "Austin, TX" from a resume, "Austin, Texas, United States" from a
+            # LinkedIn export. Splitting on the first comma alone made the state
+            # "Texas, United States".
+            parts = [part.strip() for part in self.location.split(",") if part.strip()]
+            if parts:
+                found["city"] = parts[0]
+            if len(parts) >= 2:
+                found["state"] = expand_state(parts[1])
+            if len(parts) >= 3:
+                found["country"] = parts[2]
         return {key: value for key, value in found.items() if value}
 
 

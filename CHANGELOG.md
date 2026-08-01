@@ -3,6 +3,19 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.4.0
+
+- **"Fill this in for me" is the first thing in Settings**, with two routes:
+  your résumé (.docx) and your **LinkedIn data export** (.zip). Both only add
+  what the file actually says and never overwrite what you entered yourself.
+- The LinkedIn export carries every position, every school and your skills —
+  usually more than a résumé spells out. There is deliberately no "Sign in with
+  LinkedIn": it returns a name, an email and a picture and nothing else, so it
+  would save nobody any work, and reading a profile page instead is against
+  LinkedIn's terms.
+- A three-part location such as "Austin, Texas, United States" is read as city,
+  state and country rather than putting "Texas, United States" in the state.
+
 ## 1.3.0
 
 - **A slashed label names the field twice.** "School / education institution"
