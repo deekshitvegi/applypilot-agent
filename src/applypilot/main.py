@@ -60,6 +60,13 @@ settings = load_settings()
 store = Store(settings)
 session_sign_in = SessionSignIn()
 
+#: Whether agreements an application requires may be ticked without asking.
+#: Held here rather than in the profile, so it lives as long as this service is
+#: running and no longer: something with legal weight should be chosen again
+#: rather than sit switched on for months because of one afternoon's clicking.
+#: Nothing about it reaches the disk.
+session_accept_agreements = False
+
 app = FastAPI(title="ApplyPilot", version=__version__)
 app.add_middleware(
     CORSMiddleware,
@@ -105,6 +112,7 @@ class SettingsPayload(BaseModel):
     submission_policy: str | None = None
     prefer_easy_apply: bool | None = None
     answer_demographics: bool | None = None
+    accept_agreements: bool | None = None
     auto_advance: bool | None = None
     auto_attach_resume: bool | None = None
 
@@ -118,6 +126,8 @@ def get_settings() -> dict[str, Any]:
         "submission_policy": profile.submission_policy,
         "prefer_easy_apply": profile.prefer_easy_apply,
         "answer_demographics": profile.answer_demographics,
+        "accept_agreements": session_accept_agreements,
+        "accept_agreements_scope": "this session only",
         "auto_advance": profile.auto_advance,
         "auto_attach_resume": profile.auto_attach_resume,
         "authorised_sign_in_hosts": session_sign_in.authorised_hosts(),
@@ -139,6 +149,9 @@ def put_settings(payload: SettingsPayload) -> dict[str, Any]:
         profile.prefer_easy_apply = payload.prefer_easy_apply
     if payload.answer_demographics is not None:
         profile.answer_demographics = payload.answer_demographics
+    if payload.accept_agreements is not None:
+        global session_accept_agreements
+        session_accept_agreements = payload.accept_agreements
     if payload.auto_advance is not None:
         profile.auto_advance = payload.auto_advance
     if payload.auto_attach_resume is not None:
@@ -389,6 +402,9 @@ def plan(observation: PageObservation, after_continue: bool = False) -> PlanResp
         runloop.note_observation(state, observation.signature)
         store.save_run(state)
 
+    # The session's answer to the agreements question, never the saved one:
+    # the profile on disk has no opinion about this and is not given one.
+    profile = profile.model_copy(update={"accept_agreements": session_accept_agreements})
     built = runloop.plan_page(observation, profile, store.learned_values())
     notes = list(observation.notes) + built.notes
 

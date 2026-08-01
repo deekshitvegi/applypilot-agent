@@ -456,3 +456,32 @@ def test_pressing_continue_and_getting_nowhere_still_stalls(client):
         )
         seen.append(any(stuck in note for note in response.json()["notes"]))
     assert seen[-1] is True, seen
+
+
+def test_the_agreement_setting_survives_being_saved(client):
+    """It was dropped on the way through, so the box unticked itself on save."""
+    assert client.get("/settings").json()["accept_agreements"] is False
+
+    saved = client.put("/settings", json={"accept_agreements": True}).json()
+    assert saved["accept_agreements"] is True
+    assert client.get("/settings").json()["accept_agreements"] is True
+
+    # And it can be turned back off, which a truthy-only check would miss.
+    client.put("/settings", json={"accept_agreements": False})
+    assert client.get("/settings").json()["accept_agreements"] is False
+
+
+def test_saving_something_else_leaves_it_alone(client):
+    client.put("/settings", json={"accept_agreements": True})
+    client.put("/settings", json={"auto_advance": True})
+    assert client.get("/settings").json()["accept_agreements"] is True
+
+
+def test_it_lasts_the_session_and_reaches_no_further(client):
+    """Something with legal weight is chosen again, not left on for months."""
+    client.put("/settings", json={"accept_agreements": True})
+    assert client.get("/settings").json()["accept_agreements"] is True
+    assert client.get("/settings").json()["accept_agreements_scope"] == "this session only"
+
+    # Nothing about it is written down: the saved profile has no opinion.
+    assert client.get("/profile").json()["accept_agreements"] is False

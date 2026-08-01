@@ -3,6 +3,17 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.31.0
+
+- **The agreements switch saves, and lasts one session.** It had been added to
+  the profile and to the options page but not to the settings endpoint, so it
+  was dropped in transit both ways and unticked itself on save. It now goes
+  through like every other preference &mdash; and deliberately lives in memory
+  rather than on disk, so it switches itself off when the service restarts. A
+  decision with legal weight is one you make when you sit down to apply, not one
+  left running for months because of an afternoon's clicking. Nothing about it
+  is written down.
+
 ## 1.30.0
 
 - **A tick box is answered by ticking it.** It carries no options of its own, so

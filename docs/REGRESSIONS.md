@@ -691,3 +691,14 @@ arbitration agreement came back as somewhere to type, which is not how anyone
 accepts one.
 *Mechanism.* A tick box is answered by ticking it or not, so those are the two
 things offered.
+
+**91. A setting unticked itself the moment it was saved.** The agreements switch
+was added to the profile and to the options page but not to the settings
+endpoint, so it was dropped in transit both ways: the save carried nothing and
+the reload read nothing back.
+*Mechanism.* It goes through /settings like every other preference -- and lives
+in memory for the length of the session rather than on disk, because something
+with legal weight should be chosen when you sit down to apply rather than left
+switched on for months. There are tests for saving it, unsaving it, leaving it
+alone while saving something else, and for the saved profile never learning
+about it at all.

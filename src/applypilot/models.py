@@ -283,13 +283,13 @@ class Profile(BaseModel):
     #: separately by submission_policy and is never implied by this.
     auto_advance: bool = False
     #: Tick the agreements an application requires -- terms, arbitration,
-    #: privacy consent -- rather than stopping to ask each time. Off by default,
-    #: because it is the one setting here that has legal weight; on, because
-    #: reading every arbitration clause on every application is not what anyone
-    #: actually does, and pretending otherwise just makes the tool slower
-    #: without making anyone better informed. The wording of whatever was
-    #: agreed to is written into the activity log either way, so there is a
-    #: record of it rather than a silent tick.
+    #: privacy consent -- rather than stopping to ask each time.
+    #:
+    #: Never read from here and never written here. The service holds the answer
+    #: in memory for as long as it is running and hands it in on each plan, so
+    #: something with legal weight is chosen again rather than left switched on
+    #: for months because of one afternoon's clicking. The field exists only so
+    #: the mapper has somewhere to read it from.
     accept_agreements: bool = False
     #: Attach the resume on file whenever a form asks for one. Attaching a
     #: document you uploaded yourself, to a form you are filling, is the whole
