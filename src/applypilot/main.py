@@ -106,6 +106,7 @@ class SettingsPayload(BaseModel):
     prefer_easy_apply: bool | None = None
     answer_demographics: bool | None = None
     auto_advance: bool | None = None
+    auto_attach_resume: bool | None = None
 
 
 @app.get("/settings")
@@ -118,6 +119,7 @@ def get_settings() -> dict[str, Any]:
         "prefer_easy_apply": profile.prefer_easy_apply,
         "answer_demographics": profile.answer_demographics,
         "auto_advance": profile.auto_advance,
+        "auto_attach_resume": profile.auto_attach_resume,
         "authorised_sign_in_hosts": session_sign_in.authorised_hosts(),
     }
 
@@ -139,6 +141,8 @@ def put_settings(payload: SettingsPayload) -> dict[str, Any]:
         profile.answer_demographics = payload.answer_demographics
     if payload.auto_advance is not None:
         profile.auto_advance = payload.auto_advance
+    if payload.auto_attach_resume is not None:
+        profile.auto_attach_resume = payload.auto_attach_resume
     store.save_profile(profile)
     return get_settings()
 
@@ -320,6 +324,28 @@ def tailored_resume(payload: TailorRequest) -> dict[str, Any]:
         "ordering": built.ordering,
         "highlighted_skills": built.highlighted_skills,
         "notes": built.notes,
+    }
+
+
+@app.get("/documents/{document_id}/content")
+def document_content(document_id: str) -> dict[str, str]:
+    """The bytes of a stored document, for the service worker to attach.
+
+    Base64 because it travels through a message to the extension, which builds
+    the File itself. The page is never handed a way to reach this service.
+    """
+    import base64
+
+    found = store.read_document(document_id)
+    if found is None:
+        raise HTTPException(404, "no such document")
+    filename, data = found
+    return {
+        "filename": filename,
+        "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if filename.lower().endswith(".docx")
+        else "application/octet-stream",
+        "base64": base64.b64encode(data).decode("ascii"),
     }
 
 

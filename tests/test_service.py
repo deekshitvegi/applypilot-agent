@@ -383,3 +383,34 @@ def test_the_api_key_is_stored_but_never_read_back(client):
     body = client.get("/settings").json()
     assert body["model_configured"] is True
     assert "test-key-not-a-real-one" not in str(body)
+
+
+def test_a_stored_document_can_be_fetched_for_attaching(client):
+    upload = client.post(
+        "/resume", files={"file": ("resume.docx", make_resume(), "application/octet-stream")}
+    ).json()
+    document_id = upload["document"]["id"]
+
+    body = client.get(f"/documents/{document_id}/content").json()
+    assert body["filename"] == "resume.docx"
+    assert body["mime"].endswith("wordprocessingml.document")
+
+    import base64
+
+    assert base64.b64decode(body["base64"]) == make_resume(), "the bytes come back intact"
+    assert client.get("/documents/nope/content").status_code == 404
+
+
+def test_attaching_the_resume_is_on_by_default_and_can_be_turned_off(client):
+    assert client.get("/settings").json()["auto_attach_resume"] is True
+    client.put("/settings", json={"auto_attach_resume": False})
+    assert client.get("/settings").json()["auto_attach_resume"] is False
+
+
+def test_history_answers_land_in_the_record_they_belong_to(client):
+    client.post("/resume", files={"file": ("resume.docx", make_resume(), "application/octet-stream")})
+    client.post("/profile/fact", json={"fact_key": "education.gpa", "value": "3.8", "entry": 0})
+
+    profile = client.get("/profile").json()
+    assert profile["education"][0]["gpa"] == "3.8"
+    assert "education.gpa" not in profile["facts"], "not into the flat facts, where nothing reads it"

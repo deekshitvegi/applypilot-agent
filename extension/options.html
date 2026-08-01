@@ -71,6 +71,10 @@
       Prefer a job board's quick apply over the employer's own site
     </label>
     <label class="check">
+      <input id="auto-attach" type="checkbox">
+      Attach my r&eacute;sum&eacute; whenever a form asks for one
+    </label>
+    <label class="check">
       <input id="demographics" type="checkbox">
       Answer the voluntary questions (gender, race, veteran, disability) from my saved answers
     </label>
@@ -85,23 +89,32 @@
     <h2>Your answers</h2>
     <p class="muted">Anything blank here is something a form will stop and ask you about.</p>
     <div id="facts" class="grid"></div>
-    <button id="save-facts" class="primary">Save answers</button>
+    <div class="row"><button id="save-facts" class="primary">Save answers</button><span id="facts-saved" class="muted tiny"></span></div>
   </section>
 
   <section>
     <h2>Education</h2>
     <div id="education"></div>
-    <button id="add-education" class="ghost">Add an entry</button>
+    <div class="row">
+      <button id="save-education" class="primary">Save education</button>
+      <button id="add-education" class="ghost">Add an entry</button>
+      <span id="education-saved" class="muted tiny"></span>
+    </div>
   </section>
 
   <section>
     <h2>Work history</h2>
     <p class="muted">
-      What you did in each role, as your r&eacute;sum&eacute; states it. This is what a
-      tailored r&eacute;sum&eacute; is built from, so correcting it here corrects that too.
+      What you did in each role, as your r&eacute;sum&eacute; states it &mdash; one bullet
+      point per line. This is what a tailored r&eacute;sum&eacute; is built from, so
+      correcting it here corrects that too.
     </p>
     <div id="experience"></div>
-    <button id="add-experience" class="ghost">Add an entry</button>
+    <div class="row">
+      <button id="save-experience" class="primary">Save work history</button>
+      <button id="add-experience" class="ghost">Add an entry</button>
+      <span id="experience-saved" class="muted tiny"></span>
+    </div>
   </section>
 
   <section>

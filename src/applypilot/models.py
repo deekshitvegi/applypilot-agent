@@ -282,6 +282,10 @@ class Profile(BaseModel):
     #: Continue each time. Off by default; pressing final Submit is governed
     #: separately by submission_policy and is never implied by this.
     auto_advance: bool = False
+    #: Attach the resume on file whenever a form asks for one. Attaching a
+    #: document you uploaded yourself, to a form you are filling, is the whole
+    #: point; it is a toggle because it is still an action on a page.
+    auto_attach_resume: bool = True
     updated_at: datetime = Field(default_factory=_now)
 
     def fact(self, key: str) -> str:

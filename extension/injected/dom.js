@@ -262,6 +262,7 @@
 
   function splitIdentifier(text) {
     return String(text || "")
+      .replace(/[[\]()<>{}]+/g, " ")
       .replace(/[_\-.]+/g, " ")
       .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
       .replace(/\s+/g, " ")
@@ -301,6 +302,15 @@
     let depth = 0;
     while (node && depth < 5) {
       depth += 1;
+      // A form is not obliged to use a heading tag. Plenty style "Education"
+      // and "Work experience" as ordinary coloured divs, and reading only
+      // <h1>-<h5> found no section at all -- which blocked every education and
+      // employment field from resolving, on a page that had the answers.
+      //
+      // A plain block only counts as a heading once we have walked up to a
+      // container holding several fields. Below that, the short text sitting
+      // before a control is that control's own label.
+      const multiField = controlCount(node) >= 2;
       let sibling = node.previousElementSibling;
       while (sibling) {
         if (sibling.matches("h1,h2,h3,h4,h5,legend,[role='heading']")) {
@@ -311,6 +321,12 @@
         if (nested && !sibling.querySelector("input,select,textarea")) {
           const text = textOf(nested);
           if (text) return text;
+        }
+        if (multiField && !sibling.querySelector("input,select,textarea,button")) {
+          const text = textOf(sibling);
+          if (text && text.length <= 60 && /[a-z]/i.test(text) && !isDecoration(text)) {
+            return text;
+          }
         }
         sibling = sibling.previousElementSibling;
       }

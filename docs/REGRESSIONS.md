@@ -314,3 +314,23 @@ was asked for is set again, for up to three further passes. Filling is
 idempotent, so a pass that finds nothing wrong costs nothing, and the panel says
 which fields the page changed.
 → `test_asterisk_labels.py::test_a_field_the_page_sets_for_itself_is_corrected_on_the_next_pass`
+
+**43. A section heading that is not a heading tag.** A form styled "Education"
+and "Work experience" as coloured divs. Reading only h1-h5 found no section, so
+every education and employment field was blocked from resolving on a page whose
+answers were all in the profile already.
+*Mechanism.* A plain block counts as a heading once the walk is above a
+container holding several fields. Below that, the short text before a control is
+that control's own label, not a section name.
+→ `test_styled_headings.py::test_a_styled_div_is_recognised_as_the_section_heading`
+
+**44. A history record answered in the wrong kind of block.** "Start year" fitted
+an education entry and a job equally well, and an even fit is refused, so a
+field with an obvious answer came back as a question.
+*Mechanism.* Education records answer in education blocks and employment records
+in employment blocks; the heading says which.
+
+**45. A generic word owned by a specific fact blocked two others.** The
+notice-period question owned "start", which is the ordinary word in "Start date"
+and "Start year", so neither history start date could ever resolve.
+*Mechanism.* Only words that dominate a label are owned. "start" is not one.

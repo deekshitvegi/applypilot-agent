@@ -3,6 +3,25 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.6.0
+
+- **A section heading does not have to be a heading tag.** A form styling
+  "Education" and "Work experience" as coloured divs looked, to the scanner, as
+  though it had no sections at all — which blocked every education and
+  employment field from resolving on a page whose answers were all saved.
+- **A history record only answers inside its own kind of block.** "Start year"
+  fitted an education entry and a job equally well, and an even fit is refused,
+  so a field with an obvious answer came back as a question.
+- **"start" is no longer owned by the notice-period question.** It is the
+  ordinary word in "Start date" and "Start year", and owning it had been
+  blocking both history start dates from ever resolving.
+- **Your résumé is attached automatically** when a form asks for one, with a
+  toggle in Settings. Attaching is verified from the control's own file list.
+- **Education and work history have their own Save buttons.** One Save at the
+  bottom of a long page did not read as saving the sections above it.
+- Work history is described as one bullet point per line, which is how it is
+  written out again.
+
 ## 1.5.0
 
 - **A field the page fills in for itself is corrected.** Choosing a country made

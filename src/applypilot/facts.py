@@ -247,7 +247,10 @@ FACTS: tuple[FactSpec, ...] = (
         "notice_period", "notice period", "notice", "how much notice",
         "when can you start", "earliest start date", "availability to start",
         "available start date", "start date availability",
-        topics=("notice", "start"),
+        # "start" is not owned here: it is the ordinary word in "Start date"
+        # and "Start year", and owning it blocked both history start dates from
+        # ever resolving.
+        topics=("notice",),
         prompt="Notice period or earliest start date", onboarding_group="preferences",
     ),
     _f(

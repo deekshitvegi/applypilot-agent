@@ -93,15 +93,25 @@ TOPIC_RANK: dict[str, int] = {
     "nationality": 3,
 }
 
-#: Headings that mark a block as being about one education or employment entry.
-_HISTORY_SECTION_WORDS = frozenset(
+#: Headings that mark a block as being about one education entry.
+_EDUCATION_SECTION_WORDS = frozenset(
     {
         "education", "educational", "school", "schools", "academic", "degree",
-        "degrees", "qualification", "qualifications", "experience", "employment",
-        "work", "history", "job", "jobs", "position", "positions", "career",
-        "professional",
+        "degrees", "qualification", "qualifications", "university", "college",
+        "studies", "study",
     }
 )
+
+#: Headings that mark a block as being about one employment entry.
+_EMPLOYMENT_SECTION_WORDS = frozenset(
+    {
+        "experience", "employment", "work", "history", "job", "jobs", "position",
+        "positions", "career", "professional", "employer", "employers",
+    }
+)
+
+#: Either kind.
+_HISTORY_SECTION_WORDS = _EDUCATION_SECTION_WORDS | _EMPLOYMENT_SECTION_WORDS
 
 SCORE_EXACT = 100
 SCORE_SAME_WORDS = 98
@@ -240,10 +250,30 @@ def _in_history_block(field: FieldObservation) -> bool:
     return bool(section_words & _HISTORY_SECTION_WORDS)
 
 
+def _wrong_kind_of_block(spec: FactSpec, field: FieldObservation) -> str:
+    """An education record does not answer a question in an employment block.
+
+    Without this, "Start year" fitted both an education entry and a job equally
+    well, and an even fit is refused -- so a field that had an obvious answer
+    was handed back as a question.
+    """
+    words = set(tokens(field.section))
+    education = bool(words & _EDUCATION_SECTION_WORDS)
+    employment = bool(words & _EMPLOYMENT_SECTION_WORDS)
+    if spec.record == "experience" and education and not employment:
+        return "this block is about education, not employment"
+    if spec.record == "education" and employment and not education:
+        return "this block is about employment, not education"
+    return ""
+
+
 def _history_allowed(spec: FactSpec, field: FieldObservation) -> str:
     label_norm = normalise(field.display_label)
     unmistakable = label_norm in HISTORY_ONLY_LABELS
     in_block = _in_history_block(field)
+    wrong_kind = _wrong_kind_of_block(spec, field)
+    if wrong_kind:
+        return wrong_kind
     if not unmistakable and not in_block:
         return (
             "history fields are short field names inside an education or "

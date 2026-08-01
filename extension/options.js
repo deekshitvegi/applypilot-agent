@@ -144,7 +144,7 @@ function renderRecords(hostId, records, fields, extras) {
       // Read out of the resume and kept: it is what a tailored resume reorders,
       // and there was no way to see or correct it.
       card.appendChild(
-        longField("What you did here", record.description, (value) => {
+        longField("What you did here — one bullet point per line", record.description, (value) => {
           record.description = value;
         })
       );
@@ -185,6 +185,7 @@ async function refresh() {
   el("submission").value = settings.submission_policy;
   el("easy-apply").checked = settings.prefer_easy_apply;
   el("demographics").checked = settings.answer_demographics;
+  el("auto-attach").checked = settings.auto_attach_resume !== false;
 
   profile = await service("/profile");
   renderFacts();
@@ -289,15 +290,27 @@ el("save-behaviour").addEventListener("click", async () => {
   await send("PUT", "/settings", {
     submission_policy: el("submission").value,
     prefer_easy_apply: el("easy-apply").checked,
+    auto_attach_resume: el("auto-attach").checked,
     answer_demographics: el("demographics").checked,
   });
   refresh();
 });
 
-el("save-facts").addEventListener("click", async () => {
+/** Every Save button writes the whole profile; only the wording differs. */
+async function saveProfile(noteId) {
   await send("PUT", "/profile", profile);
+  if (noteId) {
+    el(noteId).textContent = "Saved.";
+    setTimeout(() => {
+      el(noteId).textContent = "";
+    }, 2000);
+  }
   refresh();
-});
+}
+
+el("save-facts").addEventListener("click", () => saveProfile("facts-saved"));
+el("save-education").addEventListener("click", () => saveProfile("education-saved"));
+el("save-experience").addEventListener("click", () => saveProfile("experience-saved"));
 
 el("add-education").addEventListener("click", () => {
   profile.education.push({ school: "", degree: "", field_of_study: "" });

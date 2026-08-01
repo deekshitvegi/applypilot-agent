@@ -40,7 +40,9 @@ const state = {
   checklistFilter: "all",
   unread: 0,
   autoContinue: false,
+  autoAttach: true,
   submissionPolicy: "confirm",
+  primaryResumeId: "",
 };
 
 /* ------------------------------------------------------------------ plumbing */
@@ -385,6 +387,18 @@ async function renderQuestion() {
   card.classList.add("hidden");
   el("idle").classList.add("hidden");
 
+  // A form asking for the resume already on file does not need to ask anyone.
+  if (
+    question.control === "file" &&
+    state.autoAttach &&
+    state.primaryResumeId &&
+    /resume|cv|curriculum/i.test(question.fact_key || question.label) &&
+    !question._attached
+  ) {
+    question._attached = true;
+    if (await attachResume(question)) return;
+  }
+
   // Its choices may not be known yet. Open the control and read them before
   // asking anyone anything -- and if a saved answer fits one, do not ask at all.
   if (question.options_pending && !question._resolved) {
@@ -437,6 +451,34 @@ const PLACEHOLDER_LABEL =
 
 function isPlaceholderLabel(label) {
   return PLACEHOLDER_LABEL.test(String(label || "").trim());
+}
+
+/** Put the resume on file into a file control, and verify it went in. */
+async function attachResume(question) {
+  try {
+    const document_ = await service("/documents/" + state.primaryResumeId + "/content");
+    const result = await browser({
+      type: "attach",
+      tabId: state.tab.id,
+      frameId: frameOf(question.fingerprint),
+      fingerprint: question.fingerprint,
+      base64: document_.base64,
+      filename: document_.filename,
+      mime: document_.mime,
+    });
+    state.results = state.results
+      .filter((r) => r.fingerprint !== question.fingerprint)
+      .concat(result);
+    reportOne(result);
+    if (result && (result.outcome === "verified" || result.outcome === "accepted")) {
+      state.questionIndex += 1;
+      await renderQuestion();
+      return true;
+    }
+  } catch (err) {
+    say("I could not attach your resume: " + err.message, "bad");
+  }
+  return false;
 }
 
 function showResolving(question) {
@@ -1166,12 +1208,19 @@ toggle("log-toggle", "log");
   try {
     const settings = await service("/settings");
     state.autoContinue = Boolean(settings.auto_advance);
+    state.autoAttach = settings.auto_attach_resume !== false;
     state.submissionPolicy = settings.submission_policy || "confirm";
     el("auto-continue").checked = state.autoContinue;
     if (state.autoContinue) {
       el("auto-note").textContent =
         "I will press Continue myself and stop at anything I cannot answer.";
     }
+  } catch (err) {
+    /* the health check already reported the service being down */
+  }
+  try {
+    const documents = await service("/documents");
+    state.primaryResumeId = documents.primary_resume_id || "";
   } catch (err) {
     /* the health check already reported the service being down */
   }
