@@ -82,11 +82,30 @@
     return "";
   }
 
+  /**
+   * The control that will actually be submitted for this widget.
+   *
+   * Usually a hidden input, but a widget drawn over a real <select> keeps the
+   * select itself, out of sight, holding the value. That select is the best
+   * evidence there is -- it is what the employer receives.
+   */
   function backingInput(el) {
-    const widget = widgetOf(el);
-    if (!widget) return null;
-    const hidden = D.deepQuery("input[type='hidden']", widget).find((node) => node.value);
-    return hidden || null;
+    let scope = widgetOf(el);
+    for (let up = 0; up < 3 && scope && scope.tagName !== "BODY"; up += 1) {
+      const hidden = D.deepQuery("input[type='hidden']", scope).find((node) => node.value);
+      if (hidden) return hidden;
+      const shadowed = D.deepQuery("select", scope).find(
+        (node) => node !== el && !D.isVisible(node) && node.value
+      );
+      if (shadowed) {
+        const picked = Array.from(shadowed.selectedOptions || [])
+          .map((option) => (option.textContent || "").trim())
+          .filter((text) => text && !isPlaceholder(text));
+        if (picked.length) return { value: picked.join(", "), _label: picked.join(", ") };
+      }
+      scope = scope.parentElement;
+    }
+    return null;
   }
 
   function selectedInOwnedPopup(el) {
@@ -147,7 +166,7 @@
 
     const hidden = backingInput(el);
     if (hidden) {
-      const label = labelForBackingValue(el, hidden.value);
+      const label = hidden._label || labelForBackingValue(el, hidden.value);
       return { value: label || hidden.value, signal: "hidden_backing_input" };
     }
 

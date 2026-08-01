@@ -111,3 +111,85 @@ def test_an_eeo_question_with_no_label_still_reaches_its_fact(scan):
 
     keys = [m.spec.key for m in match_facts(FieldObservation.model_validate(race))]
     assert keys[:1] == ["race_ethnicity"], keys
+
+
+# ---------------------------------------------------------------------------
+# 54, 55, 56. Read off the live page and fixed there.
+# ---------------------------------------------------------------------------
+
+
+def test_the_search_box_is_found_several_levels_above_the_results(open_fixture):
+    """A dropdown is laid out [search] [results [list]].
+
+    Walking up from the list finds the search box; stopping at the list's own
+    parent did not, which is why a picker that types perfectly well was never
+    typed into at all.
+    """
+    page = open_fixture("detached_dropdown_picker.html")
+    page.evaluate(
+        """() => {
+          const drop = document.getElementById('drop');
+          const list = document.getElementById('results');
+          // Nest the list one level deeper, the way a real dropdown does.
+          const results = document.createElement('span');
+          results.className = 'results-wrapper';
+          drop.appendChild(results);
+          results.appendChild(list);
+        }"""
+    )
+    field, _ = school_of(page)
+    result = page.evaluate(
+        "async (a) => await ApplyPilot.act.perform(a)",
+        {
+            "kind": "choose",
+            "fingerprint": field["fingerprint"],
+            "option_label": "IIITDM Kurnool",
+        },
+    )
+    assert result["outcome"] == "verified", result
+
+
+def test_an_add_control_that_is_a_bare_span_is_found(open_fixture):
+    page = open_fixture("detached_dropdown_picker.html")
+    page.evaluate(
+        """() => {
+          const span = document.createElement('span');
+          span.textContent = '+ Add other education';
+          document.querySelector('main').appendChild(span);
+        }"""
+    )
+    observation = page.evaluate("() => ApplyPilot.scan.run()")
+    assert "+ Add other education" in [c["text"] for c in observation["add_controls"]]
+
+
+def test_a_wrapper_around_an_add_control_is_not_offered_as_well(open_fixture):
+    page = open_fixture("detached_dropdown_picker.html")
+    page.evaluate(
+        """() => {
+          const outer = document.createElement('div');
+          const inner = document.createElement('span');
+          inner.textContent = '+ Add other education';
+          outer.appendChild(inner);
+          document.querySelector('main').appendChild(outer);
+        }"""
+    )
+    observation = page.evaluate("() => ApplyPilot.scan.run()")
+    adds = [c["text"] for c in observation["add_controls"]]
+    assert adds.count("+ Add other education") == 1, adds
+
+
+def test_a_file_input_hidden_behind_a_dropzone_is_still_a_field(open_fixture):
+    page = open_fixture("detached_dropdown_picker.html")
+    page.evaluate(
+        """() => {
+          const zone = document.createElement('div');
+          zone.style.height = '60px';
+          zone.innerHTML = '<label class="main-label">Resume</label>' +
+            '<input type="file" name="resume" style="display:none">';
+          document.querySelector('.block').appendChild(zone);
+        }"""
+    )
+    observation = page.evaluate("() => ApplyPilot.scan.run()")
+    files = [f for f in observation["fields"] if f["control"] == "file"]
+    assert len(files) == 1, [f["label"] for f in observation["fields"]]
+    assert files[0]["label"] == "Resume"

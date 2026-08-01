@@ -245,13 +245,16 @@
       D.isVisible(node)
     );
     if (inWidget) return inWidget;
-    // The search box usually sits beside the results rather than inside them,
-    // so the dropdown's own container is looked at as well.
-    const popup = D.ownedPopup(el);
-    for (const scope of [popup, popup && popup.parentElement]) {
-      if (!scope) continue;
+    // The search box sits beside the results, not inside them, and often a
+    // couple of levels up: a dropdown is typically laid out as
+    // [search] [results [list]]. Walking up from the list finds it; stopping at
+    // the list's own parent did not, which is why a picker that types perfectly
+    // well was never typed into at all.
+    let scope = D.ownedPopup(el);
+    for (let up = 0; up < 4 && scope && scope.tagName !== "BODY"; up += 1) {
       const box = D.deepQuery("input,textarea", scope).find((node) => D.isVisible(node));
       if (box) return box;
+      scope = scope.parentElement;
     }
     return null;
   }

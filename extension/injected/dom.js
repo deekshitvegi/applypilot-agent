@@ -126,7 +126,22 @@
     if (el.hidden) return false;
     const style = getComputedStyle(el);
     if (!style) return false;
-    if (style.display === "none" || style.visibility === "hidden") return false;
+    const isFile = (el.tagName || "").toLowerCase() === "input" && (el.type || "") === "file";
+
+    // A file input is routinely hidden outright and driven by a styled dropzone
+    // beside it -- that is the whole pattern. It is still the control a document
+    // gets attached to, and the attachment is verified from its own file list
+    // afterwards, so being out of sight does not put it out of reach.
+    if (style.display === "none" || style.visibility === "hidden") {
+      if (!isFile) return false;
+      const shown = ancestors(el)
+        .slice(0, 5)
+        .some((node) => {
+          const box = node.getBoundingClientRect();
+          return box.width > 1 && box.height > 1;
+        });
+      return shown;
+    }
 
     // A checkbox, radio or file input is routinely drawn as a 1px transparent
     // control sitting behind a styled box. The box is what the applicant sees,

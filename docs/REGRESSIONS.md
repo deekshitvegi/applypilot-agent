@@ -407,3 +407,26 @@ the watcher does nothing while any of it is. It also waits for the page to hold
 the same shape across two checks before acting, and ignores a page it has
 already planned against. A watcher that cannot tell its own effects from the
 world's is worse than no watcher.
+
+**54. The search box was two levels above where it was looked for.** A dropdown
+is laid out `[search] [results [list]]`. Walking up from the list one level
+reached the results wrapper, not the dropdown, so a picker that types perfectly
+well was never typed into at all -- and the answer was reported missing from a
+list that had never been searched. Confirmed against the live control: the old
+rule found nothing, the new one finds the box at the third level up.
+*Mechanism.* The walk from the list goes up to four levels, stopping at body.
+→ `test_detached_dropdown.py::test_the_search_box_is_found_several_levels_above_the_results`
+
+**55. "+ Add other education" is a bare span.** No role, no href, no button. The
+search for clickable controls looked only at buttons, links and role=button, so
+there was nothing to press and the extra entries were never added.
+*Mechanism.* Any visible element whose own text matches is a candidate, and only
+the innermost element carrying that text counts, so a wrapper does not answer to
+it as well.
+
+**56. The résumé upload is a file input that is display:none.** It sits behind a
+styled dropzone, which is the whole pattern, and the scan skipped it as hidden --
+so there was never a file control to attach anything to.
+*Mechanism.* A file input hidden outright still counts when something visible
+wraps it. Attaching to it is how the widget is meant to work, and the attachment
+is still verified from the input's own file list afterwards.

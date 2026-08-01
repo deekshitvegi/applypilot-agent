@@ -3,6 +3,20 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.11.0
+
+All three found by driving the live application, and confirmed there.
+
+- **The school picker fills.** Its search box sits two levels above where the
+  search for it stopped, so a control that types perfectly well was never typed
+  into — and the answer was reported missing from a list that had never been
+  searched.
+- **"+ Add other education" gets pressed.** It is a bare span with no role and
+  no href, so the search for clickable controls never saw it and the extra
+  entries were never added.
+- **The résumé attaches.** Its file input is `display:none` behind a styled
+  dropzone, so the scan skipped it and there was no file control to attach to.
+
 ## 1.10.1
 
 Fixes a regression introduced in 1.7.0.

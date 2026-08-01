@@ -132,11 +132,35 @@
     ).trim();
   }
 
+  /**
+   * Controls whose text matches, whatever element the page used for them.
+   *
+   * "+ Add other education" is a bare <span> with no role and no href on at
+   * least one real application, so looking only at buttons and links found
+   * nothing to press and the extra entries were never added.
+   *
+   * Only the innermost element carrying the text counts, so a wrapper three
+   * levels up does not also answer to it.
+   */
   function matchingControls(pattern) {
     const out = [];
-    for (const el of clickableControls()) {
+    const seen = new Set();
+    const wide = D.deepQuery(
+      "button,a,input[type='submit'],input[type='button'],[role='button'],[onclick],[tabindex],span,div,li",
+      document
+    );
+    for (const el of wide) {
+      if (!D.isVisible(el)) continue;
       const text = controlText(el);
-      if (text && pattern.test(text)) out.push(describeControl(el, text));
+      if (!text || text.length > 60 || !pattern.test(text)) continue;
+      // The innermost element with this text is the one that gets clicked.
+      const inner = Array.from(el.children).some(
+        (child) => D.textOf(child) === text || (child.innerText || "").trim() === text
+      );
+      if (inner) continue;
+      if (seen.has(text)) continue;
+      seen.add(text);
+      out.push(describeControl(el, text));
     }
     return out;
   }
