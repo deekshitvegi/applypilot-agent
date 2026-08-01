@@ -3,6 +3,25 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.22.0
+
+- **The same question asked a different way gets the same answer.** A saved "25"
+  now answers a form offering "18-24 / 25-35 / 36-50", and a saved GPA of 3.34
+  answers "3.0-3.5". Ranges, "50+", "under 18" and "5 to 10 years" are all
+  understood. The arithmetic is done deterministically rather than guessed at,
+  only a label that is entirely a band counts -- "Building 25-35" is still a
+  place -- and two bands that both contain the number is a tie, which is still a
+  question rather than a coin flip.
+- **The veteran question gets asked.** "Please identify your Veteran status" did
+  not look like the veteran status field, because the request in front of it was
+  being read as part of the name. A leading request is stripped and the label
+  tried again, but only when the label as written matched nothing.
+- **"Please select an option" works now.** The rule added in 1.17.0 never fired
+  on the real page: it looked for a complaint by class name, and that form uses
+  a plain red span. It reads the wording instead -- narrowly, because
+  "*Please Check the box below:" is a label, not a complaint -- and stops
+  looking at the first ancestor belonging to a different question.
+
 ## 1.21.0
 
 - **Filling a page is 40x faster.** Measured on a form of thirty fields:

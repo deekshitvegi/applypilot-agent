@@ -64,6 +64,7 @@ from .text import (
     pretty_label,
     tokens,
     trailing_phrase_prefix,
+    without_request,
 )
 
 #: How specific a subject word is. When a label mentions several subjects, only
@@ -290,7 +291,18 @@ def match_facts(field: FieldObservation) -> list[FactMatch]:
     # A label of "*" carries no words once normalised. Treating it as a label
     # anyway is what let a whole form come back matching nothing at all.
     if label and normalise(label):
-        return _match_against_label(field, label, attribute_mode=False)
+        matches = _match_against_label(field, label, attribute_mode=False)
+        if matches:
+            return matches
+        # "Please identify your Veteran status" is the veteran status field.
+        # The request in front of it is manners, not part of the name, and a
+        # whole self-identification section went unasked because of it. Only
+        # tried when the label as written matched nothing, so a field that
+        # genuinely begins with one of those words is unaffected.
+        plain = without_request(label)
+        if plain != label and normalise(plain):
+            return _match_against_label(field, plain, attribute_mode=False)
+        return matches
     if field.attr_label:
         # No visible label at all. The control's own naming is the last resort
         # and only an exact hit counts, because employers name fields carelessly.

@@ -585,3 +585,27 @@ cost a slower lookup, never the wrong control.
 the work. A page's actions now make one trip, grouped by frame, still in the
 planned order, still each verified from the page's own state.
 Measured after: 5122ms to 120ms. `scripts/bench_fill.py` re-runs it.
+
+**80. The same fact, asked at a different resolution, was asked again.** A saved
+"25" met a form offering "18-24 / 25-35 / 36-50" and matched nothing, so a
+question already answered came back.
+*Mechanism.* A saved number selects the band that contains it -- ranges, "50+",
+"under 18", "5 to 10 years". The arithmetic is done deterministically, not
+guessed at, and only a label that is entirely a band counts, so "Building 25-35"
+is still a place. Two bands both containing the number is a tie, and a tie is
+still a question.
+
+**81. A whole self-identification section went unasked.** "Please identify your
+Veteran status" did not look like the veteran status field, because the request
+in front of it was being read as part of the name.
+*Mechanism.* A leading request phrase is stripped and the label tried again --
+only when the label as written matched nothing, so a field genuinely called
+"Select" is unaffected.
+
+**82. Every field on a step looked required.** The rule added for 75 read
+"*Please Check the box below:" -- a label -- as a form complaining. And the
+search for a complaint climbed blindly, so one red line anywhere above a group
+marked all of it.
+*Mechanism.* The wording is narrow: a complaint says what is missing, not what
+to do. And the search stops at the first ancestor holding a control that belongs
+to a different question.

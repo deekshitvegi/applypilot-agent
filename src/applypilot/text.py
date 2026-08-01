@@ -139,6 +139,25 @@ _TOKEN_RE = re.compile(r"[a-z0-9]+(?:'[a-z]+)?")
 _TRAILING_DIGITS_RE = re.compile(r"(\d+)\s*$")
 
 
+#: How a form asks, as opposed to what it is asking for. "Please identify your
+#: Veteran status" is the veteran status field; the request in front of it is
+#: manners, not part of the name. Stripped only from the front, and only when
+#: something is left behind.
+_REQUEST_RE = re.compile(
+    r"^(please\s+)?"
+    r"(identify|indicate|select|choose|specify|provide|enter|tell\s+us|let\s+us\s+know|"
+    r"complete|confirm|state|give\s+us|share)\s+"
+    r"(me\s+|us\s+)?(your|the|his|her|their|a|an)?\s*",
+    re.IGNORECASE,
+)
+
+
+def without_request(text: str) -> str:
+    """A label with any leading "please tell us your ..." taken off the front."""
+    stripped = _REQUEST_RE.sub("", text or "", count=1).strip()
+    return stripped or (text or "")
+
+
 def normalise(text: str) -> str:
     """Fold a label to a comparable form, keeping digits and word order."""
     if not text:

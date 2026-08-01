@@ -7,6 +7,7 @@ it, and a control's own "No Selection" row is never an answer.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .models import Option
@@ -128,6 +129,12 @@ MAX_CONTAINMENT_LENGTH_GAP = 12
 #: Anything below this is not offered as a selection.
 ACCEPT_THRESHOLD = 400
 
+#: A number falling inside a band the option describes. Comfortably accepted:
+#: the arithmetic either holds or it does not, so there is nothing here to be
+#: half sure about. Two bands both containing the number would be a tie, and a
+#: tie is still a question rather than a coin flip.
+BAND_SCORE = 700
+
 
 @dataclass(frozen=True)
 class OptionMatch:
@@ -189,11 +196,71 @@ def _score(desired: str, option_label: str, groups: tuple[str, ...]) -> tuple[in
     return 0, "no relation"
 
 
+#: A band of numbers an option can stand for. Written out rather than guessed
+#: at: every shape here is one a real form uses.
+_BAND_PATTERNS = (
+    # 18-24, 25 to 35, 51 - 100
+    (r"^(\d+(?:\.\d+)?)\s*(?:-|--|to|through|thru|and)\s*(\d+(?:\.\d+)?)$", "between"),
+    # 50+, 50 or more, over 50, 51 and above, at least 51
+    (r"^(?:over|above|more\s+than|greater\s+than)\s+(\d+(?:\.\d+)?)$", "above"),
+    (r"^(\d+(?:\.\d+)?)\s*\+$", "from"),
+    (r"^(\d+(?:\.\d+)?)\s+(?:or|and)\s+(?:more|above|over|older|greater|higher)$", "from"),
+    (r"^(?:at\s+least|minimum\s+of|no\s+less\s+than)\s+(\d+(?:\.\d+)?)$", "from"),
+    # Under 18, less than 18, up to 24, 24 or fewer
+    (r"^(?:under|below|less\s+than|fewer\s+than|younger\s+than)\s+(\d+(?:\.\d+)?)$", "below"),
+    (r"^(?:up\s+to|at\s+most|maximum\s+of|no\s+more\s+than)\s+(\d+(?:\.\d+)?)$", "upto"),
+    (r"^(\d+(?:\.\d+)?)\s+(?:or|and)\s+(?:less|fewer|under|below|younger)$", "upto"),
+)
+
+_NUMBER_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*$")
+
+#: A unit a form puts after a band -- "5 to 10 years". Named rather than
+#: allowed generally, so "25-35 Main Street" stays an address.
+_BAND_UNIT_RE = re.compile(
+    r"\s+(years?|yrs?|months?|mos?|weeks?|days?|hours?|hrs?|people|employees|"
+    r"members|staff|percent|%|of\s+experience|years?\s+of\s+experience)$",
+    re.IGNORECASE,
+)
+
+
+def _as_number(text: str) -> float | None:
+    match = _NUMBER_RE.match(str(text or ""))
+    return float(match.group(1)) if match else None
+
+
+def band_contains(label: str, value: float) -> bool:
+    """True when an option stands for a band of numbers that *value* falls in.
+
+    A saved "25" answers a question offering "18-24 / 25-35 / 36-50", which is
+    the same fact asked at a different resolution. The arithmetic is done here
+    rather than guessed at by a model, and only a label that is *entirely* a
+    band counts -- "Region 25-35" is a place, not a range.
+    """
+    text = _BAND_UNIT_RE.sub("", normalise(label)).strip()
+    for pattern, shape in _BAND_PATTERNS:
+        found = re.match(pattern, text, re.IGNORECASE)
+        if not found:
+            continue
+        first = float(found.group(1))
+        if shape == "between":
+            return first <= value <= float(found.group(2))
+        if shape == "above":
+            return value > first
+        if shape == "from":
+            return value >= first
+        if shape == "below":
+            return value < first
+        if shape == "upto":
+            return value <= first
+    return False
+
+
 def rank_options(
     desired: str, options: list[Option], fact_key: str = ""
 ) -> list[OptionMatch]:
     """Every usable option, best first. Placeholders and disabled rows drop out."""
     groups = groups_for(fact_key)
+    number = _as_number(desired)
     ranked: list[OptionMatch] = []
     for option in options:
         if option.disabled:
@@ -202,6 +269,10 @@ def rank_options(
             # A control's own "- Select -" row is furniture, never an answer.
             continue
         score, reason = _score(desired, option.label, groups)
+        if score <= 0 and number is not None and band_contains(option.label, number):
+            # The same fact, asked at a different resolution.
+            score = BAND_SCORE
+            reason = f"{desired} falls inside {option.label}"
         if score <= 0:
             continue
         ranked.append(OptionMatch(option=option, score=score, reason=reason))

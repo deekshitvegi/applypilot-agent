@@ -78,8 +78,23 @@
   }
 
   //: What a form says when it wanted an answer and did not get one.
-  const VALIDATION_TEXT =
-    /(please select|please choose|please enter|please check|please provide|please answer|this field is required|required field|cannot be (blank|empty)|is required|must be (selected|answered|provided))/i;
+  //: Deliberately narrow. "Please Check the box below" is what a field is
+  //: called; "Please select an option" is a form saying it did not get one, and
+  //: reading the first as the second made every field on a step look required.
+  const VALIDATION_TEXT = new RegExp(
+    "(please (select|choose|make|pick)( an?| one)? (option|selection|answer|value|choice)" +
+      "|please (enter|provide|supply) (a |an |your )?(value|answer|response)" +
+      "|please answer this question" +
+      "|this (field|question) is required" +
+      "|required field" +
+      "|cannot be (blank|empty)" +
+      "|(field|question|answer|response|selection) is required" +
+      "|must be (selected|answered|provided|completed)" +
+      "|^required$" +
+      "|^this field is required" +
+      ")",
+    "i"
+  );
 
   /**
    * The page complaining that this control needs an answer.
@@ -94,14 +109,34 @@
     const described =
       D.referencedText(el, "aria-errormessage") || D.referencedText(el, "aria-describedby");
     if (described && VALIDATION_TEXT.test(described)) return true;
-    const box =
-      D.closestDeep(el, "[class*='form-group' i],[class*='question' i],[class*='field' i]") ||
-      (el.parentElement && el.parentElement.parentElement);
-    if (!box) return false;
-    return D.deepQuery(
-      "[role='alert'],[aria-live],[class*='error' i],[class*='invalid' i],[class*='validation' i]",
-      box
-    ).some((node) => D.isVisible(node) && VALIDATION_TEXT.test(D.textOf(node)));
+    // Not by class name. A form is free to render its complaint as a plain red
+    // span with no class worth the name, and one real application does exactly
+    // that -- which is why a step showing "Please select an option" three times
+    // still reported nothing as required. What identifies it is the wording and
+    // where it sits: close to this control, and not wrapped around any control
+    // of its own.
+    // How far up counts: as far as this control's own question reaches, and not
+    // one step further. A complaint under the next question along is that
+    // question's business, and climbing blindly made every field on the step
+    // look required because somewhere above them all, something was in red.
+    const mine = el.getAttribute("name") || "";
+    let box = el.parentElement;
+    while (box && box !== document.body) {
+      const strangers = Array.from(box.querySelectorAll("input,select,textarea")).some(
+        (other) => other !== el && (other.getAttribute("name") || "") !== mine
+      );
+      if (strangers) break;
+      const complained = Array.from(box.querySelectorAll("*")).some((node) => {
+        if (node.contains(el)) return false;
+        if (node.querySelector("input,select,textarea,button")) return false;
+        const text = D.textOf(node);
+        if (!text || text.length > 120 || !VALIDATION_TEXT.test(text)) return false;
+        return D.isVisible(node);
+      });
+      if (complained) return true;
+      box = box.parentElement;
+    }
+    return false;
   }
 
   function isRequired(el, rawLabel) {
