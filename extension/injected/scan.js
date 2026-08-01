@@ -77,9 +77,39 @@
     return false;
   }
 
+  //: What a form says when it wanted an answer and did not get one.
+  const VALIDATION_TEXT =
+    /(please select|please choose|please enter|please check|please provide|please answer|this field is required|required field|cannot be (blank|empty)|is required|must be (selected|answered|provided))/i;
+
+  /**
+   * The page complaining that this control needs an answer.
+   *
+   * The strongest possible evidence that a field is required: the form itself
+   * has just said so, in its own words, on screen. A step whose questions were
+   * all read as optional was filled, continued, and rejected -- and nothing was
+   * asked, because nothing knew anything was missing.
+   */
+  function hasValidationComplaint(el) {
+    if ((el.getAttribute("aria-invalid") || "").toLowerCase() === "true") return true;
+    const described =
+      D.referencedText(el, "aria-errormessage") || D.referencedText(el, "aria-describedby");
+    if (described && VALIDATION_TEXT.test(described)) return true;
+    const box =
+      D.closestDeep(el, "[class*='form-group' i],[class*='question' i],[class*='field' i]") ||
+      (el.parentElement && el.parentElement.parentElement);
+    if (!box) return false;
+    return D.deepQuery(
+      "[role='alert'],[aria-live],[class*='error' i],[class*='invalid' i],[class*='validation' i]",
+      box
+    ).some((node) => D.isVisible(node) && VALIDATION_TEXT.test(D.textOf(node)));
+  }
+
   function isRequired(el, rawLabel) {
     if (el.required) return true;
     if ((el.getAttribute("aria-required") || "").toLowerCase() === "true") return true;
+    // Before the optional marker: a form that has just asked for this outranks
+    // any label decoration saying it could be skipped.
+    if (hasValidationComplaint(el)) return true;
     if (OPTIONAL_MARK.test(rawLabel || "")) return false;
     if (REQUIRED_MARK.test(rawLabel || "")) return true;
     const marked = D.closestDeep(el, "[class*='required' i],[data-required='true']");

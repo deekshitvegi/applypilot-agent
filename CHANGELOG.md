@@ -3,6 +3,20 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.17.0
+
+- **A step is not finished while the form is still asking for things.** Some
+  required questions say so nowhere a machine can see: no attribute, and the
+  asterisk sits in a paragraph above the buttons rather than on a label of their
+  own. They were read as optional, left blank, continued past and rejected --
+  with nothing in the panel to answer. A form saying "Please select an option"
+  about a control now counts as the strongest evidence there is that it is
+  required, and those questions come back to you.
+- An agreement is still never ticked on your behalf. It is asked.
+- **"The page did not answer in time (highlight)" is gone.** Scrolling to a
+  field shared the deadline for real work; it is a courtesy now, with a short
+  deadline and no complaint when it does not land.
+
 ## 1.16.0
 
 - **The next step gets worked on.** Two things stopped it. The panel sampled the

@@ -539,3 +539,18 @@ The panel declared the page stuck and stopped driving, and the next step then
 arrived to an empty panel -- "it did go to the next page but it's not doing
 anything".
 *Mechanism.* Wait for the page to actually become a different page.
+
+**75. A whole step read as optional, so nothing was asked.** Three required
+questions carried no `required` attribute, no aria-required, and their asterisk
+sat in a paragraph above the buttons rather than on a label of their own. They
+were left blank, continued past, and rejected by the form -- with nothing in the
+panel to answer, because nothing knew anything was missing.
+*Mechanism.* A form saying "Please select an option" about a control is the
+strongest evidence there is that the control is required, and it outranks any
+label decoration claiming otherwise.
+
+**76. Scrolling to a field could fail the run.** Highlighting shared the
+deadline for real work, so a slow page filled the activity list with "the page
+did not answer in time (highlight)".
+*Mechanism.* Showing someone where a field is is a courtesy: short deadline, and
+its failure is never reported.

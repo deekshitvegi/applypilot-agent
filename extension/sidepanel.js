@@ -97,14 +97,14 @@ const put = (path, body) =>
  */
 const BROWSER_TIMEOUT = 30000;
 
-function browser(message) {
+function browser(message, timeout) {
   return new Promise((resolve, reject) => {
     let settled = false;
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
       reject(new Error(`the page did not answer in time (${message.type})`));
-    }, BROWSER_TIMEOUT);
+    }, timeout || BROWSER_TIMEOUT);
     chrome.runtime.sendMessage(message, (reply) => {
       if (settled) return;
       settled = true;
@@ -165,6 +165,25 @@ async function until(check, timeout) {
     const waited = Date.now() - started;
     await new Promise((resolve) => setTimeout(resolve, waited < 2000 ? 300 : 1000));
   }
+}
+
+/**
+ * Scroll to a field and flash it.
+ *
+ * A courtesy, not a step of the run: it gets a short deadline and its failure
+ * is never reported. Sharing the long one filled the activity list with "the
+ * page did not answer in time (highlight)" while the run itself was fine.
+ */
+function showOnPage(fingerprint) {
+  browser(
+    {
+      type: "highlight",
+      tabId: state.tab.id,
+      frameId: frameOf(fingerprint),
+      fingerprint: fingerprint,
+    },
+    4000
+  ).catch(() => {});
 }
 
 /** Run something, counting it as work in flight for as long as it takes. */
@@ -1074,12 +1093,7 @@ function fillReport(list, items) {
     row.appendChild(label);
 
     row.addEventListener("click", () =>
-      browser({
-        type: "highlight",
-        tabId: state.tab.id,
-        frameId: frameOf(item.fingerprint),
-        fingerprint: item.fingerprint,
-      }).catch((err) => say(String(err.message), "bad"))
+      showOnPage(item.fingerprint)
     );
     list.appendChild(row);
   }
@@ -1312,12 +1326,7 @@ el("question-skip").addEventListener("click", () => {
 el("question-show").addEventListener("click", () => {
   const question = currentQuestion();
   if (!question) return;
-  browser({
-    type: "highlight",
-    tabId: state.tab.id,
-    frameId: frameOf(question.fingerprint),
-    fingerprint: question.fingerprint,
-  }).catch((err) => say(String(err.message), "bad"));
+  showOnPage(question.fingerprint);
 });
 
 el("resume-file").addEventListener("change", async (event) => {
