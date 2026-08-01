@@ -57,7 +57,7 @@
   const APPLY_TEXT = /^(apply|apply now|apply here|apply for this job|apply to this job|easy apply|quick apply|start application|apply with)/i;
   const SUBMIT_TEXT = /^(submit|submit application|send application|submit my application|finish|complete application)/i;
   const NEXT_TEXT = /(save and continue|save & continue|next|continue|proceed|save and next)/i;
-  const ADD_TEXT = /(add another|add more|add education|add experience|add employment|add school|add work|\+ add)/i;
+  const ADD_TEXT = /(add another|add more|add an(other)? entry|add education|add experience|add employment|add school|add work|add position|add degree|\+\s*add)/i;
 
   const CONFIRMATION_TEXT = /(thank you for applying|your application (has been )?(was )?(submitted|received)|we (have )?received your application|application (submitted|complete|received)|thanks for applying)/i;
 

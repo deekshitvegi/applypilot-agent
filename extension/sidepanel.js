@@ -399,9 +399,13 @@ async function renderQuestion() {
     if (await attachResume(question)) return;
   }
 
-  // Its choices may not be known yet. Open the control and read them before
-  // asking anyone anything -- and if a saved answer fits one, do not ask at all.
-  if (question.options_pending && !question._resolved) {
+  // Its choices may not be known yet, or the ones we saw may be stale: a
+  // dependent dropdown is usually read before the field it depends on is
+  // filled. Either way, open it and look again before asking anyone anything.
+  const staleOptions =
+    question.saved_value &&
+    /options offered here match/.test(question.reason || "");
+  if ((question.options_pending || staleOptions) && !question._resolved) {
     question._resolved = true;
     showResolving(question);
     const settled = await resolveOptions(question);
@@ -523,6 +527,10 @@ async function resolveOptions(question) {
       tabId: state.tab.id,
       frameId: frameOf(question.fingerprint),
       fingerprint: question.fingerprint,
+      // A search-as-you-type control offers nothing at all until something is
+      // typed into it. What we are looking for is the saved answer, so that is
+      // what gets typed.
+      filter: question.saved_value || "",
     });
 
     const ranked = await post("/options", {
@@ -553,6 +561,17 @@ async function resolveOptions(question) {
 
     if (!question.options.length) {
       question._note = ranked.note || "this control did not open a list of its own";
+      say(`${question.label}: ${question._note}`, "warn");
+    } else if (question.saved_value) {
+      // Say what was actually on offer, so a mismatch is diagnosable rather
+      // than just disappointing.
+      const shown = question.options.slice(0, 6).map((o) => o.label).join(", ");
+      say(
+        `${question.label}: none of the ${question.options.length} options match ` +
+          `"${question.saved_value}". Saw: ${shown}` +
+          (question.options.length > 6 ? ", …" : ""),
+        "warn"
+      );
     }
   } catch (err) {
     question._note = "I could not open this control: " + err.message;
@@ -678,6 +697,16 @@ function reportOne(result) {
 
 async function fillPage() {
   if (!state.plan) await planPage();
+
+  // Make room for every entry on file before filling, so the second school and
+  // the earlier jobs have somewhere to go.
+  try {
+    await addMissingEntries();
+    if (state.observation) await planPage();
+  } catch (err) {
+    say("I could not add the extra entries: " + err.message, "warn");
+  }
+
   const actions = state.plan.actions || [];
   if (!actions.length) {
     activity("Nothing to fill", "None of these fields match what you have saved.");
@@ -738,6 +767,52 @@ async function fillPage() {
   progress(0, 0);
   activity(summary.summary, KIND_NAMES[state.observation.kind] || "");
   await renderQuestion();
+}
+
+/**
+ * Press "Add another" until the page has room for every entry on file.
+ *
+ * A form that starts with one education block and one job will only ever hold
+ * the most recent of each, however many are saved.
+ */
+async function addMissingEntries() {
+  const profile = await service("/profile");
+  const wanted = { education: profile.education.length, experience: profile.experience.length };
+
+  for (const [kind, total] of Object.entries(wanted)) {
+    if (total <= 1) continue;
+    const pattern = kind === "education" ? /educat|school|degree|academic/i : /work|employ|experien|job/i;
+
+    for (let attempt = 0; attempt < total - 1; attempt += 1) {
+      const blocks = blockCount(pattern);
+      if (blocks >= total) break;
+
+      const control = (state.observation.add_controls || []).find((c) => pattern.test(c.text));
+      if (!control) break;
+
+      say(`Adding another ${kind === "education" ? "education" : "work"} entry.`);
+      const added = await browser({
+        type: "addRepeat",
+        tabId: state.tab.id,
+        text: control.text,
+      });
+      await scan();
+      if (!added || added.outcome !== "verified" || blockCount(pattern) <= blocks) {
+        say(`"${control.text}" did not add an entry, so I stopped adding.`, "warn");
+        break;
+      }
+    }
+  }
+}
+
+/** How many blocks of a given kind the page currently holds. */
+function blockCount(pattern) {
+  let most = 0;
+  for (const field of (state.observation && state.observation.fields) || []) {
+    if (!pattern.test(field.section || "")) continue;
+    most = Math.max(most, (field.group_index || 0) + 1);
+  }
+  return most;
 }
 
 /**
@@ -1197,6 +1272,31 @@ function renderChoiceCard(outcome) {
   el("log").scrollTop = el("log").scrollHeight;
 }
 
+/**
+ * Notice when the page changes without us.
+ *
+ * Pressing Continue yourself used to leave the panel showing the previous
+ * step's plan, and only stopping and starting again picked the new page up.
+ */
+function watchThePage() {
+  setInterval(async () => {
+    if (state.busy || !state.tab) return;
+    try {
+      const tab = await browser({ type: "activeTab" });
+      if (!tab || tab.id !== state.tab.id) return;
+      const fresh = await browser({ type: "scan", tabId: state.tab.id });
+      if (!fresh || !state.observation) return;
+      if (fresh.signature === state.observation.signature) return;
+
+      state.observation = fresh;
+      say("The page changed, so I have looked at it again.");
+      await planPage();
+    } catch (err) {
+      /* the tab went away or is still loading; the next tick will do */
+    }
+  }, 2500);
+}
+
 toggle("done-toggle", "done-body");
 toggle("log-toggle", "log");
 
@@ -1231,4 +1331,5 @@ toggle("log-toggle", "log");
   } catch (err) {
     activity("Open a job page", "Then press Start, or Rescan if it is already open.");
   }
+  watchThePage();
 })();

@@ -3,6 +3,24 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.7.0
+
+- **A search-as-you-type control is opened with the answer typed into it.** A
+  school picker that shows "Please enter 1 or more characters" offers nothing at
+  all until something is typed, so opening it and reading an empty list was
+  never going to work.
+- **A control whose options did not cover the saved answer is opened again.** A
+  dependent dropdown is usually read before the field it depends on is filled,
+  so the options seen at scan time were the wrong ones.
+- **When nothing matches, the panel says what was on offer** and how many, so a
+  mismatch can be looked at rather than just wondered about.
+- **"Add other education" gets pressed.** A form that starts with one education
+  block and one job would only ever hold the most recent of each, however many
+  are on file.
+- **The panel notices when you move the page yourself.** Pressing Continue by
+  hand used to leave it showing the previous step's plan until it was stopped
+  and started again.
+
 ## 1.6.0
 
 - **A section heading does not have to be a heading tag.** A form styling
