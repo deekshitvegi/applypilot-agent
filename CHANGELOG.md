@@ -3,6 +3,20 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.9.0
+
+- **A picker that searches a remote list is typed into properly and waited for.**
+  Each character gets the events a real key press produces; a list that opens
+  saying "Please enter 1 or more characters" is recognised as empty and gets the
+  filter typed into it; and the search is given time to come back. When the
+  answer really is absent, the failure now says what was on offer.
+- **A widget's own value is no longer read as the field's label.** The picker
+  renders the chosen school immediately before its input, so selecting anything
+  changed the control's identity and every later action reported it as gone —
+  the selection had worked, the control had just stopped being findable.
+- Prompts like "Please enter…", "No results" and "Loading" are placeholders, so
+  they are never offered as answers or counted as options.
+
 ## 1.8.0
 
 - **Only the step on screen is offered.** A wizard keeps every step in the

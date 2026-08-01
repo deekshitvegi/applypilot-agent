@@ -346,3 +346,25 @@ fields on the step that *was* showing were correctly judged hidden and left out
 is measured by the box drawn for it, and then the ancestor checks still run. Not
 being on screen is not something a control type can exempt itself from.
 → `test_hidden_steps.py::test_only_the_step_on_screen_is_offered`
+
+**47. A picker searching a remote list reported the answer missing.** The school
+field said `"University of North Texas" is not among the options this control
+opened`, while typing the same thing by hand found it every time.
+*Mechanism.* Three things. Setting the whole value at once and firing one input
+event is enough for a widget filtering a list it already holds and not for one
+running a search per keystroke, so each character now gets the events a real key
+press produces. A list that has opened is not a list with anything in it -- this
+one opens saying "Please enter 1 or more characters", and returning as soon as
+that appeared meant the filter was never typed. And the result was read a
+fraction of a second later, before the search had come back; it is now waited
+for. When the answer really is absent, the failure says what was on offer.
+→ `test_async_picker.py::test_opening_with_the_answer_typed_finds_it`
+
+**48. A widget's own value became the field's label.** The same picker renders
+the chosen school immediately before its input, so the search for a nearby label
+walked straight into it. The control's identity changed the moment anything was
+selected, and every action afterwards reported it as no longer on the page --
+the selection had worked, the control had simply stopped being findable.
+*Mechanism.* A widget's own furniture -- its value display, placeholder, arrow,
+menu -- is skipped when looking for a label.
+→ `test_async_picker.py::test_choosing_from_it_is_verified_from_the_pages_own_state`

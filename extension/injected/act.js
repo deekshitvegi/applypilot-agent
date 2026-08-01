@@ -27,6 +27,9 @@
 
   const OPEN_TIMEOUT = 2000;
   const GROW_TIMEOUT = 3000;
+  //: A control that searches a remote list needs longer than one that filters
+  //: a list it already holds.
+  const SEARCH_TIMEOUT = 6000;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -237,17 +240,42 @@
   }
 
   /**
-   * Type into a widget's filter box.
+   * Type into a widget's filter box, one character at a time.
    *
-   * Whatever ends up in there came from this agent, so the box is marked and can
+   * Setting the whole value at once and firing a single input event is enough
+   * for a widget filtering a list it already has, and not enough for one that
+   * runs a search per keystroke -- which is what a picker holding every
+   * university in the world does. Each character gets the events a real key
+   * press produces.
+   *
+   * Whatever ends up in the box came from this agent, so it is marked and can
    * never afterwards be read back as evidence of a selection.
    */
   function typeFilter(box, text) {
     AP.verify.markTypedAsFilter(box);
     if (box.focus) box.focus();
-    setNativeValue(box, text);
+    setNativeValue(box, "");
     fireInput(box);
-    dispatch(box, "keyup", KeyboardEvent, { bubbles: true, key: text.slice(-1) });
+
+    const value = String(text || "");
+    for (let i = 0; i < value.length; i += 1) {
+      const key = value[i];
+      const init = { bubbles: true, cancelable: true, composed: true, key: key };
+      dispatch(box, "keydown", KeyboardEvent, init);
+      setNativeValue(box, value.slice(0, i + 1));
+      dispatch(box, "input", InputEvent, { bubbles: true, composed: true, data: key });
+      dispatch(box, "keyup", KeyboardEvent, init);
+    }
+    dispatch(box, "change", Event, { bubbles: true, composed: true });
+  }
+
+  /** What a control is currently offering, as plain labels. */
+  function offeredLabels(el, popup) {
+    const list = popup || D.ownedPopup(el);
+    if (!list) return [];
+    return D.optionRows(list)
+      .map((row) => D.textOf(row))
+      .filter((text) => text && !AP.verify.isPlaceholder(text));
   }
 
   /**
@@ -258,16 +286,22 @@
    */
   async function openPopupFor(el, filterText) {
     let popup = D.ownedPopup(el);
-    if (popup) return popup;
-
-    realClick(comboTrigger(el));
-    popup = await waitFor(() => D.ownedPopup(el), OPEN_TIMEOUT);
-    if (popup) return popup;
-
-    const box = filterBox(el);
-    if (box && filterText) {
-      typeFilter(box, filterText);
+    if (!popup) {
+      realClick(comboTrigger(el));
       popup = await waitFor(() => D.ownedPopup(el), OPEN_TIMEOUT);
+    }
+
+    // A list that has opened is not the same as a list with anything in it. One
+    // picker opens saying "Please enter 1 or more characters", and returning as
+    // soon as that appeared meant the filter was never typed at all -- so the
+    // answer was reported missing from a list that had never been searched.
+    if (filterText && (!popup || !offeredLabels(el, popup).length)) {
+      const box = filterBox(el);
+      if (box) {
+        typeFilter(box, filterText);
+        await waitFor(() => offeredLabels(el).length > 0, SEARCH_TIMEOUT);
+        popup = D.ownedPopup(el) || popup;
+      }
     }
     return popup;
   }
@@ -342,20 +376,32 @@
       };
     }
 
-    let row = D.optionRows(popup).find((node) => AP.verify.same(D.textOf(node), optionLabel));
+    const findRow = (list) =>
+      D.optionRows(list || D.ownedPopup(el) || popup).find((node) =>
+        AP.verify.same(D.textOf(node), optionLabel)
+      );
+
+    let row = findRow(popup);
     if (!row) {
       const box = filterBox(el);
       if (box) {
         typeFilter(box, optionLabel);
-        await sleep(300);
-        const narrowed = D.ownedPopup(el) || popup;
-        row = D.optionRows(narrowed).find((node) => AP.verify.same(D.textOf(node), optionLabel));
+        // A picker that searches a remote list takes its time. Waiting a fixed
+        // fraction of a second and reading once reported an option missing that
+        // arrived a moment later.
+        row = await waitFor(() => findRow(null), SEARCH_TIMEOUT);
       }
     }
     if (!row) {
+      const seen = offeredLabels(el);
       return {
         changed: false,
-        failed: `"${optionLabel}" is not among the options this control opened`,
+        failed:
+          `"${optionLabel}" is not among the options this control opened` +
+          (seen.length
+            ? `; it offered ${seen.length}: ${seen.slice(0, 5).join(", ")}` +
+              (seen.length > 5 ? ", …" : "")
+            : "; it offered nothing at all"),
         previous: reading.value,
       };
     }
@@ -573,6 +619,7 @@
 
   AP.act = {
     addRepeat,
+    offeredLabels,
     attachFile,
     chooseFromPopup,
     chooseNativeOption,

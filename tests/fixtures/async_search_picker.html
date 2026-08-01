@@ -1,0 +1,158 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Education and work</title>
+<!--
+  A school picker that searches a long remote list.
+
+  It shows "Please enter 1 or more characters" until something is typed, runs
+  its search per keystroke, and answers after a delay. Setting the whole value
+  at once and reading the list a fraction of a second later reported the option
+  missing when it was simply not back yet -- and typing it by hand found it
+  every time, which is what made the failure so odd to look at.
+
+  The repeat sections are added by links reading "+ Add other education" and
+  "+ Add other work experience".
+-->
+<style>
+  .menu { border: 1px solid #ccc; max-height: 160px; overflow: auto; }
+  .menu[hidden] { display: none; }
+  .opt { padding: 2px 6px; }
+</style>
+
+<main>
+  <div class="section-title">Education</div>
+  <div id="education">
+    <div class="block">
+      <div class="field">
+        <span class="txt">School / education institution</span><span class="mandatory">*</span>
+        <div class="picker">
+          <input class="school" role="combobox" aria-expanded="false" aria-controls="m0"
+                 aria-autocomplete="list" autocomplete="off" placeholder="School / education institution">
+          <ul class="menu" id="m0" role="listbox" hidden></ul>
+          <input type="hidden" class="school-value" name="school0">
+        </div>
+      </div>
+      <div class="field">
+        <span class="txt">Area of study</span><span class="mandatory">*</span>
+        <input name="area0" placeholder="Area of study">
+      </div>
+      <div class="field">
+        <span class="txt">Graduation Year</span>
+        <input name="grad0" placeholder="Graduation Year">
+      </div>
+      <div class="field">
+        <span class="txt">GPA</span><span class="mandatory">*</span>
+        <input name="gpa0" placeholder="GPA">
+      </div>
+    </div>
+  </div>
+  <a href="#" id="add-education">+ Add other education</a>
+
+  <div class="section-title">Work experience</div>
+  <div id="work">
+    <div class="block">
+      <div class="field">
+        <span class="txt">Company</span><span class="mandatory">*</span>
+        <input name="company0" placeholder="Company">
+      </div>
+      <div class="field">
+        <span class="txt">Job title</span><span class="mandatory">*</span>
+        <input name="title0" placeholder="Job title">
+      </div>
+      <div class="field">
+        <span class="txt">Start year</span><span class="mandatory">*</span>
+        <input name="start0" placeholder="Start year">
+      </div>
+    </div>
+  </div>
+  <a href="#" id="add-work">+ Add other work experience</a>
+</main>
+
+<script>
+  const SCHOOLS = [
+    "University of North Texas", "University of Texas at Austin", "North Carolina State University",
+    "IIITDM Kurnool", "Northwestern University", "Texas A&M University", "Aalborg Universitet",
+  ];
+  let counter = 0;
+
+  function wirePicker(root) {
+    const box = root.querySelector(".school");
+    const menu = root.querySelector(".menu");
+    const hidden = root.querySelector(".school-value");
+    let timer = null;
+
+    const show = (rows) => {
+      menu.innerHTML = "";
+      for (const text of rows) {
+        const li = document.createElement("li");
+        li.className = "opt";
+        li.setAttribute("role", "option");
+        li.textContent = text;
+        menu.appendChild(li);
+      }
+      menu.hidden = false;
+      box.setAttribute("aria-expanded", "true");
+    };
+
+    const prompt = () => show(["Please enter 1 or more characters"]);
+    box.addEventListener("pointerdown", prompt);
+    box.addEventListener("focus", prompt);
+
+    // Searches per keystroke, and takes its time coming back.
+    box.addEventListener("keyup", () => {
+      const needle = box.value.trim().toLowerCase();
+      clearTimeout(timer);
+      if (!needle) return prompt();
+      show(["Loading…"]);
+      timer = setTimeout(() => {
+        const hits = SCHOOLS.filter((s) => s.toLowerCase().includes(needle));
+        show(hits.length ? hits : ["No results found"]);
+      }, 900);
+    });
+
+    menu.addEventListener("click", (event) => {
+      const row = event.target.closest("[role=option]");
+      if (!row || /please enter|loading|no results/i.test(row.textContent)) return;
+      hidden.value = row.textContent;
+      const shown = document.createElement("span");
+      shown.className = "select__singleValue";
+      shown.textContent = row.textContent;
+      root.querySelector(".picker").prepend(shown);
+      box.value = "";
+      menu.hidden = true;
+      box.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  wirePicker(document.querySelector("#education .block"));
+
+  document.getElementById("add-education").addEventListener("click", (e) => {
+    e.preventDefault();
+    counter += 1;
+    const copy = document.querySelector("#education .block").cloneNode(true);
+    copy.querySelectorAll("input").forEach((i) => { i.value = ""; });
+    copy.querySelector(".select__singleValue")?.remove();
+    const menu = copy.querySelector(".menu");
+    menu.id = "m" + counter;
+    menu.innerHTML = "";
+    menu.hidden = true;
+    copy.querySelector(".school").setAttribute("aria-controls", menu.id);
+    copy.querySelector(".school-value").name = "school" + counter;
+    copy.querySelector("input[name^=area]").name = "area" + counter;
+    copy.querySelector("input[name^=grad]").name = "grad" + counter;
+    copy.querySelector("input[name^=gpa]").name = "gpa" + counter;
+    document.getElementById("education").appendChild(copy);
+    wirePicker(copy);
+  });
+
+  document.getElementById("add-work").addEventListener("click", (e) => {
+    e.preventDefault();
+    const copy = document.querySelector("#work .block").cloneNode(true);
+    copy.querySelectorAll("input").forEach((i) => { i.value = ""; });
+    const n = document.querySelectorAll("#work .block").length;
+    copy.querySelector("input[name^=company]").name = "company" + n;
+    copy.querySelector("input[name^=title]").name = "title" + n;
+    copy.querySelector("input[name^=start]").name = "start" + n;
+    document.getElementById("work").appendChild(copy);
+  });
+</script>

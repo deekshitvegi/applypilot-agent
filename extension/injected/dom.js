@@ -170,6 +170,24 @@
 
   const LABEL_HINT = "label,[class*='label' i],[class*='Label'],[data-automation-id*='label' i]";
 
+  /*
+   * A widget's own furniture: the box showing what is selected, its placeholder,
+   * its arrow, its menu.
+   *
+   * These sit right next to the control, so the search for a nearby label walks
+   * straight into them. One picker renders the chosen school immediately before
+   * its input, and that became the field's label -- which changed the control's
+   * identity the moment anything was selected, so every later action reported it
+   * as no longer on the page. The selection had worked; the control had simply
+   * stopped being findable.
+   */
+  const WIDGET_CHROME =
+    "[class*='singleValue' i],[class*='single-value' i],[class*='selectedValue' i]," +
+    "[class*='selected-value' i],[class*='selected-option' i],[class*='placeholder' i]," +
+    "[class*='indicator' i],[class*='arrow' i],[class*='caret' i],[class*='chevron' i]," +
+    "[class*='clear' i],[role='listbox'],[role='option'],[role='presentation']," +
+    "[class*='menu' i],[data-selected-value]";
+
   /* Chrome around a form. Never the name of anything inside it. */
   const NAVIGATIONAL =
     "nav,header,footer,[role='tablist'],[role='tab'],[role='navigation'],[role='menu'],[role='menubar']";
@@ -242,6 +260,11 @@
       let sibling = node.previousElementSibling;
       while (sibling) {
         if (sibling.matches("input,select,textarea,button")) {
+          sibling = sibling.previousElementSibling;
+          continue;
+        }
+        // The widget's own display of what is selected is not its name.
+        if (sibling.matches(WIDGET_CHROME)) {
           sibling = sibling.previousElementSibling;
           continue;
         }
@@ -477,6 +500,7 @@
 
   AP.dom = {
     MAX_ELEMENTS,
+    WIDGET_CHROME,
     isDecoration,
     ancestors,
     attributeLabel,
