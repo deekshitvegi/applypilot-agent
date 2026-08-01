@@ -38,7 +38,7 @@ class ModelReply:
 class Model:
     """A thin client. Deliberately thin: nothing here is trusted."""
 
-    def __init__(self, api_key: str = "", name: str = "gemini-2.0-flash") -> None:
+    def __init__(self, api_key: str = "", name: str = "gemini-3.5-flash-lite") -> None:
         self.api_key = (api_key or "").strip()
         self.name = name
 

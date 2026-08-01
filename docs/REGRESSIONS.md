@@ -466,3 +466,23 @@ failing against a page nobody is looking at.
 *and* calling click() ran the handler once each.
 *Mechanism.* One click: the native call when it exists, a dispatched event when
 it does not.
+
+**63. The row at the foot of a form was offered as the way onward.** A
+container holding Back and Next reads, as one element, "Back Next" -- and that
+was offered as the next step, then could not be pressed, because no control on
+the page is called that.
+*Mechanism.* An element with a control inside it is a container, not a control,
+and is skipped in favour of the control.
+
+**64. A control the panel had just listed could not be pressed.** Scanning
+looked at every kind of element, because a real application uses a bare span for
+"+ Add other education"; pressing looked at buttons and links only. The two
+disagreed and the answer was "no control on this page reads that".
+*Mechanism.* One list of controls, used by both.
+
+**65. An entry that arrived slowly was reported as never added.** The wait was
+three seconds and counted only controls already drawn, so an application that
+renders a new entry from the server -- or renders it collapsed -- looked like a
+click that had done nothing, and adding stopped.
+*Mechanism.* Every field in the page counts, drawn or not, and a page that
+fetches gets time to answer.

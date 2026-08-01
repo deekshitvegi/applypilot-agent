@@ -27,6 +27,10 @@
 
   const OPEN_TIMEOUT = 2000;
   const GROW_TIMEOUT = 3000;
+  //: An application that renders a new entry, or a whole next step, from the
+  //: server takes longer than anything happening in the page alone -- and three
+  //: seconds reported a click that had worked as one that had done nothing.
+  const SLOW_PAGE_TIMEOUT = 12000;
   //: A control that searches a remote list needs longer than one that filters
   //: a list it already holds.
   const SEARCH_TIMEOUT = 6000;
@@ -461,36 +465,31 @@
    * A click that returns without error is not an added entry.
    */
   async function addRepeat(controlText) {
-    const before = S.candidateControls(document).length;
-    const button = S.clickableControls().find((el) => {
-      const text = S.controlText(el);
-      return text && (controlText ? AP.verify.same(text, controlText) : S.ADD_TEXT.test(text));
-    });
+    const before = S.formElementCount();
+    const button = S.pressable(controlText || S.ADD_TEXT);
     if (!button) {
       return { outcome: "failed", evidence: "no control on this page adds another entry" };
     }
+    const name = S.controlText(button);
     realClick(button);
-    const grew = await waitFor(
-      () => S.candidateControls(document).length > before,
-      GROW_TIMEOUT
-    );
-    const after = S.candidateControls(document).length;
+    const grew = await waitFor(() => S.formElementCount() > before, SLOW_PAGE_TIMEOUT);
+    const after = S.formElementCount();
     if (!grew) {
       return {
         outcome: "failed",
-        evidence: `pressed "${S.controlText(button)}" but the form still has ${after} controls`,
+        evidence: `pressed "${name}" but the form still has ${after} fields`,
       };
     }
     return {
       outcome: "verified",
-      evidence: `the form grew from ${before} to ${after} controls`,
+      evidence: `the form grew from ${before} to ${after} fields`,
     };
   }
 
   /* ------------------------------------------------------------- clicks */
 
   async function clickByText(text) {
-    const button = S.clickableControls().find((el) => AP.verify.same(S.controlText(el), text));
+    const button = S.pressable(text);
     if (!button) return { outcome: "failed", evidence: `no control on this page reads "${text}"` };
     const before = location.href;
     const signatureBefore = AP.scan.run().signature;
@@ -498,7 +497,7 @@
     const moved = await waitFor(() => {
       if (location.href !== before) return true;
       return AP.scan.run().signature !== signatureBefore;
-    }, GROW_TIMEOUT);
+    }, SLOW_PAGE_TIMEOUT);
     return {
       outcome: moved ? "verified" : "attempted",
       evidence: moved

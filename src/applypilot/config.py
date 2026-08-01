@@ -34,7 +34,7 @@ class Settings:
     host: str = DEFAULT_HOST
     port: int = DEFAULT_PORT
     model_provider: str = "gemini"
-    model_name: str = "gemini-2.0-flash"
+    model_name: str = "gemini-3.5-flash-lite"
 
     @property
     def db_path(self) -> Path:
@@ -61,5 +61,5 @@ def load_settings() -> Settings:
         host=os.environ.get("APPLYPILOT_HOST", DEFAULT_HOST),
         port=port,
         model_provider=os.environ.get("APPLYPILOT_MODEL_PROVIDER", "gemini"),
-        model_name=os.environ.get("APPLYPILOT_MODEL_NAME", "gemini-2.0-flash"),
+        model_name=os.environ.get("APPLYPILOT_MODEL_NAME", "gemini-3.5-flash-lite"),
     )

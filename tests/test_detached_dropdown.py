@@ -193,3 +193,101 @@ def test_a_file_input_hidden_behind_a_dropzone_is_still_a_field(open_fixture):
     files = [f for f in observation["fields"] if f["control"] == "file"]
     assert len(files) == 1, [f["label"] for f in observation["fields"]]
     assert files[0]["label"] == "Resume"
+
+
+# ---------------------------------------------------------------------------
+# 63, 64, 65. A form's foot, and an entry that arrives late.
+# ---------------------------------------------------------------------------
+
+
+def footer_with_back_and_next(page):
+    page.evaluate(
+        """() => {
+          const row = document.createElement('div');
+          row.innerHTML = '<button type="button">Back</button>' +
+                          '<button type="button">Next</button>';
+          document.querySelector('main').appendChild(row);
+        }"""
+    )
+
+
+def test_a_row_holding_back_and_next_is_not_offered_as_one_control(open_fixture):
+    """It read as "Back Next", which is not a control and cannot be pressed."""
+    page = open_fixture("detached_dropdown_picker.html")
+    footer_with_back_and_next(page)
+
+    observation = page.evaluate("() => ApplyPilot.scan.run()")
+    offered = [c["text"] for c in observation["next_controls"]]
+    assert offered == ["Next"], offered
+
+
+def test_anything_the_scan_offers_can_be_pressed(open_fixture):
+    """Scanning looked at every element and pressing looked only at buttons."""
+    page = open_fixture("detached_dropdown_picker.html")
+    page.evaluate(
+        """() => {
+          const span = document.createElement('span');
+          span.textContent = '+ Add other education';
+          span.addEventListener('click', () => {
+            const extra = document.createElement('input');
+            extra.name = 'custom[education][1][school]';
+            document.querySelector('.block').appendChild(extra);
+          });
+          document.querySelector('main').appendChild(span);
+        }"""
+    )
+    observation = page.evaluate("() => ApplyPilot.scan.run()")
+    text = next(c["text"] for c in observation["add_controls"])
+
+    result = page.evaluate("async (t) => await ApplyPilot.act.addRepeat(t)", text)
+    assert result["outcome"] == "verified", result
+    assert page.evaluate(
+        "() => document.getElementsByName('custom[education][1][school]').length === 1"
+    )
+
+
+def test_an_entry_that_takes_a_while_to_arrive_still_counts(open_fixture):
+    """A slow application rendered the new entry after we had given up."""
+    page = open_fixture("detached_dropdown_picker.html")
+    page.evaluate(
+        """() => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = '+ Add other work experience';
+          button.addEventListener('click', () => {
+            setTimeout(() => {
+              const extra = document.createElement('input');
+              extra.name = 'custom[experience][1][company]';
+              document.querySelector('.block').appendChild(extra);
+            }, 4500);
+          });
+          document.querySelector('main').appendChild(button);
+        }"""
+    )
+    result = page.evaluate(
+        "async () => await ApplyPilot.act.addRepeat('+ Add other work experience')"
+    )
+    assert result["outcome"] == "verified", result
+
+
+def test_an_entry_added_out_of_sight_still_counts(open_fixture):
+    """Counting only drawn controls missed a block that renders collapsed."""
+    page = open_fixture("detached_dropdown_picker.html")
+    page.evaluate(
+        """() => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = '+ Add another entry';
+          button.addEventListener('click', () => {
+            const wrap = document.createElement('div');
+            wrap.style.display = 'none';
+            wrap.innerHTML = '<input name="custom[education][2][school]">';
+            document.querySelector('.block').appendChild(wrap);
+          });
+          document.querySelector('main').appendChild(button);
+        }"""
+    )
+    result = page.evaluate(
+        "async () => await ApplyPilot.act.addRepeat('+ Add another entry')"
+    )
+    assert result["outcome"] == "verified", result

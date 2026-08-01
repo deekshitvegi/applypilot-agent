@@ -3,6 +3,23 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.14.0
+
+- **"Back Next" is gone.** The row at the foot of a form holds two buttons, and
+  read as one element it says "Back Next". That was being offered as the way
+  onward and then could not be pressed, because nothing on the page is called
+  that. An element with a control inside it is a container now, not a control.
+- **Adding another education or work entry works.** Two things were wrong.
+  Scanning looked at every kind of element -- a real application uses a bare
+  span for "+ Add other education" -- while pressing looked only at buttons and
+  links, so a control the panel had just listed came back as missing. And the
+  check for whether an entry appeared waited three seconds and counted only
+  fields already drawn, so a slow application looked like a click that had done
+  nothing. One list of controls for both, every field counted whether drawn or
+  not, and a page that fetches gets time to answer.
+- Gemini 3.5 Flash-Lite is the default model, and the name is editable in
+  Settings.
+
 ## 1.13.0
 
 - **Filling is fast again.** The five injected files were being fetched and

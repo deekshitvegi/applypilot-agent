@@ -117,9 +117,13 @@
     );
   }
 
+  const CLICKABLE = "button,a,input[type='submit'],input[type='button'],[role='button']";
+
+  /* Anything a page might have used for a control, however it was built. */
+  const WIDE = CLICKABLE + ",[onclick],[tabindex],span,div,li";
+
   function clickableControls() {
-    return D.deepQuery("button,a,input[type='submit'],input[type='button'],[role='button']", document)
-      .filter((el) => D.isVisible(el));
+    return D.deepQuery(CLICKABLE, document).filter((el) => D.isVisible(el));
   }
 
   function controlText(el) {
@@ -141,28 +145,66 @@
    *
    * Only the innermost element carrying the text counts, so a wrapper three
    * levels up does not also answer to it.
+   *
+   * A container holding controls is not itself a control. The row at the foot
+   * of a form holding Back and Next reads, as one element, "Back Next" -- and a
+   * page offered that as the way onward, then could not press it, because
+   * nothing on the page is called that. An element with a control inside it is
+   * skipped in favour of the control.
    */
-  function matchingControls(pattern) {
+  function wideControls() {
     const out = [];
-    const seen = new Set();
-    const wide = D.deepQuery(
-      "button,a,input[type='submit'],input[type='button'],[role='button'],[onclick],[tabindex],span,div,li",
-      document
-    );
-    for (const el of wide) {
+    for (const el of D.deepQuery(WIDE, document)) {
       if (!D.isVisible(el)) continue;
       const text = controlText(el);
-      if (!text || text.length > 60 || !pattern.test(text)) continue;
+      if (!text || text.length > 60) continue;
+      if (D.deepQuery(CLICKABLE, el).some((inside) => inside !== el)) continue;
       // The innermost element with this text is the one that gets clicked.
       const inner = Array.from(el.children).some(
         (child) => D.textOf(child) === text || (child.innerText || "").trim() === text
       );
       if (inner) continue;
-      if (seen.has(text)) continue;
-      seen.add(text);
-      out.push(describeControl(el, text));
+      out.push({ el: el, text: text });
     }
     return out;
+  }
+
+  function matchingControls(pattern) {
+    const out = [];
+    const seen = new Set();
+    for (const entry of wideControls()) {
+      if (!pattern.test(entry.text) || seen.has(entry.text)) continue;
+      seen.add(entry.text);
+      out.push(describeControl(entry.el, entry.text));
+    }
+    return out;
+  }
+
+  /**
+   * The element behind a control the scan offered.
+   *
+   * Pressing used to search buttons and links only, while scanning searched
+   * every kind of element -- so a control the panel had just listed came back
+   * as "no control on this page reads that". One list, used by both.
+   */
+  function pressable(wanted) {
+    const matches =
+      wanted instanceof RegExp
+        ? (entry) => wanted.test(entry.text)
+        : (entry) => AP.verify.same(entry.text, wanted);
+    const hit = wideControls().find(matches);
+    return hit ? hit.el : null;
+  }
+
+  /**
+   * How much form there is, laid out or not.
+   *
+   * An added entry is in the page before it is drawn, and on a slow site the
+   * gap between those two moments was longer than the wait -- so a click that
+   * had worked was reported as having added nothing.
+   */
+  function formElementCount() {
+    return D.deepQuery("input,select,textarea," + CUSTOM_CONTROLS, document).length;
   }
 
   function describeControl(el, text) {
@@ -391,6 +433,9 @@
     classify,
     clickableControls,
     controlText,
+    formElementCount,
+    pressable,
+    wideControls,
     describeControl,
     insideFurniture,
     isSearchControl,
