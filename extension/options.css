@@ -205,8 +205,20 @@ button:active { transform: none; box-shadow: var(--down-sm); }
    every Save stretched the full width of the page like a banner. */
 section > button, section > .import-grid + button { align-self: flex-start; }
 
-.primary { background: var(--accent); color: var(--accent-text); }
-.ghost { background: var(--surface); }
+/*
+ * Buttons are made of the surface, not painted on top of it.
+ *
+ * A solid block of colour is the one thing soft UI cannot absorb: the whole
+ * language is a single material catching the light, and a filled rectangle
+ * reads as a sticker on it. So a button is the same material, raised, and the
+ * accent is carried by its lettering. Depth says whether it can be pressed;
+ * colour says whether it is the one to press.
+ *
+ * Erase everything keeps its fill. It is the only thing here that cannot be
+ * undone, and it should not look like everything else.
+ */
+.primary { background: var(--surface); color: var(--accent); }
+.ghost { background: var(--surface); color: var(--text-soft); }
 .bad { background: var(--bad); color: #fff; }
 
 /* ------------------------------------------------------------ bringing data in */

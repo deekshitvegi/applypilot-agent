@@ -27,6 +27,13 @@ const EXTENSION_VERSION = chrome.runtime.getManifest().version;
 
 const el = (id) => document.getElementById(id);
 
+/** Controls that are answered by picking, never by typing. */
+const CHOICE_CONTROLS = new Set(["radio", "select", "multiselect", "combobox", "listbox"]);
+
+function isChoice(control) {
+  return CHOICE_CONTROLS.has(String(control || "").toLowerCase());
+}
+
 const state = {
   tab: null,
   observation: null,
@@ -525,7 +532,16 @@ async function renderQuestion() {
 
   const host = el("question-input");
   host.innerHTML = "";
-  const choices = (question.options || [])
+  // A choice is never handed back as a text box. If the question arrived
+  // without its options -- whatever emptied them -- the control on the page
+  // still has them, and they are read from there rather than giving up and
+  // offering a box to type into. Typing the exact wording of a radio button
+  // does not select that radio button; it does nothing at all.
+  const live = fieldFor(question.fingerprint);
+  const offered = (question.options || []).length
+    ? question.options
+    : (isChoice(question.control) && live ? live.options || [] : []);
+  const choices = offered
     .map((o) => o.label)
     .filter((label) => label && label.trim() && !isPlaceholderLabel(label));
   const control = buildControl(
@@ -725,16 +741,12 @@ async function answerQuestionInner(value, button, restoreLabel) {
   setBusy(button, true);
   try {
     if (value) {
+      const picking = isChoice(question.control);
       const result = await applyAndReport({
-        kind:
-          question.control === "checkbox"
-            ? "check"
-            : (question.options || []).length
-              ? "choose"
-              : "fill",
+        kind: question.control === "checkbox" ? "check" : picking ? "choose" : "fill",
         fingerprint: question.fingerprint,
         value: value,
-        option_label: (question.options || []).length ? value : "",
+        option_label: picking ? value : "",
       });
 
       if (result && result.outcome === "failed") {

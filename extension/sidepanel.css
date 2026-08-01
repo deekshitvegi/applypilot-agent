@@ -409,9 +409,25 @@ button { font: inherit; cursor: pointer; }
   box-shadow: var(--down-sm);
 }
 
-.primary { background: var(--accent); color: var(--accent-text); }
-.quiet, .ghost { background: var(--surface); color: var(--text); }
+/*
+ * Buttons are made of the surface, not painted on top of it.
+ *
+ * A solid block of colour is the one thing soft UI cannot absorb: the whole
+ * language is a single material catching the light, and a filled rectangle
+ * reads as a sticker on it. So a button is the same material, raised, and the
+ * accent is carried by its lettering. Depth says whether it can be pressed;
+ * colour says whether it is the one to press.
+ *
+ * Start keeps its fill, and only Start. It is the way in, it is in the corner
+ * the eye goes to first, and it is the one control that has to be findable
+ * without reading anything.
+ */
+.primary { background: var(--surface); color: var(--accent); }
+.quiet, .ghost { background: var(--surface); color: var(--text-soft); }
 .danger { background: var(--surface); color: var(--bad); }
+
+/* Pressed in while it works, so nothing needs to change colour to say so. */
+.primary:active, .quiet:active, .ghost:active, .danger:active { color: var(--accent); }
 
 /* Pressed in and going nowhere. */
 button:disabled {
@@ -434,19 +450,17 @@ button.busy::after {
   border: 2px solid currentcolor;
   border-top-color: transparent;
   border-radius: 50%;
-  color: var(--accent-text);
+  color: var(--accent);
   animation: spin 620ms linear infinite;
 }
 
-.quiet.busy::after, .ghost.busy::after { color: var(--text); }
+.run.busy::after, .cta.busy::after { color: var(--accent-text); }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
-button.done {
-  background: var(--good) !important;
-  border-color: var(--good) !important;
-  color: #fff !important;
-}
+/* Done is said in colour, because the shape has not changed. */
+button.done { color: var(--good) !important; }
+.run.done, .cta.done { background: var(--good) !important; color: #fff !important; }
 
 .link {
   align-self: flex-start;

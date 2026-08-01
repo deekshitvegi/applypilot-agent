@@ -3,6 +3,21 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.26.0
+
+- **A question with options is asked with those options.** The veteran question
+  was being handed back as a box to type into, and typing the exact wording of a
+  radio button selects nothing at all -- which is why it kept failing however
+  carefully it was typed. Whether a question is answered by choosing or by
+  typing now follows from what the control is, not from whether its options
+  happened to survive the trip; and if they did not, they are read from the
+  control on the page.
+- **Buttons are made of the surface rather than painted on it.** A solid block
+  of colour is the one thing soft UI cannot absorb. A button is the same
+  material, raised, with the accent carried by its lettering: depth says it can
+  be pressed, colour says it is the one to press. Start keeps its fill, and only
+  Start.
+
 ## 1.25.0
 
 - **Light or dark, your choice.** Settings has a Theme control: follow the

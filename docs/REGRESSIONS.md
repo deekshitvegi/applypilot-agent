@@ -641,3 +641,13 @@ unasked -- while the control was called "veteran" the whole time.
 *Mechanism.* A label that answers to nothing is telling us nothing, so the name
 gets its turn on the same narrow terms a field with no label at all gets: an
 exact hit only, with the confidence penalty that goes with it.
+
+**86. A five-option question was handed back as a box to type into.** Whether a
+question was answered by choosing or by typing was decided by whether options
+happened to be present on the object, not by what the control is. Anything that
+emptied that list silently turned a radio group into free text -- and typing the
+exact wording of a radio button selects nothing at all, so the answer failed
+with "that did not go onto the page" however carefully it was typed.
+*Mechanism.* What a control is decides how it is answered. A choice control is
+answered by choosing, and if its options did not arrive with the question they
+are read from the control on the page rather than giving up and offering a box.
