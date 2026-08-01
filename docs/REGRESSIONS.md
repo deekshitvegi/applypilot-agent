@@ -514,3 +514,28 @@ cheap reading of the page's shape says whether anything moved.
 State list does not exist until a Country is picked.
 *Mechanism.* A choice offering nothing usable yet goes last, so everything that
 can be answered is answered first. Nothing in the rule knows what a State is.
+
+**71. Every page declared itself stuck on the third look.** The stall guard
+counted observations, and filling a page plans it several times over by design:
+once at the start, again after every choice, and again on each correction pass.
+Three of those and the run was blocked -- which is how it reached a new step,
+announced it had stopped, and then sat on a plan it would not act on.
+*Mechanism.* Only an attempt to move the page on counts towards the guard.
+
+**72. The panel made the page slow while doing nothing at all.** The watcher
+scanned every frame of the application every two and a half seconds for as long
+as the panel was open.
+*Mechanism.* A cheap reading of the page answers "has anything moved?"; a full
+scan happens only when it has.
+
+**73. A reply that never came left a button spinning for minutes.** Nothing
+asked of the page had a deadline, so one lost answer meant reloading the
+extension.
+*Mechanism.* Every request to the page has a deadline and says what timed out.
+
+**74. Continuing sampled the next step once, immediately, and gave up.** The
+click knows the page moved, but the new step's fields can still be on their way.
+The panel declared the page stuck and stopped driving, and the next step then
+arrived to an empty panel -- "it did go to the next page but it's not doing
+anything".
+*Mechanism.* Wait for the page to actually become a different page.

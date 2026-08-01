@@ -416,3 +416,43 @@ def test_history_answers_land_in_the_record_they_belong_to(client):
     profile = client.get("/profile").json()
     assert profile["education"][0]["gpa"] == "3.8"
     assert "education.gpa" not in profile["facts"], "not into the flat facts, where nothing reads it"
+
+
+# ---------------------------------------------------------------------------
+# 71. Only an attempt to move on can stall a page.
+# ---------------------------------------------------------------------------
+
+
+def _blank_application() -> dict:
+    return {
+        "url": "https://careers.example.test/apply",
+        "kind": "application",
+        "signature": "one-and-the-same",
+        "fields": [],
+    }
+
+
+def test_planning_the_same_page_over_and_over_is_not_a_stall(client):
+    """Filling a page re-plans it several times over, by design.
+
+    The page is read again after every choice and again on each correction
+    pass. Counting those as failures to progress declared every page stuck on
+    the third look -- which is how a run reached a new step, said it had
+    stopped, and then sat there with a plan it would not act on.
+    """
+    stuck = "This page has not changed after several attempts"
+    for _ in range(6):
+        notes = client.post("/plan", json=_blank_application()).json()["notes"]
+        assert not any(stuck in note for note in notes), notes
+
+
+def test_pressing_continue_and_getting_nowhere_still_stalls(client):
+    """The guard itself is untouched: it just counts the right thing now."""
+    stuck = "This page has not changed after several attempts"
+    seen = []
+    for _ in range(5):
+        response = client.post(
+            "/plan", params={"after_continue": "true"}, json=_blank_application()
+        )
+        seen.append(any(stuck in note for note in response.json()["notes"]))
+    assert seen[-1] is True, seen

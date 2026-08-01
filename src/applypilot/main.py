@@ -375,13 +375,19 @@ class PlanResponse(BaseModel):
 
 
 @app.post("/plan", response_model=PlanResponse)
-def plan(observation: PageObservation) -> PlanResponse:
+def plan(observation: PageObservation, after_continue: bool = False) -> PlanResponse:
     profile = store.get_profile()
     identity = classify_host(observation.url, hints=observation.hints)
 
     state = store.get_run()
-    runloop.note_observation(state, observation.signature)
-    store.save_run(state)
+    if after_continue:
+        # Only an attempt to move the page on can stall. Filling a page means
+        # planning it several times over by design -- the page is re-read after
+        # every choice and again on each correction pass -- and counting those
+        # as failures to progress declared every page stuck on the third look,
+        # which is how a run reached a new step and then refused to touch it.
+        runloop.note_observation(state, observation.signature)
+        store.save_run(state)
 
     built = runloop.plan_page(observation, profile, store.learned_values())
     notes = list(observation.notes) + built.notes

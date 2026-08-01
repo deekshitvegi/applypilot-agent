@@ -273,3 +273,4 @@ def test_stop_is_a_control_not_a_conversation(profile):
     outcome = chat.interpret("stop", [], profile=profile)
     assert outcome.kind == "control"
     assert outcome.value == "stop"
+

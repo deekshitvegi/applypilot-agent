@@ -684,6 +684,7 @@
 
   AP.act = {
     addRepeat,
+    pageShape,
     offeredLabels,
     attachFile,
     chooseFromPopup,

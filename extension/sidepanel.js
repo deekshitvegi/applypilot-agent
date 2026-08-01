@@ -47,6 +47,9 @@ const state = {
   //: nothing ever finishes.
   working: 0,
   lastPlannedSignature: "",
+  //: The cheap reading the watcher compares against, so a page that is not
+  //: doing anything costs nothing to watch.
+  lastShape: "",
   stableSignature: "",
   stableTicks: 0,
   submissionPolicy: "confirm",
@@ -84,9 +87,28 @@ const put = (path, body) =>
     body: JSON.stringify(body || {}),
   });
 
+/**
+ * Ask the service worker to do something to the page.
+ *
+ * With a deadline. A reply that never comes leaves a button spinning for as
+ * long as anyone is willing to watch it, and there is no way back from that
+ * except reloading the extension -- which is exactly what happened: Start went
+ * round and round for minutes with nothing behind it.
+ */
+const BROWSER_TIMEOUT = 30000;
+
 function browser(message) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`the page did not answer in time (${message.type})`));
+    }, BROWSER_TIMEOUT);
     chrome.runtime.sendMessage(message, (reply) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
       if (chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));
       if (!reply || !reply.ok) return reject(new Error((reply && reply.error) || "no reply"));
       resolve(reply.value);
@@ -132,6 +154,17 @@ function fieldFor(fingerprint) {
   return ((state.observation && state.observation.fields) || []).find(
     (f) => f.fingerprint === fingerprint
   ) || null;
+}
+
+/** Keep asking until it is true, or until the time is up. */
+async function until(check, timeout) {
+  const started = Date.now();
+  for (;;) {
+    if (await check()) return true;
+    if (Date.now() - started > timeout) return false;
+    const waited = Date.now() - started;
+    await new Promise((resolve) => setTimeout(resolve, waited < 2000 ? 300 : 1000));
+  }
 }
 
 /** Run something, counting it as work in flight for as long as it takes. */
@@ -391,8 +424,11 @@ const KIND_NAMES = {
   unknown: "Unrecognised page",
 };
 
-async function planPage() {
-  const plan = await post("/plan", state.observation);
+async function planPage(afterContinue) {
+  // Only a press of Continue can count towards the stall guard. Filling a page
+  // re-plans it several times over by design.
+  const where = afterContinue ? "/plan?after_continue=true" : "/plan";
+  const plan = await post(where, state.observation);
   state.plan = plan;
   state.questionIndex = 0;
   state.lastPlannedSignature = state.observation.signature || "";
@@ -964,15 +1000,23 @@ async function runToCompletionInner() {
       return;
     }
 
+    // Give the next step time to arrive before deciding it never will. The
+    // click knows the page moved, but the step's fields can still be on their
+    // way -- sampling once, immediately, declared the page stuck and stopped,
+    // and then the new page turned up to an empty panel with nothing driving
+    // it. That is the run that "went to the next page and did nothing".
     const before = state.observation.signature;
-    await scan();
-    if (state.observation.signature === before) {
+    const arrived = await until(async () => {
+      await scan();
+      return state.observation.signature !== before;
+    }, 20000);
+    if (!arrived) {
       // The saved run's stall guard covers the service side; this stops the
       // panel spinning on a page that will not move.
       say("The page has not changed after pressing continue, so I have stopped.", "warn");
       return;
     }
-    await planPage();
+    await planPage(true);
   }
   say(`Stopped after ${MAX_STEPS} steps rather than going round forever.`, "warn");
 }
@@ -1382,6 +1426,18 @@ function watchThePage() {
     try {
       const tab = await browser({ type: "activeTab" });
       if (!tab || tab.id !== state.tab.id) return;
+
+      // Ask the cheap question first. Scanning every frame of a large
+      // application every couple of seconds, for as long as the panel is open,
+      // was the panel making the page slow all by itself -- and it did it while
+      // sitting there doing nothing.
+      const shape = await browser({ type: "shape", tabId: state.tab.id });
+      if (shape && shape === state.lastShape) {
+        state.stableTicks = 0;
+        return;
+      }
+      state.lastShape = shape;
+
       const fresh = await browser({ type: "scan", tabId: state.tab.id });
       if (!fresh || !fresh.signature) return;
 

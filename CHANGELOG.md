@@ -3,6 +3,21 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.16.0
+
+- **The next step gets worked on.** Two things stopped it. The panel sampled the
+  new page once, immediately after pressing Continue, decided it had not changed
+  and stopped driving -- and the step then arrived to a panel with nothing
+  behind it. And the stall guard counted every look at a page, while filling one
+  plans it several times over by design, so every page declared itself stuck on
+  the third look. Continuing now waits for the page to actually become a
+  different page, and only an attempt to move on counts towards the guard.
+- **The panel no longer slows the page down while idle.** It scanned every frame
+  of the application every two and a half seconds for as long as it was open. It
+  asks a cheap question first now and scans only when something has moved.
+- **Nothing spins forever.** Every request to the page has a deadline and says
+  what timed out, instead of leaving Start going round and round.
+
 ## 1.15.0
 
 - **Every education and every job gets its own entry, with its own record.**

@@ -186,6 +186,13 @@ const HANDLERS = {
       return true;
     }
   },
+  async shape(message) {
+    // A cheap "has anything moved?" for the watcher. Scanning every frame of a
+    // large application every couple of seconds, forever, was the panel making
+    // the page slow just by being open.
+    const parts = await callInFrames(message.tabId, "act.pageShape");
+    return parts.map((entry) => entry.value).join("~");
+  },
   async perform(message) {
     return callInFrame(message.tabId, message.frameId, "act.perform", [message.action]);
   },
