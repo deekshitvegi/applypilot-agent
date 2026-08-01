@@ -464,6 +464,29 @@ class Resolution:
     fact_key: str = ""
 
 
+#: A box a form asks you to tick to agree to something. Matched on wording,
+#: because forms mark these no other way, and kept narrow on purpose: "I agree",
+#: "I certify", "I have read". A question about whether you have ever worked
+#: here is not an agreement, whatever else its sentence happens to contain.
+_AGREEMENT_RE = re.compile(
+    r"\b(i\s+(have\s+read|agree|accept|consent|acknowledge|certify|confirm)"
+    r"|agree\s+to\s+the\s+(terms|conditions)"
+    r"|accept\s+the\s+(terms|conditions)"
+    r"|terms\s+(and|&)\s+conditions"
+    r"|arbitration\s+agreement"
+    r"|privacy\s+(policy|notice|statement)"
+    r"|code\s+of\s+conduct)\b",
+    re.IGNORECASE,
+)
+
+
+def is_agreement(field: FieldObservation) -> bool:
+    """True when this is a box asking you to agree to something."""
+    if field.control is not ControlKind.CHECKBOX:
+        return False
+    return bool(_AGREEMENT_RE.search(field.display_label or field.label or ""))
+
+
 def resolve_field(
     field: FieldObservation,
     profile: Profile,
@@ -495,6 +518,18 @@ def resolve_field(
             question=_ask(
                 field, "", "your saved answer is not one of the options offered here", profile
             ),
+        )
+
+    if is_agreement(field):
+        # Nothing in the fact catalogue answers one of these, and nothing
+        # should: what is being agreed to is different every time. So it was
+        # falling through to "optional and nothing saved answers it" and being
+        # left blank -- which is how a step got refused with an arbitration
+        # agreement unticked and nothing on screen saying why. It is asked now.
+        # Never ticked from a saved answer, whatever the label resembles.
+        return Resolution(
+            field=field,
+            question=_ask(field, "", "an agreement -- yours to read and accept", profile),
         )
 
     if is_conditional(label):

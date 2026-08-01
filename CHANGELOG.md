@@ -3,6 +3,18 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.29.0
+
+- **An agreement is asked, not skipped.** "I have read and agree to the terms of
+  the Mutual Arbitration Agreement" matched no saved fact -- correctly, since
+  what is being agreed to differs every time -- so it fell through to "optional"
+  and was left unticked, and the step was refused with nothing explaining why.
+  It now comes back as a question every time. It is never answered from a saved
+  value, however much its wording resembles a Yes/No already on file.
+- **Settings is three tabs instead of one long scroll.** About you, Settings,
+  Your data. Which tab you were on survives a reload. Everything is tighter
+  too: smaller type, less padding, less air between sections.
+
 ## 1.28.0
 
 - **The "Other info" step asks its questions.** Two radio groups there thought

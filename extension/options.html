@@ -10,7 +10,13 @@
   <h1>ApplyPilot</h1>
   <p id="health" class="muted"></p>
 
-  <section class="feature">
+  <nav class="tabs" id="tabs">
+    <button type="button" data-tab="you" class="on">About you</button>
+    <button type="button" data-tab="settings">Settings</button>
+    <button type="button" data-tab="data">Your data</button>
+  </nav>
+
+  <section data-tab="you" class="feature">
     <h2>Fill this in for me</h2>
     <p class="muted">
       Rather than typing all of it. Both routes only add what the file actually
@@ -42,7 +48,7 @@
     </div>
   </section>
 
-  <section>
+  <section data-tab="settings">
     <h2>Model key</h2>
     <p class="muted">
       Matching your saved answers to a form works without a key. A key is only
@@ -66,7 +72,7 @@
     </div>
   </section>
 
-  <section>
+  <section data-tab="settings">
     <h2>Appearance</h2>
     <label for="theme">Theme</label>
     <select id="theme">
@@ -77,7 +83,7 @@
     <p class="muted tiny">Applies to this page and the panel.</p>
   </section>
 
-  <section>
+  <section data-tab="settings">
     <h2>How I should behave</h2>
     <label for="submission">Final Submit</label>
     <select id="submission">
@@ -104,14 +110,14 @@
     <button id="save-behaviour" class="primary">Save</button>
   </section>
 
-  <section>
+  <section data-tab="you">
     <h2>Your answers</h2>
     <p class="muted">Anything blank here is something a form will stop and ask you about.</p>
     <div id="facts" class="grid"></div>
     <div class="row"><button id="save-facts" class="primary">Save answers</button><span id="facts-saved" class="muted tiny"></span></div>
   </section>
 
-  <section>
+  <section data-tab="you">
     <h2>Education</h2>
     <div id="education"></div>
     <div class="row">
@@ -121,7 +127,7 @@
     </div>
   </section>
 
-  <section>
+  <section data-tab="you">
     <h2>Work history</h2>
     <p class="muted">
       What you did in each role, as your r&eacute;sum&eacute; states it &mdash; one bullet
@@ -136,7 +142,7 @@
     </div>
   </section>
 
-  <section>
+  <section data-tab="data">
     <h2>Answers learned from forms</h2>
     <p class="muted">
       Things you typed on an application that I kept so you would not have to
@@ -146,7 +152,7 @@
     <button id="forget-all" class="ghost">Forget all of them</button>
   </section>
 
-  <section>
+  <section data-tab="data">
     <h2>Applications</h2>
     <table id="applications"><tbody></tbody></table>
     <div class="row">
@@ -154,7 +160,7 @@
     </div>
   </section>
 
-  <section class="danger">
+  <section data-tab="data" class="danger">
     <h2>Erase everything</h2>
     <p class="muted">
       Deletes your profile, saved answers, documents and history from this

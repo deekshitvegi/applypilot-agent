@@ -674,3 +674,13 @@ which is the whole of "it is not asking me questions to fill them".
 *Mechanism.* The question is looked for inside the block, above the buttons,
 where it actually lives, before anything walks outward at all; and text nobody
 can see is never a label, which is what let a hidden sign-in prompt become one.
+
+**89. An agreement was silently left blank.** Nothing in the fact catalogue
+answers "I have read and agree to the terms of the Mutual Arbitration
+Agreement", and nothing should -- what is being agreed to differs every time.
+So it fell through to "optional and nothing saved answers it", was left
+unticked, and the step was refused with nothing on screen saying why.
+*Mechanism.* An agreement is always asked and never answered from a saved value,
+however much its wording resembles a Yes/No the profile happens to hold. A
+checkbox is not an agreement merely for being a checkbox: "This is my most
+recent education" and "Have you ever been employed by us before?" are not.

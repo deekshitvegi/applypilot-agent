@@ -361,3 +361,38 @@ el("theme").addEventListener("change", (event) => saveTheme(event.target.value))
 loadTheme().then((choice) => {
   el("theme").value = choice;
 });
+
+/* ---------------------------------------------------------------------- tabs */
+
+/*
+ * Ten sections down one page is a scroll, not a settings screen. They are three
+ * groups really -- what is true about you, how the thing behaves, and what it
+ * has kept -- so they are three tabs. Which one you were on survives a reload,
+ * because being thrown back to the top after every save is its own annoyance.
+ */
+function showTab(name) {
+  for (const section of document.querySelectorAll("section[data-tab]")) {
+    section.classList.toggle("hidden", section.dataset.tab !== name);
+  }
+  for (const button of document.querySelectorAll("#tabs button")) {
+    button.classList.toggle("on", button.dataset.tab === name);
+  }
+  try {
+    localStorage.setItem("settings-tab", name);
+  } catch (err) {
+    /* the choice simply does not persist */
+  }
+}
+
+document.getElementById("tabs").addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-tab]");
+  if (button) showTab(button.dataset.tab);
+});
+
+showTab((() => {
+  try {
+    return localStorage.getItem("settings-tab") || "you";
+  } catch (err) {
+    return "you";
+  }
+})());
