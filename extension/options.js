@@ -354,3 +354,10 @@ el("reset").addEventListener("click", async () => {
 });
 
 refresh();
+
+/* ---------------------------------------------------------------- appearance */
+
+el("theme").addEventListener("change", (event) => saveTheme(event.target.value));
+loadTheme().then((choice) => {
+  el("theme").value = choice;
+});

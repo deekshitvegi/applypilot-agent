@@ -3,6 +3,14 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.25.0
+
+- **Light or dark, your choice.** Settings has a Theme control: follow the
+  browser, or pin it. It applies to the panel as well, and changing it in one
+  reaches the other without reopening either. With nothing chosen it follows the
+  browser exactly as before. Kept in the browser's own storage rather than your
+  profile -- it is a display preference, not something about you.
+
 ## 1.24.0
 
 Measured on the live application rather than a fixture, which is the only reason

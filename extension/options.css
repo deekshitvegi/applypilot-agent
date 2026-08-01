@@ -45,8 +45,17 @@
   --press: 150ms ease;
 }
 
+
+/*
+ * Light or dark.
+ *
+ * The browser's own setting is followed unless a choice has been saved, in
+ * which case that wins. The dark values are written twice on purpose: once for
+ * "the browser says dark and nothing overrides it", once for "you asked for
+ * dark". Naming both beats one rule that has to mean both.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #262a31;
     --surface: #262a31;
 
@@ -62,6 +71,23 @@
     --lit: #30353e;
     --shade: #1a1d23;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #262a31;
+  --surface: #262a31;
+
+  --text: #f0f2f6;
+  --text-soft: #a9b2c0;
+  --text-faint: #7e8899;
+
+  --accent: #6d97ff;
+  --accent-text: #10141a;
+
+  --bad: #f58080;
+
+  --lit: #30353e;
+  --shade: #1a1d23;
 }
 
 * { box-sizing: border-box; }
