@@ -303,3 +303,14 @@ displayed, so a label reads as a question rather than as "*GPA *".
 **41. Setup stalled on "Middle name" while work authorisation was unanswered.**
 *Mechanism.* The next question asked is the first that is not optional. Optional
 ones are only offered once everything that matters is done.
+
+**42. The page set a field itself, after ours, and the wrong value stood.**
+Choosing a country made a form pick the first state in its list. A saved Texas
+came out as Alabama, and nothing reported it, because the re-fill pass only
+looked at fields that had been verified and then lost -- not at fields the page
+had filled in with something else of its own accord.
+*Mechanism.* After filling, the page is re-read and anything not holding what
+was asked for is set again, for up to three further passes. Filling is
+idempotent, so a pass that finds nothing wrong costs nothing, and the panel says
+which fields the page changed.
+→ `test_asterisk_labels.py::test_a_field_the_page_sets_for_itself_is_corrected_on_the_next_pass`

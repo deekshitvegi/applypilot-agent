@@ -74,6 +74,20 @@ const send = (method, path, body) =>
     body: JSON.stringify(body || {}),
   });
 
+function longField(label, value, onInput) {
+  const wrap = document.createElement("div");
+  wrap.className = "wide";
+  const name = document.createElement("label");
+  name.textContent = label;
+  const box = document.createElement("textarea");
+  box.rows = 5;
+  box.value = value || "";
+  box.addEventListener("input", () => onInput(box.value));
+  wrap.appendChild(name);
+  wrap.appendChild(box);
+  return wrap;
+}
+
 function textField(label, value, onInput) {
   const wrap = document.createElement("div");
   const name = document.createElement("label");
@@ -126,6 +140,16 @@ function renderRecords(hostId, records, fields, extras) {
     }
     card.appendChild(grid);
 
+    if (extras && extras.description) {
+      // Read out of the resume and kept: it is what a tailored resume reorders,
+      // and there was no way to see or correct it.
+      card.appendChild(
+        longField("What you did here", record.description, (value) => {
+          record.description = value;
+        })
+      );
+    }
+
     if (extras && extras.current) {
       const check = document.createElement("label");
       check.className = "check";
@@ -165,7 +189,10 @@ async function refresh() {
   profile = await service("/profile");
   renderFacts();
   renderRecords("education", profile.education, EDUCATION_FIELDS);
-  renderRecords("experience", profile.experience, EXPERIENCE_FIELDS, { current: true });
+  renderRecords("experience", profile.experience, EXPERIENCE_FIELDS, {
+    current: true,
+    description: true,
+  });
 
   const learned = await service("/learned");
   const learnedBody = el("learned").querySelector("tbody");
@@ -278,8 +305,11 @@ el("add-education").addEventListener("click", () => {
 });
 
 el("add-experience").addEventListener("click", () => {
-  profile.experience.push({ company: "", title: "", current: false });
-  renderRecords("experience", profile.experience, EXPERIENCE_FIELDS, { current: true });
+  profile.experience.push({ company: "", title: "", current: false, description: "" });
+  renderRecords("experience", profile.experience, EXPERIENCE_FIELDS, {
+    current: true,
+    description: true,
+  });
 });
 
 el("forget-all").addEventListener("click", async () => {

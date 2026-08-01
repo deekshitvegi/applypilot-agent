@@ -3,6 +3,16 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.5.0
+
+- **A field the page fills in for itself is corrected.** Choosing a country made
+  one form pick the first state in the list, so a saved Texas came out as
+  Alabama and nothing said so. Filling now keeps going while the page keeps
+  changing its mind, and says which fields it had to set again.
+- **What you did in each role is visible and editable** in Settings. It was read
+  out of your résumé and kept — it is what a tailored résumé reorders — but
+  there was no way to see or correct it.
+
 ## 1.4.0
 
 - **"Fill this in for me" is the first thing in Settings**, with two routes:

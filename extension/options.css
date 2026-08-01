@@ -105,6 +105,8 @@ button:hover { border-color: var(--accent); }
 }
 .record .grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .record .remove { float: right; margin-top: 0; }
+.record .wide { margin-top: 10px; }
+.record textarea { min-height: 90px; resize: vertical; line-height: 1.5; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }

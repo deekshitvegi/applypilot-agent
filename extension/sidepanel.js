@@ -655,24 +655,29 @@ async function fillPage() {
   }
   progress(actions.length, actions.length);
 
-  // Choosing a country can rebuild the whole address block and throw away work
-  // done seconds earlier. Look again and re-fill only what the page no longer
-  // holds -- filling is idempotent, so nothing already correct is touched.
+  // A page can change its own mind after we fill it: choosing a country
+  // rebuilds the address block, and one of them set the State to the first
+  // entry in the list on its own. Look again and fill whatever the page no
+  // longer holds. Filling is idempotent, so anything already right is untouched
+  // and an extra pass costs nothing.
   const loose = (text) => String(text || "").trim().toLowerCase();
-  const after = await scan();
-  const replan = await post("/plan", after);
-  const onPage = new Map((after.fields || []).map((f) => [f.fingerprint, f]));
-  const lost = (replan.actions || []).filter((action) => {
-    const wanted = action.option_label || action.value;
-    const field = onPage.get(action.fingerprint);
-    const wasVerified = results.some(
-      (r) => r.fingerprint === action.fingerprint && r.outcome === "verified"
+  for (let pass = 2; pass <= 4; pass += 1) {
+    const after = await scan();
+    const replan = await post("/plan", after);
+    const onPage = new Map((after.fields || []).map((f) => [f.fingerprint, f]));
+    const wrong = (replan.actions || []).filter((action) => {
+      const field = onPage.get(action.fingerprint);
+      if (!field) return false;
+      return loose(field.value) !== loose(action.option_label || action.value);
+    });
+    if (!wrong.length) break;
+
+    activity(`Pass ${pass}: ${wrong.length} field(s) the page changed`);
+    say(
+      `The page changed ${wrong.length} field(s) after I filled them. Setting them again.`,
+      "warn"
     );
-    return wasVerified && field && loose(field.value) !== loose(wanted);
-  });
-  if (lost.length) {
-    say(`The page rebuilt itself and dropped ${lost.length} field(s). Filling them again.`, "warn");
-    for (const action of lost) {
+    for (const action of wrong) {
       try {
         results.push(await applyAndReport(action));
       } catch (err) {

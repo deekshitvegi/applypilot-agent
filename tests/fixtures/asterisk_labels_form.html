@@ -82,7 +82,7 @@
 <script>
   // State depends on Country, the way these forms usually do.
   const STATES = {
-    "United States": ["Texas", "Utah", "California", "New York"],
+    "United States": ["Alabama", "California", "New York", "Texas", "Utah"],
     "India": ["Telangana", "Karnataka", "Maharashtra"],
     "Canada": ["Ontario", "Quebec"],
   };
@@ -96,6 +96,10 @@
       option.value = name;
       state.appendChild(option);
     }
+    // The page picks the first entry for you. Whatever was chosen before is
+    // gone, which is how a saved Texas turned into an Alabama.
+    const first = state.querySelector("option[value]:not([value=''])");
+    if (first) state.value = first.value;
   });
 
   // "Next" only moves on once everything required is filled in.

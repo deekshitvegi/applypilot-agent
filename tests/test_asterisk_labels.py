@@ -159,3 +159,57 @@ def test_a_year_field_gets_the_year_not_the_whole_date():
     resolution = resolve_field(field, profile)
     assert resolution.answer is not None
     assert resolution.answer.value == "2025"
+
+
+# ---------------------------------------------------------------------------
+# 42. The page changed a field after it was filled.
+# ---------------------------------------------------------------------------
+
+
+def test_a_field_the_page_sets_for_itself_is_corrected_on_the_next_pass(open_fixture, profile):
+    """Choosing a country made the form pick the first state in the list.
+
+    A saved Texas came out as Alabama, and nothing said so, because the re-fill
+    only looked at fields that had been verified and then lost -- not at fields
+    the page had filled in with something else of its own accord.
+    """
+    page = open_fixture("asterisk_labels_form.html")
+
+    def observe():
+        return PageObservation.model_validate(page.evaluate("() => ApplyPilot.scan.run()"))
+
+    def run(plan):
+        for action in plan.actions:
+            page.evaluate(
+                "async (a) => await ApplyPilot.act.perform(a)",
+                {
+                    "kind": action.kind,
+                    "fingerprint": action.fingerprint,
+                    "value": action.value,
+                    "option_label": action.option_label,
+                },
+            )
+
+    run(plan_page(observe(), profile))
+    assert page.evaluate("() => document.querySelector('select[name=state]').value") == "Alabama", (
+        "the page should have set the state itself, which is the situation under test"
+    )
+
+    # The panel keeps going while the page keeps changing its mind.
+    for _ in range(3):
+        after = observe()
+        plan = plan_page(after, profile)
+        on_page = {f.fingerprint: f for f in after.fields}
+        wrong = [
+            a
+            for a in plan.actions
+            if a.fingerprint in on_page
+            and on_page[a.fingerprint].value.strip().lower()
+            != (a.option_label or a.value).strip().lower()
+        ]
+        if not wrong:
+            break
+        run_plan = plan_page(after, profile)
+        run(type(run_plan)(actions=wrong))
+
+    assert page.evaluate("() => document.querySelector('select[name=state]').value") == "Texas"
