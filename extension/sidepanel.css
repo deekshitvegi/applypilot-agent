@@ -95,6 +95,42 @@ header {
   text-overflow: ellipsis;
 }
 
+/* The one control that changes how much the agent does on its own. */
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px 10px;
+  cursor: pointer;
+  border-top: 1px solid var(--line);
+}
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.track {
+  flex: none;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--line);
+  position: relative;
+  transition: background 140ms;
+}
+.knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--raised);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 140ms;
+}
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track .knob { transform: translateX(14px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+.switch-text { display: flex; flex-direction: column; min-width: 0; }
+.switch-text strong { font-weight: 500; font-size: 12px; }
+
 .progress { height: 2px; background: var(--line); }
 .progress > div {
   height: 100%;
@@ -318,27 +354,43 @@ textarea { min-height: 72px; resize: vertical; }
 .tabs button { padding: 3px 9px; font-size: 11px; border-radius: 999px; }
 .tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* ------------------------------------------------------------- checklist */
+/* ---------------------------------------------------------------- report */
 
-.checklist { list-style: none; margin: 6px 0 0; padding: 0; max-height: 260px; overflow-y: auto; }
-.checklist li {
+/* The whole question, not a truncated version of it: half of these read as
+ * sentences and the first four words do not tell you which one it is. */
+.report { list-style: none; margin: 6px 0 0; padding: 0; max-height: 300px; overflow-y: auto; }
+.report li {
   display: grid;
-  grid-template-columns: 7px 1fr;
-  gap: 9px;
+  grid-template-columns: 15px 1fr;
+  gap: 8px;
   align-items: start;
-  padding: 6px 4px;
+  padding: 5px 4px;
   border-radius: 6px;
   cursor: pointer;
+  line-height: 1.4;
 }
-.checklist li:hover { background: var(--raised); }
-.dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; flex: none; }
-.dot.verified { background: var(--ok); }
-.dot.attempted { background: var(--warn); }
-.dot.needs_you { background: var(--accent); }
-.dot.failed { background: var(--bad); }
-.dot.skipped { background: var(--line); }
+.report li:hover { background: var(--raised); }
+.mark { font-size: 11px; line-height: 1.5; text-align: center; }
+.mark.verified { color: var(--ok); }
+.mark.attempted { color: var(--warn); }
+.mark.needs_you { color: var(--accent); }
+.mark.failed { color: var(--bad); }
+.mark.skipped { color: var(--ink-2); }
 .item-label { min-width: 0; }
 .item-value { display: block; color: var(--ink-2); font-size: 11px; }
+
+/* --------------------------------------------------------------- the CTA */
+
+.cta-bar {
+  position: sticky;
+  bottom: 0;
+  padding: 10px;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+  border-top: 1px solid var(--line);
+}
+.cta { width: 100%; max-width: none; padding: 10px 14px; font-size: 13px; font-weight: 600; }
+.cta:disabled { background: var(--surface); border-color: var(--line); color: var(--ink-2); }
+#cta-note { margin-top: 5px; text-align: center; }
 
 /* -------------------------------------------------------------- activity */
 

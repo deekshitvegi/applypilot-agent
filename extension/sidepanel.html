@@ -15,6 +15,17 @@
       </div>
       <button id="settings" class="icon" title="Settings" aria-label="Settings">&#9881;</button>
     </div>
+    <!-- With this on, the agent works through the steps itself. It still stops
+         at anything required that it cannot answer, and it never presses final
+         Submit unless that is set separately in Settings. -->
+    <label class="switch" for="auto-continue">
+      <input id="auto-continue" type="checkbox">
+      <span class="track"><span class="knob"></span></span>
+      <span class="switch-text">
+        <strong>Fill and continue on its own</strong>
+        <span id="auto-note" class="sub tiny">I will stop at anything I cannot answer.</span>
+      </span>
+    </label>
     <div id="progress" class="progress hidden"><div id="progress-bar"></div></div>
   </header>
 
@@ -67,14 +78,19 @@
       </div>
     </section>
 
-    <section class="card">
-      <button id="checklist-toggle" class="disclosure" aria-expanded="false">
+    <!-- What happened, grouped: what still wants you, and what is already done. -->
+    <section id="review-card" class="card hidden">
+      <h2 id="needs-heading">Needs you</h2>
+      <ul id="needs-list" class="report"></ul>
+    </section>
+
+    <section id="done-card" class="card hidden">
+      <button id="done-toggle" class="disclosure" aria-expanded="false">
         <span class="chev">&#9656;</span>
-        <span id="checklist-summary">Nothing scanned yet</span>
+        <span id="done-heading">Completed</span>
       </button>
-      <div id="checklist-body" class="hidden">
-        <div class="tabs" id="checklist-tabs"></div>
-        <ul id="checklist" class="checklist"></ul>
+      <div id="done-body" class="hidden">
+        <ul id="done-list" class="report"></ul>
         <p class="sub tiny">Click a row to find that field on the page.</p>
       </div>
     </section>
@@ -93,6 +109,12 @@
       <p class="sub tiny">e.g. <em>state texas</em> &middot; <em>middle name Kumar</em> &middot; <em>change my last answer to No</em></p>
     </section>
   </main>
+
+  <!-- One place to look for what happens next. -->
+  <div class="cta-bar">
+    <button id="cta" class="primary cta">Fill this page</button>
+    <p id="cta-note" class="sub tiny"></p>
+  </div>
 
   <footer>
     <span id="versions"></span>

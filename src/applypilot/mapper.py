@@ -256,7 +256,9 @@ def _history_allowed(spec: FactSpec, field: FieldObservation) -> str:
 def match_facts(field: FieldObservation) -> list[FactMatch]:
     """Every fact that could legitimately answer *field*, best first."""
     label = field.display_label
-    if label:
+    # A label of "*" carries no words once normalised. Treating it as a label
+    # anyway is what let a whole form come back matching nothing at all.
+    if label and normalise(label):
         return _match_against_label(field, label, attribute_mode=False)
     if field.attr_label:
         # No visible label at all. The control's own naming is the last resort
@@ -548,7 +550,7 @@ def _ask(
         fingerprint=field.fingerprint,
         label=field.display_label or field.attr_label,
         control=field.control,
-        options=list(field.options),
+        options=usable_options(field),
         required=field.required,
         fact_key=fact_key,
         reason=reason,

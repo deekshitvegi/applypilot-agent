@@ -141,9 +141,9 @@ FACTS: tuple[FactSpec, ...] = (
         prompt="State or province", onboarding_group="address",
     ),
     _f(
-        "postal_code", "zip", "zip code", "postal code", "postcode",
-        "zip postal code", "postal", "post code",
-        topics=("zip", "postal", "postcode"),
+        "postal_code", "zip", "zip code", "zipcode", "postal code", "postalcode",
+        "postcode", "zip postal code", "postal", "post code", "pin code", "pincode",
+        topics=("zip", "zipcode", "postal", "postalcode", "postcode", "pincode"),
         prompt="ZIP or postal code", onboarding_group="address",
     ),
     _f(

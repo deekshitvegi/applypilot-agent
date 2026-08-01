@@ -53,6 +53,30 @@
     return "text";
   }
 
+  /**
+   * A required marker that lives in its own element beside the control.
+   *
+   * The asterisk is skipped when reading a label -- it is not the name of a
+   * field -- but it is still the only thing saying the field is required, so it
+   * is looked for separately.
+   */
+  function hasRequiredMarker(el) {
+    let node = el;
+    for (let depth = 0; depth < 2 && node; depth += 1) {
+      const parent = node.parentElement;
+      if (!parent) return false;
+      for (const child of parent.children) {
+        if (child === node || child.contains(el)) continue;
+        if (child.querySelector("input,select,textarea")) continue;
+        const text = D.textOf(child);
+        // Short and decorative: a marker, not "* indicates a required field".
+        if (text && text.length <= 20 && /[*]|\b(required|mandatory)\b/i.test(text)) return true;
+      }
+      node = parent;
+    }
+    return false;
+  }
+
   function isRequired(el, rawLabel) {
     if (el.required) return true;
     if ((el.getAttribute("aria-required") || "").toLowerCase() === "true") return true;
@@ -60,7 +84,7 @@
     if (REQUIRED_MARK.test(rawLabel || "")) return true;
     const marked = D.closestDeep(el, "[class*='required' i],[data-required='true']");
     if (marked && !/not-required|non-required/i.test(marked.className || "")) return true;
-    return false;
+    return hasRequiredMarker(el);
   }
 
   function commonAncestor(elements) {

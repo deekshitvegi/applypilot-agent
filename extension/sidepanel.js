@@ -39,6 +39,8 @@ const state = {
   checklist: [],
   checklistFilter: "all",
   unread: 0,
+  autoContinue: false,
+  submissionPolicy: "confirm",
 };
 
 /* ------------------------------------------------------------------ plumbing */
@@ -376,7 +378,8 @@ async function renderQuestion() {
 
   if (!question) {
     card.classList.add("hidden");
-    el("idle").classList.remove("hidden");
+    el("idle").classList.add("hidden");
+    updateCta();
     return;
   }
   card.classList.add("hidden");
@@ -392,6 +395,7 @@ async function renderQuestion() {
   }
 
   card.classList.remove("hidden");
+  updateCta();
   el("question-remaining").textContent =
     questions().length - state.questionIndex - 1 > 0
       ? `${questions().length - state.questionIndex - 1} more`
@@ -403,7 +407,7 @@ async function renderQuestion() {
   host.innerHTML = "";
   const choices = (question.options || [])
     .map((o) => o.label)
-    .filter((label) => label && label.trim());
+    .filter((label) => label && label.trim() && !isPlaceholderLabel(label));
   const control = buildControl(
     choices.length ? "choice" : question.control === "textarea" ? "textarea" : "text",
     choices,
@@ -423,6 +427,14 @@ async function renderQuestion() {
     control.highlight(question._suggestion);
     showHint(question._suggestionWhy, true);
   }
+}
+
+/* A control's own "Choose" row is furniture, not an answer. */
+const PLACEHOLDER_LABEL =
+  /^(|-+|no selection|none selected|not selected|select|select.*|please select.*|choose|choose.*|pick one|--.*--|n\/?a)$/i;
+
+function isPlaceholderLabel(label) {
+  return PLACEHOLDER_LABEL.test(String(label || "").trim());
 }
 
 function showResolving(question) {
@@ -523,6 +535,8 @@ async function suggestFor(question, control) {
           : `Suggested: ${reply.suggested} — ${reply.why || "based on the question"}`;
       control.highlight(reply.suggested);
       showHint(question._suggestionWhy, true);
+    } else if (reply.kind === "model_unavailable") {
+      say(reply.why, "warn");
     } else if (reply.why) {
       showHint(reply.why, false);
     }
@@ -674,64 +688,114 @@ async function fillPage() {
   await renderQuestion();
 }
 
-/* --------------------------------------------------------------- checklist */
+/**
+ * Work through a multi-step application without being asked to press Continue.
+ *
+ * It stops at the first thing it cannot answer, and it never presses final
+ * Submit -- that is governed separately in Settings and is not implied by this.
+ */
+const MAX_STEPS = 15;
 
-const CHECKLIST_TABS = [
-  ["all", "All"],
-  ["needs_you", "Needs you"],
-  ["verified", "Verified"],
-  ["attempted", "Unverified"],
-  ["failed", "Failed"],
-  ["skipped", "Skipped"],
-];
+async function runToCompletion() {
+  for (let step = 1; step <= MAX_STEPS; step += 1) {
+    await fillPage();
+
+    const outstanding = questions().filter((q) => q.required);
+    if (outstanding.length) {
+      activity(
+        `Step ${step}: stopped for you`,
+        `${outstanding.length} required question${outstanding.length > 1 ? "s" : ""} I cannot answer.`
+      );
+      return;
+    }
+
+    const submit = (state.observation.submit_controls || [])[0];
+    const next = (state.observation.next_controls || [])[0];
+
+    if (!next && submit) {
+      if (state.submissionPolicy !== "auto") {
+        activity("Ready to submit", `Everything filled. Press "${submit.text}" yourself.`);
+        say(`Everything on this page is filled. Final submit is yours: "${submit.text}".`, "warn");
+        return;
+      }
+      say(`Pressing "${submit.text}".`, "warn");
+      await browser({ type: "click", tabId: state.tab.id, text: submit.text });
+      const confirmation = await browser({ type: "confirmation", tabId: state.tab.id });
+      say(
+        confirmation
+          ? `Submitted -- the page confirmed it: ${confirmation}`
+          : "I pressed submit but the page showed no confirmation, so I have not recorded " +
+            "this as submitted. Check the page.",
+        confirmation ? undefined : "warn"
+      );
+      return;
+    }
+
+    if (!next) {
+      activity("Nothing further to press", "This looks like the end of what I can do here.");
+      return;
+    }
+
+    activity(`Step ${step}: continuing`, `Pressing "${next.text}".`);
+    const moved = await browser({ type: "click", tabId: state.tab.id, text: next.text });
+    if (!moved || moved.outcome === "failed") {
+      say(`"${next.text}" did not move the page on: ${(moved || {}).evidence || "no change"}`, "bad");
+      return;
+    }
+
+    const before = state.observation.signature;
+    await scan();
+    if (state.observation.signature === before) {
+      // The saved run's stall guard covers the service side; this stops the
+      // panel spinning on a page that will not move.
+      say("The page has not changed after pressing continue, so I have stopped.", "warn");
+      return;
+    }
+    await planPage();
+  }
+  say(`Stopped after ${MAX_STEPS} steps rather than going round forever.`, "warn");
+}
+
+/* ------------------------------------------------------------------ report */
+
+const DONE_STATES = new Set(["verified", "attempted", "skipped"]);
+const MARKS = {
+  verified: "✓",
+  attempted: "!",
+  needs_you: "!",
+  failed: "×",
+  skipped: "–",
+};
 
 function setChecklist(items) {
   state.checklist = items || [];
-  const counts = {};
-  for (const item of state.checklist) counts[item.state] = (counts[item.state] || 0) + 1;
+  const needs = state.checklist.filter((i) => i.state === "needs_you" || i.state === "failed");
+  const done = state.checklist.filter((i) => DONE_STATES.has(i.state));
 
-  const parts = [];
-  if (counts.verified) parts.push(`${counts.verified} verified`);
-  if (counts.needs_you) parts.push(`${counts.needs_you} need you`);
-  if (counts.attempted) parts.push(`${counts.attempted} unverified`);
-  if (counts.failed) parts.push(`${counts.failed} failed`);
-  if (counts.skipped) parts.push(`${counts.skipped} left blank`);
-  el("checklist-summary").textContent = parts.length
-    ? parts.join(" · ")
-    : `${state.checklist.length} fields`;
+  el("review-card").classList.toggle("hidden", needs.length === 0);
+  el("needs-heading").textContent = `Needs you (${needs.length})`;
+  fillReport(el("needs-list"), needs);
 
-  const tabs = el("checklist-tabs");
-  tabs.innerHTML = "";
-  for (const [key, label] of CHECKLIST_TABS) {
-    const count = key === "all" ? state.checklist.length : counts[key] || 0;
-    if (!count) continue;
-    const button = document.createElement("button");
-    button.textContent = `${label} ${count}`;
-    button.className = state.checklistFilter === key ? "on" : "";
-    button.addEventListener("click", () => {
-      state.checklistFilter = key;
-      setChecklist(state.checklist);
-    });
-    tabs.appendChild(button);
-  }
-  renderChecklist();
+  el("done-card").classList.toggle("hidden", done.length === 0);
+  const verified = done.filter((i) => i.state === "verified").length;
+  el("done-heading").textContent =
+    `Completed (${verified})` + (done.length > verified ? ` · ${done.length - verified} left blank` : "");
+  fillReport(el("done-list"), done);
+
+  updateCta();
 }
 
-function renderChecklist() {
-  const list = el("checklist");
+/** One row per field, showing the whole question rather than a truncation. */
+function fillReport(list, items) {
   list.innerHTML = "";
-  const items =
-    state.checklistFilter === "all"
-      ? state.checklist
-      : state.checklist.filter((item) => item.state === state.checklistFilter);
-
   for (const item of items) {
     const row = document.createElement("li");
     row.title = "Find this field on the page";
 
-    const dot = document.createElement("span");
-    dot.className = "dot " + item.state;
-    row.appendChild(dot);
+    const mark = document.createElement("span");
+    mark.className = "mark " + item.state;
+    mark.textContent = MARKS[item.state] || "·";
+    row.appendChild(mark);
 
     const label = document.createElement("span");
     label.className = "item-label";
@@ -751,6 +815,113 @@ function renderChecklist() {
       }).catch((err) => say(String(err.message), "bad"))
     );
     list.appendChild(row);
+  }
+}
+
+/**
+ * The one place to look for what happens next.
+ *
+ * It never offers to submit unless that was set deliberately in Settings.
+ */
+function updateCta() {
+  const cta = el("cta");
+  const note = el("cta-note");
+  cta.disabled = false;
+
+  const outstanding = questions().filter((q) => q.required).length;
+  const next = ((state.observation || {}).next_controls || [])[0];
+  const submit = ((state.observation || {}).submit_controls || [])[0];
+
+  if (!state.observation || (state.observation.fields || []).length === 0) {
+    cta.textContent = "Scan this page";
+    note.textContent = "";
+    cta._action = "scan";
+    return;
+  }
+  if (outstanding) {
+    cta.textContent = `Answer ${outstanding} question${outstanding > 1 ? "s" : ""}`;
+    note.textContent = "I have filled everything else I can.";
+    cta._action = "focus";
+    return;
+  }
+  if (!state.plan || !(state.plan.actions || []).length) {
+    if (next) {
+      cta.textContent = `Continue application ▸`;
+      note.textContent = `Presses "${next.text}".`;
+      cta._action = "next";
+      return;
+    }
+    if (submit) {
+      if (state.submissionPolicy === "auto") {
+        cta.textContent = "Submit application ▸";
+        note.textContent = "You set submitting to happen automatically.";
+        cta._action = "submit";
+      } else {
+        cta.textContent = `Press "${submit.text}" yourself`;
+        note.textContent = "I do not press final submit. Change that in Settings if you want to.";
+        cta.disabled = true;
+        cta._action = "none";
+      }
+      return;
+    }
+    cta.textContent = "Rescan this page";
+    cta._action = "scan";
+    note.textContent = "";
+    return;
+  }
+  cta.textContent = "Fill this page";
+  note.textContent = `${state.plan.actions.length} field(s) I can fill from what you saved.`;
+  cta._action = "fill";
+}
+
+async function runCta() {
+  const cta = el("cta");
+  if (state.busy) return;
+  const action = cta._action;
+  if (action === "focus") {
+    el("question").scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  state.busy = true;
+  setBusy(cta, true);
+  const restore = cta.textContent;
+  try {
+    if (action === "scan") {
+      await scan();
+      state.busy = false;
+      await planPage();
+    } else if (action === "fill") {
+      state.busy = false;
+      if (state.autoContinue) await runToCompletion();
+      else await fillPage();
+    } else if (action === "next" || action === "submit") {
+      const control =
+        action === "next"
+          ? state.observation.next_controls[0]
+          : state.observation.submit_controls[0];
+      const moved = await browser({ type: "click", tabId: state.tab.id, text: control.text });
+      if (action === "submit") {
+        const confirmation = await browser({ type: "confirmation", tabId: state.tab.id });
+        say(
+          confirmation
+            ? `Submitted -- the page confirmed it: ${confirmation}`
+            : "I pressed submit but the page showed no confirmation, so I have not recorded " +
+              "this as submitted. Check the page.",
+          confirmation ? undefined : "warn"
+        );
+      } else if (!moved || moved.outcome === "failed") {
+        say(`"${control.text}" did not move the page on.`, "bad");
+      }
+      state.busy = false;
+      await scan();
+      await planPage();
+    }
+  } catch (err) {
+    say(String(err.message), "bad");
+  } finally {
+    state.busy = false;
+    setBusy(cta, false, restore);
+    updateCta();
   }
 }
 
@@ -788,7 +959,10 @@ el("run").addEventListener("click", async () => {
     setBusy(el("run"), false, "Stop");
     state.busy = false;
     await planPage();
-    if (observation.kind === "application") await fillPage();
+    if (observation.kind === "application") {
+      if (state.autoContinue) await runToCompletion();
+      else await fillPage();
+    }
   } catch (err) {
     say(String(err.message), "bad");
     activity("Stopped after an error", String(err.message));
@@ -835,6 +1009,19 @@ el("fill").addEventListener("click", async () => {
   }
 });
 
+el("auto-continue").addEventListener("change", async (event) => {
+  state.autoContinue = event.target.checked;
+  el("auto-note").textContent = state.autoContinue
+    ? "I will press Continue myself and stop at anything I cannot answer."
+    : "I will stop at anything I cannot answer.";
+  try {
+    await put("/settings", { auto_advance: state.autoContinue });
+  } catch (err) {
+    say(String(err.message), "bad");
+  }
+});
+
+el("cta").addEventListener("click", runCta);
 el("settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
 el("onboarding-later").addEventListener("click", () => el("onboarding").classList.add("hidden"));
 el("resume-file").addEventListener("click", (event) => event.stopPropagation());
@@ -956,7 +1143,7 @@ function renderChoiceCard(outcome) {
   el("log").scrollTop = el("log").scrollHeight;
 }
 
-toggle("checklist-toggle", "checklist-body");
+toggle("done-toggle", "done-body");
 toggle("log-toggle", "log");
 
 /* --------------------------------------------------------------------- boot */
@@ -964,6 +1151,18 @@ toggle("log-toggle", "log");
 (async function start() {
   const health = await refreshHealth();
   if (!health) return;
+  try {
+    const settings = await service("/settings");
+    state.autoContinue = Boolean(settings.auto_advance);
+    state.submissionPolicy = settings.submission_policy || "confirm";
+    el("auto-continue").checked = state.autoContinue;
+    if (state.autoContinue) {
+      el("auto-note").textContent =
+        "I will press Continue myself and stop at anything I cannot answer.";
+    }
+  } catch (err) {
+    /* the health check already reported the service being down */
+  }
   await refreshOnboarding();
   try {
     await scan();

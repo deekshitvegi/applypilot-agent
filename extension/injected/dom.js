@@ -162,6 +162,21 @@
   const NAVIGATIONAL =
     "nav,header,footer,[role='tablist'],[role='tab'],[role='navigation'],[role='menu'],[role='menubar']";
 
+  /*
+   * A required marker is not a field name.
+   *
+   * Forms often put the asterisk in its own element between the name and the
+   * control, which makes it the nearest thing before the input. A whole
+   * application came back with every field labelled "*", nothing matched any
+   * saved answer, and the panel reported there was nothing it could fill.
+   */
+  const DECORATION_ONLY =
+    /^[\s*†‡•()[\]{}:;.,\-–—_|]*(required|optional|mandatory|req)?[\s*†‡•()[\]{}:;.,\-–—_|]*$/i;
+
+  function isDecoration(text) {
+    return !text || DECORATION_ONLY.test(String(text).trim());
+  }
+
   function referencedText(el, attribute) {
     const ids = (el.getAttribute(attribute) || "").split(/\s+/).filter(Boolean);
     if (!ids.length) return "";
@@ -183,26 +198,28 @@
   function visibleLabel(el) {
     if (!el) return "";
 
+    // Every strategy below skips text that is only a required marker: an
+    // asterisk is decoration, not the name of a field.
     if (el.labels && el.labels.length) {
       for (const label of el.labels) {
         const text = textOf(label);
-        if (text) return text;
+        if (!isDecoration(text)) return text;
       }
     }
 
     const byRef = referencedText(el, "aria-labelledby");
-    if (byRef) return byRef;
+    if (!isDecoration(byRef)) return byRef;
 
     const wrapping = closestDeep(el, "label");
     if (wrapping) {
       const clone = wrapping.cloneNode(true);
       clone.querySelectorAll("input,select,textarea,button").forEach((n) => n.remove());
       const text = textOf(clone);
-      if (text) return text;
+      if (!isDecoration(text)) return text;
     }
 
     const aria = (el.getAttribute("aria-label") || "").trim();
-    if (aria) return aria;
+    if (!isDecoration(aria)) return aria;
 
     // A label sitting just before the control inside the same field row: the
     // common shape when a form does not use <label for>. The walk stops as soon
@@ -219,7 +236,9 @@
         if (sibling.matches(NAVIGATIONAL) || sibling.querySelector("a[href]")) return "";
         const hint = sibling.matches(LABEL_HINT) ? sibling : sibling.querySelector(LABEL_HINT);
         const text = textOf(hint || sibling);
-        if (text) return text.length <= 200 ? text : "";
+        // A lone asterisk between the name and the control is skipped over,
+        // not taken as the name.
+        if (text && !isDecoration(text)) return text.length <= 200 ? text : "";
         sibling = sibling.previousElementSibling;
       }
       node = node.parentElement;
@@ -430,6 +449,7 @@
 
   AP.dom = {
     MAX_ELEMENTS,
+    isDecoration,
     ancestors,
     attributeLabel,
     blockSignature,

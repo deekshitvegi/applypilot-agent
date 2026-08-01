@@ -23,7 +23,7 @@ from . import __version__, ai, applications, chat, documents, learning, onboardi
 from .adapters import classify_host
 from .config import load_settings
 from .mapper import describe_match
-from .matching import rank_options
+from .matching import rank_options, real_options
 from .models import (
     ActionResult,
     ApplicationRecord,
@@ -91,6 +91,7 @@ class SettingsPayload(BaseModel):
     submission_policy: str | None = None
     prefer_easy_apply: bool | None = None
     answer_demographics: bool | None = None
+    auto_advance: bool | None = None
 
 
 @app.get("/settings")
@@ -102,6 +103,7 @@ def get_settings() -> dict[str, Any]:
         "submission_policy": profile.submission_policy,
         "prefer_easy_apply": profile.prefer_easy_apply,
         "answer_demographics": profile.answer_demographics,
+        "auto_advance": profile.auto_advance,
         "authorised_sign_in_hosts": session_sign_in.authorised_hosts(),
     }
 
@@ -121,6 +123,8 @@ def put_settings(payload: SettingsPayload) -> dict[str, Any]:
         profile.prefer_easy_apply = payload.prefer_easy_apply
     if payload.answer_demographics is not None:
         profile.answer_demographics = payload.answer_demographics
+    if payload.auto_advance is not None:
+        profile.auto_advance = payload.auto_advance
     store.save_profile(profile)
     return get_settings()
 
@@ -385,6 +389,14 @@ async def rank_page_options(payload: OptionsPayload) -> dict[str, Any]:
             "note": "these options did not come from a list the control owns, so they are ignored",
         }
 
+    offered = real_options(payload.options)
+    if not offered:
+        return {
+            "chosen": None,
+            "options": [],
+            "note": "this dropdown has nothing to choose from yet -- it may depend on "
+                    "another field being filled in first",
+        }
     ranked = rank_options(payload.saved_value, payload.options, payload.fact_key)
     chosen = ranked[0] if ranked else None
     ambiguous = len(ranked) > 1 and ranked[1].score == ranked[0].score
@@ -393,7 +405,7 @@ async def rank_page_options(payload: OptionsPayload) -> dict[str, Any]:
         return {
             "chosen": chosen.option.label,
             "why": chosen.reason,
-            "options": [o.model_dump() for o in payload.options],
+            "options": [o.model_dump() for o in offered],
         }
 
     note = "none of the options is close enough to your saved answer"
@@ -401,11 +413,7 @@ async def rank_page_options(payload: OptionsPayload) -> dict[str, Any]:
         note = "two options fit equally well, so this is yours to pick"
     if not payload.saved_value:
         note = "nothing saved answers this"
-    return {
-        "chosen": None,
-        "note": note,
-        "options": [o.model_dump() for o in payload.options],
-    }
+    return {"chosen": None, "note": note, "options": [o.model_dump() for o in offered]}
 
 
 # ---------------------------------------------------------------------------
@@ -534,13 +542,16 @@ async def suggest(payload: SuggestPayload) -> dict[str, Any]:
         return {
             "suggested": None,
             "why": "nothing saved answers this, and there is no model key set",
+            "kind": "model_unavailable",
         }
     try:
         chosen, why = await ai.choose_among(
             model, payload.label, payload.options, payload.saved_value
         )
     except ai.ModelUnavailable as exc:
-        return {"suggested": None, "why": str(exc)}
+        # Flagged so the panel keeps it out of the question card: a busy model
+        # is not something the applicant needs to read while answering.
+        return {"suggested": None, "why": str(exc), "kind": "model_unavailable"}
     if chosen is None:
         return {"suggested": None, "why": why}
     return {"suggested": chosen.label, "why": why, "from": "model"}

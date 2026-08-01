@@ -274,6 +274,10 @@ class Profile(BaseModel):
     answer_demographics: bool = False
     submission_policy: Literal["never", "confirm", "auto"] = "confirm"
     prefer_easy_apply: bool = False
+    #: Work through a multi-step application without being asked to press
+    #: Continue each time. Off by default; pressing final Submit is governed
+    #: separately by submission_policy and is never implied by this.
+    auto_advance: bool = False
     updated_at: datetime = Field(default_factory=_now)
 
     def fact(self, key: str) -> str:

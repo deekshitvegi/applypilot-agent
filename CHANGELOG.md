@@ -3,6 +3,25 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.2.0
+
+- **A required marker is no longer read as a field name.** On a form that puts
+  its asterisk in its own element between the name and the control, every field
+  came back labelled `*`, nothing matched, and the panel reported there was
+  nothing it could fill on a form asking for a first name and an address. The
+  asterisk is skipped when reading a label and looked for separately when
+  deciding whether a field is required.
+- **Fill and continue on its own**, as a toggle in the panel. It works through
+  the steps, stops at the first thing it cannot answer, and never presses final
+  Submit -- that stays governed by the submission policy in Settings.
+- **The report is grouped the way it reads**: "Needs you" with the whole
+  question, and "Completed" collapsed underneath. One primary control at the
+  bottom says what happens next.
+- A dependent dropdown holding only "Choose" is no longer offered as a question
+  with no answers; it fills on the next pass once the field it depends on is in.
+- "Zipcode" and "Pincode" answer the postal code.
+- A busy model reads as busy, not as a broken key.
+
 ## 1.1.0
 
 Fixes from the first run on a real application.

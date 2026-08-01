@@ -261,3 +261,22 @@ failed fill keeps the question up with the reason.
 **35. Two copies of a date hint produced a backwards date.** `MM/DD/YYYY` joined
 to itself contains "yyyy mm/dd", which matched the ISO pattern.
 *Mechanism.* Each hint is tested on its own.
+
+**36. Every field on a form came back labelled `*`.** The required marker sits
+in its own element between the field name and the control, so the nearest thing
+before each input was a lone asterisk. Nothing matched any saved answer and the
+panel reported there was nothing it could fill, on a form asking for a first
+name, an email and an address.
+*Mechanism.* Text that is only a required marker is skipped by every label
+strategy, and the walk carries on past it. Because the asterisk was also the
+only thing saying a field was required, that signal is now looked for
+separately, among the short decorative elements sitting beside the control.
+A label that normalises to nothing falls back to the control's own attributes.
+→ `test_asterisk_labels.py::test_a_required_marker_is_not_read_as_the_field_name`
+
+**37. A dependent dropdown was offered as a question with no answers.** State
+holds nothing but "Choose" until a country is picked.
+*Mechanism.* Placeholder rows never reach a question, so such a control has no
+options and is marked as needing them opened rather than asked about. It fills
+on the next pass, once the field it depends on is in.
+→ `test_state_becomes_answerable_once_country_is_chosen`

@@ -61,10 +61,16 @@ class Model:
                 )
         except httpx.HTTPError as exc:
             raise ModelUnavailable(f"could not reach the model: {exc}") from exc
-        if response.status_code >= 400:
+        if response.status_code == 429:
+            # Rate limiting is not a broken key, and saying so sends people to
+            # Settings to fix something that is not wrong.
             raise ModelUnavailable(
-                f"the model provider returned {response.status_code}; check the key in Settings"
+                "the model is busy right now (rate limited); matching still works"
             )
+        if response.status_code in {401, 403}:
+            raise ModelUnavailable("the model provider rejected the key; check it in Settings")
+        if response.status_code >= 400:
+            raise ModelUnavailable(f"the model provider returned {response.status_code}")
         data = response.json()
         try:
             return data["candidates"][0]["content"]["parts"][0]["text"].strip()
