@@ -3,6 +3,15 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.19.0
+
+- **The race question stops coming back.** A form that asks "Are you Hispanic or
+  Latino?" and "Race category" separately was answering both from one saved
+  value: picking a race wrote "Asian" where a Yes/No belonged, then answering
+  the Yes/No wrote "No" over the race -- so each answer made the other question
+  wrong again, however many times either was answered. Two questions, two facts.
+  A combined "Race / Ethnicity" question still works as one.
+
 ## 1.18.0
 
 - **The panel and Settings look like something a person designed.** Space

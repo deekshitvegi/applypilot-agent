@@ -293,10 +293,22 @@ FACTS: tuple[FactSpec, ...] = (
     ),
     _f(
         "race_ethnicity", "race", "ethnicity", "race ethnicity",
-        "race or ethnicity", "ethnic background", "hispanic or latino",
-        kind="choice", topics=("race", "ethnicity", "ethnic", "hispanic", "latino"),
+        "race or ethnicity", "race category", "ethnic background", "ethnic category",
+        kind="choice", topics=("race", "ethnicity", "ethnic"),
         sensitivity=Sensitivity.DEMOGRAPHIC,
         prompt="Race / ethnicity", onboarding_group="voluntary",
+    ),
+    # Its own question, and its own answer. A form that asks "Are you Hispanic
+    # or Latino?" and "Race category" separately was answering both from one
+    # saved value: picking a race wrote "Asian" where a Yes/No belonged, then
+    # answering Yes/No wrote "No" over the race -- and each answer made the
+    # other question wrong again, for as long as anyone kept answering.
+    _f(
+        "hispanic_latino", "hispanic or latino", "are you hispanic or latino",
+        "hispanic latino", "hispanic",
+        kind="choice", topics=("hispanic", "latino"),
+        sensitivity=Sensitivity.DEMOGRAPHIC,
+        prompt="Are you Hispanic or Latino?", onboarding_group="voluntary",
     ),
     _f(
         "veteran_status", "veteran status", "veteran", "protected veteran",

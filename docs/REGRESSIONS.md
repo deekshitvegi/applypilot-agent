@@ -561,3 +561,11 @@ before the answer went in, so the new one was never in it, and the step was
 continued past with a required field unanswered.
 *Mechanism.* An answer that goes onto the page is followed by a fresh look at
 it, and a new plan if the page is no longer the same page.
+
+**78. Two EEO questions shared one saved answer, so both were asked forever.**
+A form asks "Are you Hispanic or Latino?" and "Race category" separately, and
+one fact owned both. Picking a race wrote "Asian" where a Yes/No belonged;
+answering the Yes/No wrote "No" over the race. Each answer made the other
+question wrong again, however many times either was answered.
+*Mechanism.* Two questions, two facts. A combined "Race / Ethnicity" question,
+which plenty of forms still ask, stays with race.
