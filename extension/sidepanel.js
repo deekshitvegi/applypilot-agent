@@ -1070,9 +1070,22 @@ async function runToCompletionInner() {
       return state.observation.signature !== before;
     }, 20000);
     if (!arrived) {
-      // The saved run's stall guard covers the service side; this stops the
-      // panel spinning on a page that will not move.
-      say("The page has not changed after pressing continue, so I have stopped.", "warn");
+      // A step that refuses to move on has just said why, in red, on itself.
+      // That is the one moment the page states which of its questions it
+      // actually wanted -- several of them say so nowhere else -- and it was
+      // being thrown away: the run stopped here without looking again, so three
+      // required questions stayed invisible and the panel simply announced it
+      // had stopped. Look now, while the complaints are on screen.
+      await planPage(true);
+      const wanted = (state.plan.questions || []).length;
+      say(
+        wanted
+          ? `"${next.text}" did not move the page on. The form is asking for ` +
+              `${wanted} more answer(s) -- they are below.`
+          : "The page has not changed after pressing continue, so I have stopped.",
+        "warn"
+      );
+      await renderQuestion();
       return;
     }
     await planPage(true);

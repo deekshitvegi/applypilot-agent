@@ -3,6 +3,17 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.27.0
+
+- **A step that refuses to move on is read again, not given up on.** Several
+  required questions say so nowhere a machine can see until Continue is pressed
+  and refused -- that is the moment the form prints "Please select an option"
+  against each of them. The rule for reading those was already there; it never
+  got to run, because the panel pressed Continue, saw the page had not moved,
+  announced it had stopped and returned without looking again. It looks now,
+  while the complaints are on screen, and hands back what the form is asking
+  for instead of saying nothing.
+
 ## 1.26.0
 
 - **A question with options is asked with those options.** The veteran question

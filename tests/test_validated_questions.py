@@ -79,3 +79,27 @@ def test_an_answered_question_stops_being_complained_about(open_fixture):
     required = {f.name for f in observe(page).fields if f.required}
     assert "employed_before" not in required, required
     assert "arbitration" in required
+
+
+def test_the_complaints_only_exist_after_a_refused_continue(open_fixture):
+    """Which is the one moment the panel has to look again.
+
+    Read off the live application: before Next is pressed the complaint element
+    is display:none and nothing on the page says those questions are required.
+    Pressing Next is what makes the form state its case -- and stopping there
+    without looking again is how a step ended up announcing it had stopped while
+    three required questions sat unasked and invisible.
+    """
+    page = open_fixture("validated_questions.html")
+    before = {f.name for f in observe(page).fields if f.required}
+    assert before == set(), before
+
+    press_next(page)
+    after = {f.name for f in observe(page).fields if f.required}
+    assert after == {"employed_before", "arbitration"}, after
+
+    plan = plan_page(observe(page), Profile())
+    observation = observe(page)
+    names = {f.fingerprint: f.name for f in observation.fields}
+    asked = {names.get(q.fingerprint) for q in plan.questions}
+    assert {"employed_before", "arbitration"} <= asked, asked

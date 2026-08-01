@@ -651,3 +651,15 @@ with "that did not go onto the page" however carefully it was typed.
 *Mechanism.* What a control is decides how it is answered. A choice control is
 answered by choosing, and if its options did not arrive with the question they
 are read from the control on the page rather than giving up and offering a box.
+
+**87. The one moment a form says what it wanted was thrown away.** Several
+required questions say so nowhere a machine can see until Continue is pressed
+and refused -- that is when the form prints "Please select an option" against
+each of them. Read off the live page: before Continue those elements are
+display:none, so a scan taken beforehand is right to call the fields optional.
+The run pressed Continue, saw the page had not moved, announced it had stopped,
+and returned without looking again -- so the complaints appeared on screen, were
+never read, and three required questions stayed unasked and invisible.
+*Mechanism.* A Continue that does not move the page on is followed by a fresh
+look and a fresh plan, because that is exactly when the page has stated its
+case. What it asks for is then handed back to be answered.
