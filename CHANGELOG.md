@@ -3,6 +3,20 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.18.0
+
+- **The panel and Settings look like something a person designed.** Space
+  instead of boxes inside boxes, body text at a readable size, one accent colour
+  used only where something is the main action or a warning, and the question
+  being asked is the only thing on screen with a border. The activity list reads
+  as a transcript rather than a wall of coloured blocks. Both follow the
+  browser's own light or dark setting.
+- **A question that appears because of your answer gets asked.** Answering one
+  EEO question adds another below it; the list had been captured before the
+  answer went in, so the new one was never in it and the step was continued past
+  with a required field blank. An answer that goes onto the page is now followed
+  by a fresh look at it.
+
 ## 1.17.0
 
 - **A step is not finished while the form is still asking for things.** Some

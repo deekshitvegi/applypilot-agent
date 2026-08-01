@@ -762,6 +762,19 @@ async function answerQuestionInner(value, button, restoreLabel) {
         });
       }
       flashDone(button, "Saved", restoreLabel);
+
+      // An answer can bring a whole question into existence: choosing "No" for
+      // one EEO question adds a required Race category below it. Working
+      // through a list captured before the answer never sees it, and the step
+      // is then continued past with a required field nobody was ever asked
+      // about. Look again whenever an answer went onto the page.
+      const before = state.observation.signature;
+      await scan();
+      if (state.observation.signature !== before) {
+        await planPage();
+        await renderQuestion();
+        return;
+      }
     }
     state.questionIndex += 1;
     await renderQuestion();

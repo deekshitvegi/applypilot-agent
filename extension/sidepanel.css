@@ -1,46 +1,73 @@
 /*
- * One thing at a time.
+ * The panel's appearance.
  *
- * The panel had four cards competing for attention and a wall of log lines, and
- * the question being asked was the smallest thing on screen. Now the question
- * owns the space, everything else collapses, and every control says clearly
- * whether it is doing something.
+ * Written for someone opening it for the first time. Three things drive it:
+ *
+ *   One thing at a time. Whatever is being asked right now is the only thing
+ *   with a border and a colour. Everything else steps back.
+ *
+ *   Space instead of boxes. Sections are separated by air, not by nested
+ *   rectangles. Boxes inside boxes inside boxes is what made a short list of
+ *   fields feel like a second form to fill in.
+ *
+ *   Readable at a glance. Body text is 14px with room to breathe, so a long
+ *   legal question can be read without leaning towards the screen.
+ *
+ * Light and dark both follow the browser's own setting, so the panel matches
+ * the window it is docked to.
  */
 
 :root {
+  color-scheme: light dark;
+
   --bg: #ffffff;
   --surface: #f6f7f9;
-  --raised: #ffffff;
-  --ink: #101317;
-  --ink-2: #5b6472;
-  --line: #e3e7ed;
-  --accent: #1f5fd4;
-  --accent-soft: #eaf1ff;
-  --ok: #167a4a;
-  --warn: #8a5a00;
-  --warn-soft: #fff5e2;
-  --bad: #b3261e;
-  --bad-soft: #fdecea;
+  --surface-2: #eef0f4;
+  --line: #e2e5ea;
+  --line-strong: #ccd2da;
+
+  --text: #16181d;
+  --text-soft: #5c6470;
+  --text-faint: #878e99;
+
+  --accent: #2f6df6;
+  --accent-text: #ffffff;
+  --accent-soft: #eff4fe;
+  --accent-line: #bcd0fb;
+
+  --good: #1d7a4c;
+  --warn: #9a6206;
+  --warn-soft: #fdf5e6;
+  --bad: #c02b2b;
+  --bad-soft: #fdeeee;
+
   --radius: 10px;
-  --shadow: 0 1px 2px rgba(16, 19, 23, 0.06), 0 4px 12px rgba(16, 19, 23, 0.05);
+  --radius-sm: 7px;
+  --pad: 16px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #101317;
-    --surface: #171b21;
-    --raised: #1c2129;
-    --ink: #eef1f5;
-    --ink-2: #99a3b1;
-    --line: #2a313a;
-    --accent: #6fa0ff;
-    --accent-soft: #1b2740;
-    --ok: #4fc98a;
-    --warn: #e3a94a;
-    --warn-soft: #2c2415;
-    --bad: #ff8a80;
-    --bad-soft: #331d1c;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+    --bg: #16181c;
+    --surface: #1d2026;
+    --surface-2: #24282f;
+    --line: #2c313a;
+    --line-strong: #3a414c;
+
+    --text: #eceef2;
+    --text-soft: #a3abb8;
+    --text-faint: #7b8492;
+
+    --accent: #5c8dff;
+    --accent-text: #0d1117;
+    --accent-soft: #1a2131;
+    --accent-line: #33477a;
+
+    --good: #4fbf85;
+    --warn: #d9a441;
+    --warn-soft: #272117;
+    --bad: #f07171;
+    --bad-soft: #2a1b1b;
   }
 }
 
@@ -48,8 +75,8 @@
 
 body {
   margin: 0;
-  font: 13px/1.5 system-ui, "Segoe UI", sans-serif;
-  color: var(--ink);
+  font: 14px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
   background: var(--bg);
   display: flex;
   flex-direction: column;
@@ -57,13 +84,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h2 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
 p { margin: 0; }
-em { font-style: normal; color: var(--ink); background: var(--surface); padding: 0 3px; border-radius: 3px; }
 
-.sub { color: var(--ink-2); font-size: 12px; }
-.tiny { font-size: 11px; }
 .hidden { display: none !important; }
+.sub { color: var(--text-soft); }
+.tiny { font-size: 12px; line-height: 1.5; }
+.muted { color: var(--text-faint); }
 
 /* ------------------------------------------------------------------ header */
 
@@ -71,180 +98,243 @@ header {
   position: sticky;
   top: 0;
   z-index: 5;
+  padding: var(--pad);
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
 
-.head-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-}
+.head-row { display: flex; align-items: flex-start; gap: 12px; }
+.head-text { flex: 1; min-width: 0; padding-top: 1px; }
 
-.head-text { flex: 1; min-width: 0; }
-.activity {
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.activity { font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+
 .head-text .sub {
-  white-space: nowrap;
+  font-size: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-/* The one control that changes how much the agent does on its own. */
-.switch {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 12px 10px;
+/* The one control that starts and stops everything. */
+.run {
+  flex: none;
+  min-width: 72px;
+  padding: 7px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 600;
   cursor: pointer;
-  border-top: 1px solid var(--line);
 }
-.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+.run:hover { filter: brightness(1.06); }
+.run.running { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+
+.icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-soft);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon:hover { background: var(--surface-2); color: var(--text); }
+
+/* The one setting that changes how much the panel does by itself. */
+.switch { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; pointer-events: none; }
+
 .track {
   flex: none;
-  width: 32px;
-  height: 18px;
+  width: 34px;
+  height: 20px;
+  margin-top: 1px;
   border-radius: 999px;
-  background: var(--line);
-  position: relative;
-  transition: background 140ms;
+  background: var(--line-strong);
+  transition: background 120ms ease;
 }
+
 .knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 2px;
   border-radius: 50%;
-  background: var(--raised);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: transform 140ms;
+  background: #fff;
+  transition: transform 120ms ease;
 }
+
 .switch input:checked + .track { background: var(--accent); }
 .switch input:checked + .track .knob { transform: translateX(14px); }
 .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
-.switch-text { display: flex; flex-direction: column; min-width: 0; }
-.switch-text strong { font-weight: 500; font-size: 12px; }
 
-.progress { height: 2px; background: var(--line); }
-.progress > div {
-  height: 100%;
-  width: 0;
-  background: var(--accent);
-  transition: width 240ms ease;
+.switch-text { display: block; min-width: 0; }
+.switch-text strong { display: block; font-weight: 600; }
+.switch-text .sub { display: block; }
+
+.progress {
+  height: 3px;
+  margin-top: 14px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
 }
 
-/* ------------------------------------------------------------------ layout */
+#progress-bar { height: 100%; width: 0; background: var(--accent); transition: width 160ms ease; }
+
+/* -------------------------------------------------------------------- body */
 
 main {
-  padding: 10px;
+  flex: 1;
+  padding: var(--pad);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  flex: 1;
+  gap: 22px;
 }
 
-.card {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-  padding: 12px;
-}
+/*
+ * A section is space and a heading. Only the thing being asked gets a border,
+ * so the eye has exactly one place to land.
+ */
+.card { display: flex; flex-direction: column; gap: 10px; }
 
-/* The card that is actually asking for something. */
 .card.accent {
-  background: var(--raised);
-  border-color: var(--accent);
-  box-shadow: var(--shadow);
+  padding: 14px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
 }
 
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+
+.pill {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 600;
 }
 
+.quiet-pill { background: var(--surface-2); }
+
+/* The question itself: the largest text in the panel, because it is the point. */
 .ask {
   font-size: 15px;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.45;
   letter-spacing: -0.01em;
-  margin: 2px 0 4px;
+  overflow-wrap: anywhere;
 }
 
-.hint { margin-top: 6px; }
-.hint.suggested { color: var(--accent); }
+.hint { font-style: italic; }
 
-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 12px;
-  border-top: 1px solid var(--line);
-  font-size: 11px;
-  color: var(--ink-2);
+/* ------------------------------------------------------------------ inputs */
+
+input[type="text"],
+input[type="search"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   background: var(--bg);
-  position: sticky;
-  bottom: 0;
+  color: var(--text);
+  font: inherit;
 }
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+::placeholder { color: var(--text-faint); }
+
+/* Answers a form offers, as things to press rather than a list to read. */
+.choices { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.choices button {
+  padding: 7px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.choices button:hover { border-color: var(--accent); }
+
+.choices button.picked {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+/* What the model put forward. Marked, never chosen on anyone's behalf. */
+.choices button.suggested { border-color: var(--accent); border-style: dashed; }
+
+/* A long list stops being buttons and becomes a column you can scroll. */
+.choices.many {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  max-height: 220px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.choices.many button { border-radius: var(--radius-sm); }
+
+.check { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; }
+.check input { margin: 3px 0 0; flex: none; }
 
 /* ----------------------------------------------------------------- buttons */
 
-button {
-  font: inherit;
-  border-radius: 7px;
-  border: 1px solid var(--line);
-  padding: 6px 12px;
-  cursor: pointer;
-  background: var(--raised);
-  color: var(--ink);
-  transition: background 120ms, border-color 120ms, transform 60ms;
-}
-button:hover:not(:disabled) { border-color: var(--accent); }
-button:active:not(:disabled) { transform: translateY(1px); }
-button:disabled { opacity: 0.55; cursor: default; }
-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button { font: inherit; cursor: pointer; }
 
-.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
-.primary:hover:not(:disabled) { filter: brightness(1.08); }
-.quiet { background: transparent; }
-.link {
-  background: none;
-  border: none;
-  color: var(--ink-2);
-  padding: 6px 0;
-  text-decoration: underline;
-}
-.icon {
-  border: none;
-  background: transparent;
-  font-size: 16px;
-  line-height: 1;
-  padding: 6px 8px;
-  color: var(--ink-2);
-}
-
-.run {
-  min-width: 68px;
+.primary, .quiet, .ghost, .danger {
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
   font-weight: 600;
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
 }
-.run.running { background: var(--bad); border-color: var(--bad); }
 
-.actions { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
-.actions .primary { flex: 1 1 auto; min-width: 120px; max-width: 260px; }
+.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.primary:hover { filter: brightness(1.06); }
 
-/* A control that is doing something says so, and cannot be pressed again. */
+.quiet, .ghost { background: var(--bg); border-color: var(--line-strong); color: var(--text); }
+.quiet:hover, .ghost:hover { border-color: var(--text-faint); }
+
+.danger { background: none; border-color: var(--bad); color: var(--bad); }
+
+button:disabled { opacity: 0.55; cursor: default; }
+
+/* Every control says whether it is working, and cannot be pressed twice. */
 button.busy { position: relative; color: transparent !important; }
+
 button.busy::after {
   content: "";
   position: absolute;
@@ -252,163 +342,190 @@ button.busy::after {
   margin: auto;
   width: 13px;
   height: 13px;
-  border: 2px solid rgba(255, 255, 255, 0.45);
-  border-top-color: #fff;
+  border: 2px solid currentcolor;
+  border-top-color: transparent;
   border-radius: 50%;
-  animation: spin 640ms linear infinite;
+  color: var(--accent-text);
+  animation: spin 620ms linear infinite;
 }
-.quiet.busy::after { border-color: var(--line); border-top-color: var(--accent); }
+
+.quiet.busy::after, .ghost.busy::after { color: var(--text); }
+
 @keyframes spin { to { transform: rotate(360deg); } }
 
-button.done { background: var(--ok); border-color: var(--ok); color: #fff; }
-
-/* ------------------------------------------------------------------ inputs */
-
-input[type="text"], textarea, select {
-  font: inherit;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--bg);
-  color: var(--ink);
-}
-input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: var(--accent); }
-textarea { min-height: 72px; resize: vertical; }
-
-/* Options are shown as options. Nobody types a dropdown answer. */
-.choices { display: flex; flex-wrap: wrap; gap: 6px; }
-.choices button {
-  flex: 0 1 auto;
-  max-width: 100%;
-  text-align: left;
-  white-space: normal;
-  line-height: 1.35;
-  padding: 7px 11px;
-}
-.choices button.picked {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-.choices button.suggested:not(.picked) {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.choices.many { max-height: 220px; overflow-y: auto; }
-
-.loading { display: flex; align-items: center; gap: 8px; color: var(--ink-2); padding: 6px 0; }
-.spinner {
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--line);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 640ms linear infinite;
-  flex: none;
+button.done {
+  background: var(--good) !important;
+  border-color: var(--good) !important;
+  color: #fff !important;
 }
 
-.pill {
-  font-size: 11px;
-  font-weight: 500;
+.link {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
   color: var(--accent);
-  background: var(--accent-soft);
-  padding: 2px 8px;
-  border-radius: 999px;
-  white-space: nowrap;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
-.quiet-pill { color: var(--warn); background: var(--warn-soft); }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.tabs button {
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tabs button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+/* ------------------------------------------------------------- résumé drop */
 
 .file-drop {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  border: 1px dashed var(--line);
+  padding: 16px;
+  border: 1px dashed var(--line-strong);
   border-radius: var(--radius);
-  padding: 12px;
-  margin: 10px 0 6px;
-  cursor: pointer;
+  background: var(--bg);
   text-align: center;
+  cursor: pointer;
 }
-.file-drop:hover { border-color: var(--accent); background: var(--accent-soft); }
-.file-drop-title { font-weight: 500; }
 
-/* -------------------------------------------------------------- disclosure */
+.file-drop:hover { border-color: var(--accent); }
+.file-drop-title { font-weight: 600; }
+
+/* ------------------------------------------------------------------ report */
 
 .disclosure {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
+  padding: 0;
   border: none;
   background: none;
-  padding: 0;
-  font-weight: 500;
+  color: var(--text);
+  font-weight: 600;
   text-align: left;
 }
-.disclosure:hover { color: var(--accent); }
-.chev { color: var(--ink-2); transition: transform 140ms; flex: none; }
+
+.chev { color: var(--text-faint); font-size: 11px; transition: transform 120ms ease; }
 .disclosure[aria-expanded="true"] .chev { transform: rotate(90deg); }
 
-.tabs { display: flex; gap: 4px; margin: 10px 0 4px; flex-wrap: wrap; }
-.tabs button { padding: 3px 9px; font-size: 11px; border-radius: 999px; }
-.tabs button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.report { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
 
-/* ---------------------------------------------------------------- report */
-
-/* The whole question, not a truncated version of it: half of these read as
- * sentences and the first four words do not tell you which one it is. */
-.report { list-style: none; margin: 6px 0 0; padding: 0; max-height: 300px; overflow-y: auto; }
 .report li {
-  display: grid;
-  grid-template-columns: 15px 1fr;
-  gap: 8px;
-  align-items: start;
-  padding: 5px 4px;
-  border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  padding: 9px 8px;
+  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--line);
   cursor: pointer;
-  line-height: 1.4;
 }
-.report li:hover { background: var(--raised); }
-.mark { font-size: 11px; line-height: 1.5; text-align: center; }
-.mark.verified { color: var(--ok); }
-.mark.attempted { color: var(--warn); }
-.mark.needs_you { color: var(--accent); }
-.mark.failed { color: var(--bad); }
-.mark.skipped { color: var(--ink-2); }
-.item-label { min-width: 0; }
-.item-value { display: block; color: var(--ink-2); font-size: 11px; }
 
-/* --------------------------------------------------------------- the CTA */
+.report li:last-child { border-bottom: none; }
+.report li:hover { background: var(--surface); }
+
+.mark { flex: none; width: 15px; font-weight: 700; text-align: center; }
+.mark.verified { color: var(--good); }
+.mark.attempted, .mark.needs_you { color: var(--warn); }
+.mark.failed { color: var(--bad); }
+.mark.skipped { color: var(--text-faint); }
+
+.item-label { display: block; overflow-wrap: anywhere; }
+.item-value { display: block; margin-top: 1px; font-size: 12px; color: var(--text-soft); }
+
+/* ---------------------------------------------------------------- activity */
+
+/*
+ * Reads like a transcript, not a wall of coloured boxes. A line that wants
+ * attention is marked by a rule down its left edge; the rest is quiet text.
+ */
+.log {
+  max-height: 210px;
+  padding: 2px 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.line {
+  padding: 5px 0 5px 10px;
+  border-left: 2px solid var(--line);
+  color: var(--text-soft);
+  font-size: 12.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.line.warn { border-left-color: var(--warn); color: var(--warn); }
+.line.bad { border-left-color: var(--bad); color: var(--bad); }
+.line.you { border-left-color: var(--accent); color: var(--text); font-weight: 500; }
+
+.loading { color: var(--text-faint); font-size: 12.5px; }
+
+.chat { display: flex; gap: 8px; }
+.chat input { flex: 1; min-width: 0; }
+
+/* ------------------------------------------------------------------ alerts */
+
+#alerts { display: flex; flex-direction: column; gap: 8px; padding: 0 var(--pad); }
+#alerts:empty { display: none; }
+
+.alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 13px;
+}
+
+.alert.bad { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+
+.alert button {
+  flex: none;
+  padding: 5px 10px;
+  border: 1px solid currentcolor;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------- what happens next */
 
 .cta-bar {
   position: sticky;
   bottom: 0;
-  padding: 10px;
-  background: linear-gradient(to top, var(--bg) 70%, transparent);
+  padding: 12px var(--pad);
   border-top: 1px solid var(--line);
+  background: var(--bg);
+  text-align: center;
 }
-.cta { width: 100%; max-width: none; padding: 10px 14px; font-size: 13px; font-weight: 600; }
-.cta:disabled { background: var(--surface); border-color: var(--line); color: var(--ink-2); }
-#cta-note { margin-top: 5px; text-align: center; }
 
-/* -------------------------------------------------------------- activity */
+.cta { width: 100%; padding: 11px; }
+.cta:disabled { background: var(--surface-2); border-color: var(--line); color: var(--text-faint); }
+#cta-note { margin-top: 6px; }
 
-.log { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-.line { padding: 6px 8px; border-radius: 6px; background: var(--raised); font-size: 12px; }
-.line.you { background: var(--accent-soft); }
-.line.warn { background: var(--warn-soft); }
-.line.bad { background: var(--bad-soft); }
-
-.chat { display: flex; gap: 6px; margin-top: 8px; }
-.chat input { flex: 1; }
-
-.alert {
-  margin: 8px 10px 0;
-  padding: 9px 11px;
-  border-radius: var(--radius);
-  background: var(--warn-soft);
-  font-size: 12px;
+footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px var(--pad) 12px;
+  color: var(--text-faint);
+  font-size: 11px;
 }
-.alert.bad { background: var(--bad-soft); }
-.alert button { margin-top: 7px; padding: 4px 10px; font-size: 12px; }

@@ -1,22 +1,57 @@
+/*
+ * Settings.
+ *
+ * The same rules as the panel: space rather than nested boxes, text large
+ * enough to read, and one accent colour used only where something is either
+ * the main action or a warning.
+ *
+ * A section is a heading, a line, and its contents. Nothing is wrapped in a
+ * tinted card for decoration -- the tinted cards are the two that carry
+ * consequences, and they stand out because nothing else does.
+ */
+
 :root {
+  color-scheme: light dark;
+
   --bg: #ffffff;
-  --panel: #f7f8fa;
-  --ink: #14161a;
-  --muted: #5d6472;
-  --line: #dfe3ea;
-  --accent: #1f5fd4;
-  --bad: #b3261e;
+  --surface: #f6f7f9;
+  --line: #e2e5ea;
+  --line-strong: #ccd2da;
+
+  --text: #16181d;
+  --text-soft: #5c6470;
+  --text-faint: #878e99;
+
+  --accent: #2f6df6;
+  --accent-text: #ffffff;
+  --accent-soft: #eff4fe;
+  --accent-line: #bcd0fb;
+
+  --bad: #c02b2b;
+  --bad-soft: #fdeeee;
+
+  --radius: 10px;
+  --radius-sm: 7px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #14161a;
-    --panel: #1c1f26;
-    --ink: #e9ebf0;
-    --muted: #9aa3b2;
-    --line: #2c313b;
-    --accent: #6fa0ff;
-    --bad: #ff8a80;
+    --bg: #16181c;
+    --surface: #1d2026;
+    --line: #2c313a;
+    --line-strong: #3a414c;
+
+    --text: #eceef2;
+    --text-soft: #a3abb8;
+    --text-faint: #7b8492;
+
+    --accent: #5c8dff;
+    --accent-text: #0d1117;
+    --accent-soft: #1a2131;
+    --accent-line: #33477a;
+
+    --bad: #f07171;
+    --bad-soft: #2a1b1b;
   }
 }
 
@@ -24,91 +59,180 @@
 
 body {
   margin: 0;
-  font: 14px/1.55 system-ui, "Segoe UI", sans-serif;
-  color: var(--ink);
+  font: 15px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
   background: var(--bg);
+  -webkit-font-smoothing: antialiased;
 }
 
-main { max-width: 760px; margin: 0 auto; padding: 22px 18px 60px; }
-h1 { font-size: 20px; margin: 0 0 4px; }
-h2 { font-size: 14px; margin: 0 0 6px; }
-p { margin: 0 0 8px; }
+main { max-width: 720px; margin: 0 auto; padding: 40px 24px 80px; }
 
+h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
+h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+p { margin: 0; }
+
+/* Space and a rule, not a box. */
 section {
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  padding: 14px;
-  background: var(--panel);
-  margin-top: 14px;
-}
-section.danger { border-color: var(--bad); }
-section.feature { border-color: var(--accent); }
-
-.import-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-top: 36px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  margin: 12px 0 10px;
 }
-.import-card {
-  border: 1px dashed var(--line);
-  border-radius: 8px;
-  padding: 12px;
-  background: var(--bg);
-}
-.import-card:hover { border-color: var(--accent); }
-.import-card strong { display: block; margin-bottom: 4px; }
-.import-card input { margin-top: 8px; }
-.import-card em { font-style: normal; color: var(--ink); }
 
-label { display: block; margin: 8px 0 3px; font-size: 12px; color: var(--muted); }
-label.check { display: flex; gap: 7px; align-items: center; color: var(--ink); font-size: 14px; }
-label.check input { width: auto; }
+/* The two that carry consequences are the only ones that look like anything. */
+section.feature,
+section.danger {
+  padding: 18px;
+  border: 1px solid var(--accent-line);
+  border-top: 1px solid var(--accent-line);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+section.danger {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+
+.muted { color: var(--text-soft); }
+.tiny { font-size: 13px; line-height: 1.55; }
+.hidden { display: none !important; }
+
+/* ------------------------------------------------------------------ fields */
+
+label {
+  display: block;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+label.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 4px 0;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+}
+
+label.check input { width: auto; margin: 5px 0 0; flex: none; }
 
 input, select, textarea {
   font: inherit;
   width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   background: var(--bg);
-  color: var(--ink);
+  color: var(--text);
 }
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+::placeholder { color: var(--text-faint); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 4px 16px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+
+/* ----------------------------------------------------------------- buttons */
 
 button {
   font: inherit;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  padding: 6px 12px;
-  cursor: pointer;
+  font-weight: 600;
+  padding: 9px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
   background: var(--bg);
-  color: var(--ink);
-  margin-top: 10px;
+  color: var(--text);
+  cursor: pointer;
 }
-button:hover { border-color: var(--accent); }
-.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+button:hover { border-color: var(--text-faint); }
+
+/* A button is as wide as its label. A section is a column, and without this
+   every Save stretched the full width of the page like a banner. */
+section > button, section > .import-grid + button { align-self: flex-start; }
+
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.primary:hover { border-color: var(--accent); filter: brightness(1.06); }
+
 .ghost { background: transparent; }
+
 .bad { background: var(--bad); border-color: var(--bad); color: #fff; }
+.bad:hover { border-color: var(--bad); filter: brightness(1.06); }
 
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.muted { color: var(--muted); }
-.tiny { font-size: 12px; }
+/* ------------------------------------------------------------ bringing data in */
 
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px 12px; }
+.import-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.import-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.import-card:hover { border-color: var(--accent); }
+.import-card strong { font-weight: 600; }
+.import-card em { font-style: normal; color: var(--text); }
+.import-card input, .import-card button { margin-top: 8px; }
+
+/* ------------------------------------------------- education and experience */
 
 .record {
+  padding: 16px;
+  margin-top: 12px;
   border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 10px;
-  margin-top: 8px;
-  background: var(--bg);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
-.record .grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
-.record .remove { float: right; margin-top: 0; }
-.record .wide { margin-top: 10px; }
-.record textarea { min-height: 90px; resize: vertical; line-height: 1.5; }
 
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.record .grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.record .remove { float: right; padding: 4px 10px; font-size: 13px; }
+.record .wide { margin-top: 12px; }
+
+.record textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+/* ------------------------------------------------------------------ tables */
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+
+td {
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+tr:last-child td { border-bottom: none; }
+
 td.actions { text-align: right; white-space: nowrap; }
-td button { margin: 0; padding: 2px 8px; font-size: 12px; }
+td button { padding: 4px 10px; font-size: 13px; }

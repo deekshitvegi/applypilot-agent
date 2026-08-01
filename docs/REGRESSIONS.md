@@ -554,3 +554,10 @@ deadline for real work, so a slow page filled the activity list with "the page
 did not answer in time (highlight)".
 *Mechanism.* Showing someone where a field is is a courtesy: short deadline, and
 its failure is never reported.
+
+**77. A new required question appeared and nobody was ever asked it.** Answering
+one EEO question adds another below it. The list of questions was captured
+before the answer went in, so the new one was never in it, and the step was
+continued past with a required field unanswered.
+*Mechanism.* An answer that goes onto the page is followed by a fresh look at
+it, and a new plan if the page is no longer the same page.
