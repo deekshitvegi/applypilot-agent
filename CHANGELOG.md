@@ -3,6 +3,23 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.21.0
+
+- **Filling a page is 40x faster.** Measured on a form of thirty fields:
+  **5122ms before, 120ms after**. None of it was where it looked.
+  - A flat 120ms wait before every read-back, paid by every field, on pages that
+    had already finished reacting. The page is read as soon as it has caught up
+    now; only a genuinely slow one waits, and it still gets as long as it needs.
+  - Finding a control meant searching the whole document, twice per field. Where
+    a fingerprint was last found is remembered -- and re-derived from the live
+    page before it is trusted, so a stale entry costs a slower lookup and never
+    the wrong control.
+  - Two messages per field, one of them only asking whether the tab was visible.
+    A page's actions make one trip now, grouped by frame.
+- Nothing about what "verified" means changed. Actions still run one at a time
+  in the planned order, and every result is still the page's own state read back
+  afterwards. `scripts/bench_fill.py` re-runs the measurement.
+
 ## 1.20.0
 
 - **Soft UI.** Both the panel and Settings sit on a single colour with no

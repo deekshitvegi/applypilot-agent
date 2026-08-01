@@ -27,6 +27,10 @@
 
   const OPEN_TIMEOUT = 2000;
   const GROW_TIMEOUT = 3000;
+  //: How long a control gets to show the value before the read-back is taken
+  //: as final. Reached only by a page that is actually slow; one that answers
+  //: straight away is read straight away.
+  const SETTLE_TIMEOUT = 1200;
   //: An application that renders a new entry, or a whole next step, from the
   //: server takes longer than anything happening in the page alone -- and three
   //: seconds reported a click that had worked as one that had done nothing.
@@ -678,13 +682,69 @@
       };
     }
 
-    await sleep(120);
-    return AP.verify.check(action.fingerprint, desired, step ? step.previous : "");
+    return settled(action.fingerprint, desired, step ? step.previous : "");
+  }
+
+  /**
+   * A page's worth of actions in one trip into it.
+   *
+   * Every action used to be its own message to the service worker, its own
+   * injection target and its own reply -- and once the work inside the page was
+   * made fast, that traffic was most of what was left: on a form of thirty
+   * fields, six sevenths of the time was spent getting in and out rather than
+   * filling anything in.
+   *
+   * They still run one at a time, in order, through exactly the same perform().
+   * A form where one answer changes the next one still sees them in the order
+   * they were planned, and every result is still the page's own state read back
+   * afterwards. Nothing here decides anything; it only saves the journey.
+   */
+  async function performMany(actions) {
+    const results = [];
+    for (const action of actions || []) {
+      try {
+        results.push(await perform(action));
+      } catch (err) {
+        results.push({
+          fingerprint: action.fingerprint,
+          requested: action.value || action.option_label || "",
+          outcome: "failed",
+          observed: "",
+          signal: "none",
+          evidence: String((err && err.message) || err),
+        });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Read the page back as soon as it has caught up, rather than after a count.
+   *
+   * This used to be a flat wait of 120ms before every single read-back, on the
+   * reasoning that a page needs a moment to react. Most of them do not need
+   * anything like that long, and a form of thirty fields was paying it thirty
+   * times over -- four seconds of a fill spent waiting for pages that had
+   * already finished. A page that genuinely does need longer now gets longer.
+   *
+   * Nothing about what counts as verified changes here: the answer still comes
+   * from verify.js reading state the page owns, and a control that never takes
+   * the value is still reported exactly as it was.
+   */
+  async function settled(fingerprint, desired, previous) {
+    const deadline = Date.now() + SETTLE_TIMEOUT;
+    let result = AP.verify.check(fingerprint, desired, previous);
+    for (let wait = 15; result.outcome !== "verified" && Date.now() < deadline; wait *= 2) {
+      await sleep(Math.min(wait, 200));
+      result = AP.verify.check(fingerprint, desired, previous);
+    }
+    return result;
   }
 
   AP.act = {
     addRepeat,
     pageShape,
+    performMany,
     offeredLabels,
     attachFile,
     chooseFromPopup,

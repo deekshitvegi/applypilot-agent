@@ -789,6 +789,40 @@ async function answerQuestionInner(value, button, restoreLabel) {
 
 /* ----------------------------------------------------------------- filling */
 
+/**
+ * A page's worth of actions in one trip into the page.
+ *
+ * Each field used to cost two messages -- one to ask whether the tab was on
+ * screen, one to do the thing -- and once the work inside the page was made
+ * fast, that traffic was most of what a fill cost. They still run in order,
+ * through the same code, and each result is still read back from the page.
+ */
+async function applyAll(actions) {
+  if (!actions.length) return [];
+  await waitForTheTab();
+  const withFrames = actions.map((action) =>
+    Object.assign({}, action, { frame: frameOf(action.fingerprint) })
+  );
+  let results;
+  try {
+    results = await browser(
+      { type: "performMany", tabId: state.tab.id, actions: withFrames },
+      Math.max(BROWSER_TIMEOUT, actions.length * 2500)
+    );
+  } catch (err) {
+    say(String(err.message), "bad");
+    return [];
+  }
+  for (const result of results) {
+    state.lastFingerprint = result.fingerprint;
+    state.results = state.results
+      .filter((r) => r.fingerprint !== result.fingerprint)
+      .concat(result);
+    reportOne(result);
+  }
+  return results;
+}
+
 async function applyAndReport(action) {
   await waitForTheTab();
   const result = await browser({
@@ -840,16 +874,9 @@ async function fillPageInner() {
     return;
   }
 
-  const results = [];
-  for (let i = 0; i < actions.length; i += 1) {
-    activity(`Filling ${i + 1} of ${actions.length}`);
-    progress(i, actions.length);
-    try {
-      results.push(await applyAndReport(actions[i]));
-    } catch (err) {
-      say(String(err.message), "bad");
-    }
-  }
+  activity(`Filling ${actions.length} field(s)`);
+  progress(1, 3);
+  const results = await applyAll(actions);
   progress(actions.length, actions.length);
 
   // A choice can bring a whole field to life: State holds nothing but "Choose"
@@ -866,13 +893,7 @@ async function fillPageInner() {
       const wanted = (action.option_label || action.value || "").trim().toLowerCase();
       return field && (field.value || "").trim().toLowerCase() !== wanted;
     });
-    for (const action of nowAnswerable) {
-      try {
-        results.push(await applyAndReport(action));
-      } catch (err) {
-        say(String(err.message), "bad");
-      }
-    }
+    results.push(...(await applyAll(nowAnswerable)));
   }
 
   // A page can change its own mind after we fill it: choosing a country
@@ -906,13 +927,7 @@ async function fillPageInner() {
       `The page changed ${wrong.length} field(s) after I filled them. Setting them again.`,
       "warn"
     );
-    for (const action of wrong) {
-      try {
-        results.push(await applyAndReport(action));
-      } catch (err) {
-        say(String(err.message), "bad");
-      }
-    }
+    results.push(...(await applyAll(wrong)));
   }
 
   const summary = await post("/results", {

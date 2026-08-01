@@ -376,7 +376,57 @@
   }
 
   /** Find a control again by fingerprint. Never by position. */
+  /**
+   * Where each fingerprint was last found.
+   *
+   * Looking a control up meant classifying the page and then building a full
+   * observation for every control on it until one matched -- a whole scan, per
+   * field, and twice per field once the read-back is counted. On a form of
+   * thirty questions that was most of the time the fill took.
+   *
+   * A remembered element is never trusted on its own. Its fingerprint is worked
+   * out again from the page as it is now, and only a control that still answers
+   * to the same fingerprint is used; anything else falls through to the full
+   * search. A fingerprint is what identity means here, so a stale entry cannot
+   * turn into the wrong control -- it can only turn into a slower lookup.
+   */
+  const lastSeen = new Map();
+
+  function stillTheSame(hit, fingerprint) {
+    const el = hit.element;
+    if (!el || !el.isConnected) return false;
+    if (hit.group) {
+      if (hit.group.some((one) => !one.isConnected)) return false;
+      const options = hit.group.map((one) => ({ label: optionLabel(one) }));
+      const again = baseObservation(
+        hit.group[0], groupLabel(hit.group), D.attributeLabel(hit.group[0]), "radio", options
+      );
+      return again.fingerprint === fingerprint;
+    }
+    const kind = controlKind(el);
+    if (kind !== hit.kind) return false;
+    let options = [];
+    if (kind === "select" || kind === "multiselect") {
+      options = Array.from(el.options || []).map((o) => ({
+        label: (o.textContent || "").replace(/\s+/g, " ").trim(),
+      }));
+    }
+    const again = baseObservation(el, D.visibleLabel(el), D.attributeLabel(el), kind, options);
+    return again.fingerprint === fingerprint;
+  }
+
   function findByFingerprint(fingerprint) {
+    const remembered = lastSeen.get(fingerprint);
+    if (remembered) {
+      if (stillTheSame(remembered, fingerprint)) return remembered;
+      lastSeen.delete(fingerprint);
+    }
+    const hit = searchForFingerprint(fingerprint);
+    if (hit) lastSeen.set(fingerprint, hit);
+    return hit;
+  }
+
+  function searchForFingerprint(fingerprint) {
     const classification = S.classify();
     const root = S.scanRoot(classification.kind) || document;
     const controls = S.candidateControls(root);

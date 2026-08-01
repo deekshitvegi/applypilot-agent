@@ -196,6 +196,26 @@ const HANDLERS = {
   async perform(message) {
     return callInFrame(message.tabId, message.frameId, "act.perform", [message.action]);
   },
+  /**
+   * A page's worth of actions, one trip per frame.
+   *
+   * Grouped by frame because an action still has to run where its control
+   * actually lives, and kept in the planned order within each frame.
+   */
+  async performMany(message) {
+    const byFrame = new Map();
+    for (const action of message.actions || []) {
+      const frame = action.frame === undefined || action.frame === "" ? 0 : Number(action.frame);
+      if (!byFrame.has(frame)) byFrame.set(frame, []);
+      byFrame.get(frame).push(action);
+    }
+    const results = [];
+    for (const [frame, actions] of byFrame) {
+      const done = await callInFrame(message.tabId, frame, "act.performMany", [actions]);
+      if (Array.isArray(done)) results.push(...done);
+    }
+    return results;
+  },
   async openOptions(message) {
     return callInFrame(message.tabId, message.frameId, "act.openOptions", [
       message.fingerprint,

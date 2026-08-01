@@ -569,3 +569,19 @@ answering the Yes/No wrote "No" over the race. Each answer made the other
 question wrong again, however many times either was answered.
 *Mechanism.* Two questions, two facts. A combined "Race / Ethnicity" question,
 which plenty of forms still ask, stays with race.
+
+**79. Filling a page was slow, and none of it was where it looked.** Measured on
+a form of thirty fields: 5.1 seconds, 175ms per field. Three causes, in the
+order they mattered.
+*A flat wait before every read-back.* 120ms, paid thirty times, on pages that
+had almost always finished reacting immediately. Now the page is read as soon as
+it has caught up, and only a page that is genuinely slow waits.
+*A whole document search to find each control.* Classifying the page and
+building an observation for every control on it, twice per field. Where a
+fingerprint was last found is remembered -- and the remembered element's
+fingerprint is worked out again before it is used, so a stale entry can only
+cost a slower lookup, never the wrong control.
+*Two messages per field.* One asking whether the tab was on screen, one doing
+the work. A page's actions now make one trip, grouped by frame, still in the
+planned order, still each verified from the page's own state.
+Measured after: 5122ms to 120ms. `scripts/bench_fill.py` re-runs it.
