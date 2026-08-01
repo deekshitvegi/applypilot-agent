@@ -401,7 +401,9 @@ async function renderQuestion() {
       ? `${questions().length - state.questionIndex - 1} more`
       : "last one";
   el("question-label").textContent = question.label;
-  el("question-reason").textContent = question.reason;
+  el("question-reason").textContent = [question.section, question.reason]
+    .filter(Boolean)
+    .join(" · ");
 
   const host = el("question-input");
   host.innerHTML = "";
@@ -573,9 +575,12 @@ async function answerQuestion(value, button, restoreLabel) {
       }
 
       if (question.fact_key) {
-        const profile = await service("/profile");
-        profile.facts[question.fact_key] = value;
-        await put("/profile", profile);
+        const field = fieldFor(question.fingerprint);
+        await post("/profile/fact", {
+          fact_key: question.fact_key,
+          value: value,
+          entry: (field && field.group_index) || 0,
+        });
       } else {
         await post("/learn", {
           field: fieldFor(question.fingerprint) || {
@@ -802,7 +807,9 @@ function fillReport(list, items) {
     label.textContent = item.label + (item.required ? " *" : "");
     const detail = document.createElement("span");
     detail.className = "item-value";
-    detail.textContent = item.value || item.detail || "";
+    detail.textContent = [item.section, item.value || item.detail || ""]
+      .filter(Boolean)
+      .join(" · ");
     label.appendChild(detail);
     row.appendChild(label);
 

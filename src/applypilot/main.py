@@ -22,12 +22,15 @@ from pydantic import BaseModel, Field
 from . import __version__, ai, applications, chat, documents, learning, onboarding, resume, runloop
 from .adapters import classify_host
 from .config import load_settings
+from .facts import BY_KEY
 from .mapper import describe_match
 from .matching import rank_options, real_options
 from .models import (
     ActionResult,
     ApplicationRecord,
     ChecklistItem,
+    EducationRecord,
+    ExperienceRecord,
     FieldObservation,
     Option,
     PageKind,
@@ -152,9 +155,50 @@ def get_onboarding() -> dict[str, Any]:
         "answered": built.answered,
         "total": built.total,
         "complete": built.complete,
+        "required_remaining": built.required_remaining,
         "notes": built.notes,
         "next": built.next_step.__dict__ if built.next_step else None,
     }
+
+
+class FactAnswer(BaseModel):
+    fact_key: str
+    value: str = ""
+    entry: int = 0
+
+
+@app.post("/profile/fact")
+def save_fact(payload: FactAnswer) -> dict[str, Any]:
+    """Save one answer, into the right place.
+
+    A history key such as ``education.gpa`` belongs in an education record, not
+    in the flat set of facts -- writing it flat meant answering it once did not
+    stop it being asked again.
+    """
+    profile = store.get_profile()
+    spec = BY_KEY.get(payload.fact_key)
+    if spec is None:
+        raise HTTPException(400, f"no such fact: {payload.fact_key}")
+
+    if spec.record:
+        records = profile.education if spec.record == "education" else profile.experience
+        while len(records) <= payload.entry:
+            records.append(
+                EducationRecord() if spec.record == "education" else ExperienceRecord()
+            )
+        record = records[payload.entry]
+        current = getattr(record, spec.record_field, "")
+        if isinstance(current, bool):
+            setattr(record, spec.record_field, payload.value.strip().lower() in {"yes", "true"})
+        else:
+            setattr(record, spec.record_field, payload.value.strip())
+    elif payload.value.strip():
+        profile.facts[payload.fact_key] = payload.value.strip()
+    else:
+        profile.facts.pop(payload.fact_key, None)
+
+    store.save_profile(profile)
+    return {"ok": True, "fact_key": payload.fact_key, "entry": payload.entry}
 
 
 class OnboardingAnswer(BaseModel):

@@ -169,6 +169,14 @@ def alternatives(text: str) -> list[str]:
     norm = normalise(text)
     if "/" not in norm:
         return [norm]
+
+    # A slash with spaces around it joins two whole phrases, either of which
+    # names the field: "School / education institution" is a school and it is an
+    # educational institution. Without this it matched neither.
+    if " / " in norm:
+        parts = [part.strip() for part in norm.split(" / ") if part.strip()]
+        return parts or [norm]
+
     parts = norm.split(" ")
     slash_index = next((i for i, p in enumerate(parts) if "/" in p), None)
     if slash_index is None:
@@ -258,6 +266,16 @@ def coverage(alias: str, label: str) -> float:
         return 0.0
     alias_content = set(content_tokens(alias))
     return len(alias_content & label_content) / len(label_content)
+
+
+def pretty_label(text: str) -> str:
+    """A label as it should be shown, with required markers taken off.
+
+    Display only. The raw label is what decides whether a field is required, so
+    it is never rewritten -- but "*GPA *" is nobody's idea of a question.
+    """
+    cleaned = re.sub(r"^[\s*†‡•:]+|[\s*†‡•:]+$", "", (text or "").strip())
+    return re.sub(r"\s+", " ", cleaned).strip()
 
 
 def squash(text: str) -> str:

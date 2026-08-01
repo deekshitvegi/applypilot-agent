@@ -280,3 +280,26 @@ holds nothing but "Choose" until a country is picked.
 options and is marked as needing them opened rather than asked about. It fills
 on the next pass, once the field it depends on is in.
 → `test_state_becomes_answerable_once_country_is_chosen`
+
+**38. A slashed label named the field twice and matched neither.**
+"School / education institution" is a school and it is an educational
+institution; read as one phrase it is neither, so the field stayed empty on a
+form that had the school in the profile all along.
+*Mechanism.* A slash with spaces around it joins two whole phrases, and each
+side is tried as a reading of the label. A slash without spaces keeps the older
+word-level behaviour, so "Country/Region of Residence" still resolves.
+→ `test_asterisk_labels.py::test_a_spaced_slash_label_resolves_from_either_side`
+
+**39. Answering a history question did not stop it being asked.** A key such as
+`education.gpa` was saved into the flat set of facts, where nothing reads it.
+*Mechanism.* A history key is written into the record it belongs to, chosen by
+which entry of the repeating block the field was in.
+
+**40. Three fields all labelled "GPA", with nothing to tell them apart.**
+*Mechanism.* A field in a repeating block reports which entry it is, and the
+question and the report both show it. Required markers are stripped from what is
+displayed, so a label reads as a question rather than as "*GPA *".
+
+**41. Setup stalled on "Middle name" while work authorisation was unanswered.**
+*Mechanism.* The next question asked is the first that is not optional. Optional
+ones are only offered once everything that matters is done.

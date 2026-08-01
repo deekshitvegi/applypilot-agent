@@ -61,6 +61,7 @@ from .text import (
     looks_like_placeholder,
     normalise,
     numeric_suffix,
+    pretty_label,
     tokens,
     trailing_phrase_prefix,
 )
@@ -522,6 +523,9 @@ def _shape_answer(
         value = chosen.option.label
         picked = f"matched the option '{chosen.option.label}' ({chosen.reason})"
         reason = f"{reason}; {picked}".strip("; ")
+    elif "year" in normalise(field.display_label).split() and re.search(r"(19|20)\d{2}", value):
+        # "Graduation Year" wants 2025, not "Jul 2025".
+        value = re.search(r"(19|20)\d{2}", value).group(0)
     elif field.control is ControlKind.CHECKBOX:
         value = "Yes" if normalise(value) in {"yes", "true", "1", "y"} else "No"
     return Answer(
@@ -548,17 +552,28 @@ def _ask(
             saved = fact_value(profile, spec, field)
     return PendingQuestion(
         fingerprint=field.fingerprint,
-        label=field.display_label or field.attr_label,
+        label=pretty_label(field.display_label or field.attr_label),
         control=field.control,
         options=usable_options(field),
         required=field.required,
         fact_key=fact_key,
         reason=reason,
-        section=field.section,
+        section=_entry_context(field),
         frame=field.frame,
         saved_value=saved,
         options_pending=needs_its_options_opened(field),
     )
+
+
+def _entry_context(field: FieldObservation) -> str:
+    """Which entry of a repeating block this is.
+
+    Three fields all labelled "GPA" with nothing to tell them apart is not a
+    list anyone can act on.
+    """
+    if field.group:
+        return f"{field.section or 'Entry'} {field.group_index + 1}".strip()
+    return field.section
 
 
 def usable_options(field: FieldObservation) -> list:

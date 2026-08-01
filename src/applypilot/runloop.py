@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .mapper import Resolution, resolve_page
+from .mapper import Resolution, _entry_context, resolve_page
 from .models import (
     ActionResult,
     Answer,
@@ -29,6 +29,7 @@ from .models import (
     RunState,
 )
 from .models import ControlKind as CK
+from .text import pretty_label
 
 #: Every signal verify.js can return except "none". A result carrying one of
 #: these was read from state the page owns.
@@ -173,7 +174,8 @@ def build_checklist(
         if not observed.visible:
             continue
         result = by_fingerprint.get(observed.fingerprint)
-        label = observed.display_label or observed.attr_label
+        label = pretty_label(observed.display_label or observed.attr_label)
+        where = _entry_context(observed)
         if result is not None:
             state = {
                 Outcome.VERIFIED: "verified",
@@ -185,6 +187,7 @@ def build_checklist(
                 ChecklistItem(
                     fingerprint=observed.fingerprint,
                     label=label,
+                    section=where,
                     state=state,
                     value=result.observed or result.requested,
                     detail=result.evidence,
@@ -197,6 +200,7 @@ def build_checklist(
                 ChecklistItem(
                     fingerprint=observed.fingerprint,
                     label=label,
+                    section=where,
                     state="needs_you",
                     detail=question.reason,
                     required=observed.required,
@@ -207,6 +211,7 @@ def build_checklist(
                 ChecklistItem(
                     fingerprint=observed.fingerprint,
                     label=label,
+                    section=where,
                     state="skipped",
                     detail=skipped[observed.fingerprint],
                     required=observed.required,
@@ -217,6 +222,7 @@ def build_checklist(
                 ChecklistItem(
                     fingerprint=observed.fingerprint,
                     label=label,
+                    section=where,
                     state="attempted",
                     value=answers[observed.fingerprint].value,
                     detail="planned but not carried out yet",

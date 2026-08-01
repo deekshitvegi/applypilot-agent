@@ -82,7 +82,22 @@ class Onboarding:
 
     @property
     def next_step(self) -> Step | None:
-        return next((step for step in self.steps if not step.answered), None)
+        """The next thing worth asking.
+
+        Everything that matters comes first. Setup stalling on "Middle name"
+        while work authorisation is still unanswered is the wrong order, and
+        optional questions are only offered once the rest are done.
+        """
+        needed = next(
+            (s for s in self.steps if not s.answered and not s.optional), None
+        )
+        if needed is not None:
+            return needed
+        return next((s for s in self.steps if not s.answered), None)
+
+    @property
+    def required_remaining(self) -> int:
+        return sum(1 for s in self.steps if not s.answered and not s.optional)
 
     @property
     def remaining(self) -> list[Step]:

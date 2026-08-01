@@ -214,6 +214,30 @@ async function refresh() {
   }
 }
 
+el("resume-file").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  el("resume-result").textContent = "Reading…";
+  const form = new FormData();
+  form.append("file", file);
+  try {
+    const response = await fetch(SERVICE + "/resume", { method: "POST", body: form });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || "that file could not be read");
+    const parts = [
+      `${body.education.length} education entries`,
+      `${body.experience.length} work entries`,
+      `${body.skills.length} skills`,
+    ];
+    el("resume-result").textContent =
+      "Read " + parts.join(", ") + ". Check them below and correct anything I got wrong." +
+      (body.notes.length ? " " + body.notes.join(" ") : "");
+    refresh();
+  } catch (err) {
+    el("resume-result").textContent = String(err.message);
+  }
+});
+
 el("save-key").addEventListener("click", async () => {
   const key = el("api-key").value.trim();
   if (!key) return;

@@ -358,12 +358,13 @@ FACTS: tuple[FactSpec, ...] = (
     ),
     _f(
         "education.start_date", "education start date", "school start date",
-        "start date", "from",
+        "start date", "start year", "from year", "from",
         scope=FactScope.HISTORY, record="education", record_field="start_date",
     ),
     _f(
         "education.end_date", "education end date", "graduation date",
-        "end date", "to", "expected graduation",
+        "graduation year", "year of graduation", "year completed",
+        "completion year", "end date", "to", "expected graduation",
         scope=FactScope.HISTORY, record="education", record_field="end_date",
     ),
     _f(
@@ -388,11 +389,13 @@ FACTS: tuple[FactSpec, ...] = (
         scope=FactScope.HISTORY, record="experience", record_field="location",
     ),
     _f(
-        "experience.start_date", "employment start date", "start date", "from",
+        "experience.start_date", "employment start date", "start date",
+        "start year", "from year", "from",
         scope=FactScope.HISTORY, record="experience", record_field="start_date",
     ),
     _f(
-        "experience.end_date", "employment end date", "end date", "to",
+        "experience.end_date", "employment end date", "end date",
+        "end year", "to year", "to",
         scope=FactScope.HISTORY, record="experience", record_field="end_date",
     ),
     _f(

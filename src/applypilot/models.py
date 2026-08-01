@@ -238,6 +238,10 @@ class PendingQuestion(BaseModel):
 class ChecklistItem(BaseModel):
     fingerprint: str
     label: str
+    #: Which entry of a repeating block, when there is one. Three rows all
+    #: labelled "GPA" with nothing to tell them apart is not a list anyone can
+    #: act on.
+    section: str = ""
     state: Literal["verified", "attempted", "needs_you", "skipped", "failed"] = "needs_you"
     value: str = ""
     detail: str = ""

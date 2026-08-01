@@ -109,3 +109,53 @@ def test_the_cv_upload_is_asked_for_rather_than_guessed(scan, profile):
 def test_the_page_offers_a_next_control_for_auto_continue(scan):
     _, observation = scan("asterisk_labels_form.html")
     assert [c["text"] for c in observation["next_controls"]] == ["Next"]
+
+
+# ---------------------------------------------------------------------------
+# 38. A slashed label names the field twice, and neither reading matched.
+# ---------------------------------------------------------------------------
+
+
+def test_a_spaced_slash_label_resolves_from_either_side():
+    from applypilot.mapper import match_facts
+    from applypilot.models import ControlKind, FieldObservation
+
+    field = FieldObservation(
+        fingerprint="x",
+        label="*School / education institution",
+        control=ControlKind.COMBOBOX,
+        section="Education",
+    )
+    assert [m.spec.key for m in match_facts(field)][:1] == ["education.school"]
+
+
+def test_labels_are_shown_without_their_required_markers():
+    from applypilot.text import pretty_label
+
+    assert pretty_label("*GPA") == "GPA"
+    assert pretty_label("*Company ") == "Company"
+    assert pretty_label("Country/Region of Residence:* *") == "Country/Region of Residence"
+
+
+def test_a_repeated_field_says_which_entry_it_belongs_to():
+    from applypilot.mapper import _entry_context
+    from applypilot.models import ControlKind, FieldObservation
+
+    second = FieldObservation(
+        fingerprint="x", label="*GPA", control=ControlKind.TEXT,
+        section="Education", group="g1", group_index=1,
+    )
+    assert _entry_context(second) == "Education 2"
+
+
+def test_a_year_field_gets_the_year_not_the_whole_date():
+    from applypilot.mapper import resolve_field
+    from applypilot.models import ControlKind, EducationRecord, FieldObservation, Profile
+
+    profile = Profile(education=[EducationRecord(school="Somewhere", end_date="Jul 2025")])
+    field = FieldObservation(
+        fingerprint="x", label="Graduation Year", control=ControlKind.TEXT, section="Education"
+    )
+    resolution = resolve_field(field, profile)
+    assert resolution.answer is not None
+    assert resolution.answer.value == "2025"

@@ -3,6 +3,24 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.3.0
+
+- **A slashed label names the field twice.** "School / education institution"
+  matched neither reading and was left empty on a form that had the school in
+  the profile all along. Either side of a spaced slash now names the field.
+- **Questions read as questions.** Required markers are stripped from what is
+  shown, so "*GPA *" is "GPA *", and a field in a repeating block says which
+  entry it belongs to rather than appearing three identical times.
+- **Answering a history question saves into the right record.** A key such as
+  `education.gpa` was written into the flat set of facts, where nothing read it,
+  so answering it once did not stop it being asked again.
+- **Setup asks what matters first.** It was stalling on "Middle name" at 28 of
+  37 while work authorisation was still unanswered. Optional questions come last.
+- **Résumé upload is in Settings**, not only during first-time setup, so it can
+  be redone whenever the document changes.
+- "Graduation Year" and "Start year" resolve, and a year-shaped field gets the
+  year rather than "Jul 2025".
+
 ## 1.2.0
 
 - **A required marker is no longer read as a field name.** On a form that puts
