@@ -115,7 +115,11 @@
 
   function baseObservation(el, label, attrLabel, kind, options) {
     const block = D.repeatBlock(el);
-    const optionText = (options || []).map((o) => o.label).join("|");
+    // Option labels identify a radio group, whose buttons are all present from
+    // the start. They must not identify a dropdown: a form whose options load
+    // only when touched changed identity the moment it was opened, and every
+    // action on it afterwards reported the control as gone.
+    const optionText = kind === "radio" ? (options || []).map((o) => o.label).join("|") : "";
     // The first entry of a repeating section carries no block marker, so its
     // identity does not change the moment a second entry is added beside it.
     const blockPart = block.index > 0 ? `${block.group}:${block.index}` : "";
@@ -145,6 +149,10 @@
       checked: null,
       max_length: el.maxLength && el.maxLength > 0 ? el.maxLength : null,
       accepts: el.getAttribute("accept") || "",
+      // Reported so the service can write a date the shape this control asks
+      // for. Never used as a label.
+      placeholder: el.getAttribute("placeholder") || "",
+      input_type: (el.getAttribute("type") || "").toLowerCase(),
       options_source: "none",
     };
   }

@@ -36,6 +36,9 @@ class FactSpec:
     key: str
     aliases: tuple[str, ...]
     kind: str = "text"
+    #: Worked out at the time of filling rather than stored. Today's date is not
+    #: something anyone should be asked to type into a form.
+    computed: str = ""
     #: Words that make a label unmistakably about this fact. If a label carries
     #: a topic word owned by some other fact, this fact cannot answer it.
     topics: tuple[str, ...] = ()
@@ -305,6 +308,21 @@ FACTS: tuple[FactSpec, ...] = (
         kind="choice", topics=("disability", "disabled"),
         sensitivity=Sensitivity.DEMOGRAPHIC,
         prompt="Disability status", onboarding_group="voluntary",
+    ),
+    # ---- things the agent works out for itself --------------------------
+    _f(
+        "current_date", "current date", "today's date", "todays date", "date",
+        "date signed", "signature date", "date of signature", "today",
+        "date completed", "application date",
+        kind="date", computed="today",
+        # "Date of Birth" is guarded off by the birth modifier, and "Start Date"
+        # and "End Date" by their own leading words, so this only claims a date
+        # field that names no other subject.
+    ),
+    _f(
+        "signature", "signature", "electronic signature", "e signature",
+        "type your name to sign", "sign here", "signed by",
+        computed="full_name",
     ),
     # ---- documents ------------------------------------------------------
     _f(

@@ -61,6 +61,8 @@ DISTINGUISHING_MODIFIERS = frozenset(
         "evening", "daytime", "spouse", "partner", "parent", "guardian",
         "referrer", "referral", "manager", "supervisor", "recruiter",
         "confirm", "retype", "repeat", "verify",
+        # "Date of Birth" must never be answered with today's date.
+        "birth", "birthday", "dob",
     }
 )
 

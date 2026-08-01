@@ -135,6 +135,10 @@ class FieldObservation(BaseModel):
     checked: bool | None = None
     max_length: int | None = None
     accepts: str = ""
+    #: What the control shows when empty. Used to work out the shape a date
+    #: field wants, never as a label.
+    placeholder: str = ""
+    input_type: str = ""
     options_source: Literal["native", "owned_popup", "none"] = "none"
 
     @property
@@ -221,6 +225,14 @@ class PendingQuestion(BaseModel):
     fact_key: str = ""
     reason: str = ""
     section: str = ""
+    frame: str = ""
+    #: What the profile holds for this question's fact, so the panel can rank
+    #: the control's own options against it once they have been opened.
+    saved_value: str = ""
+    #: True when the control's options have not been read yet. They live behind
+    #: a popup only that control owns, so they have to be opened before there is
+    #: anything to show -- asking someone to type a dropdown answer is not it.
+    options_pending: bool = False
 
 
 class ChecklistItem(BaseModel):

@@ -500,6 +500,52 @@ def post_chat(payload: ChatPayload) -> dict[str, Any]:
     }
 
 
+class SuggestPayload(BaseModel):
+    label: str
+    options: list[Option] = Field(default_factory=list)
+    saved_value: str = ""
+    fact_key: str = ""
+    source: str = "owned_popup"
+
+
+@app.post("/suggest")
+async def suggest(payload: SuggestPayload) -> dict[str, Any]:
+    """Suggest one of the page's own options for a question nothing answers.
+
+    Matching gets first refusal. Only when that finds nothing is the model asked,
+    and it is asked to pick from a list scraped off the page -- then its answer
+    is checked against that same list before it is offered. A suggestion is
+    shown as a suggestion; it is never filled in without being accepted.
+    """
+    if not payload.options:
+        return {"suggested": None, "why": "this control has no options to choose between"}
+
+    if payload.saved_value:
+        ranked = rank_options(payload.saved_value, payload.options, payload.fact_key)
+        if ranked and ranked[0].score >= 400:
+            return {
+                "suggested": ranked[0].option.label,
+                "why": f"your saved answer, {ranked[0].reason}",
+                "from": "profile",
+            }
+
+    model = _model()
+    if not model.available:
+        return {
+            "suggested": None,
+            "why": "nothing saved answers this, and there is no model key set",
+        }
+    try:
+        chosen, why = await ai.choose_among(
+            model, payload.label, payload.options, payload.saved_value
+        )
+    except ai.ModelUnavailable as exc:
+        return {"suggested": None, "why": str(exc)}
+    if chosen is None:
+        return {"suggested": None, "why": why}
+    return {"suggested": chosen.label, "why": why, "from": "model"}
+
+
 class DescribePayload(BaseModel):
     observation: PageObservation
 

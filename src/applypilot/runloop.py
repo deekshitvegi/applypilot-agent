@@ -139,9 +139,12 @@ def plan_page(
             continue
         if resolution.question is not None:
             question = resolution.question
-            if observed.control is CK.COMBOBOX and not observed.options:
-                # Its options live behind a popup only that control owns, so they
-                # have to be opened before there is anything to ask about.
+            if question.options_pending:
+                # Its choices live behind a popup only that control owns, and
+                # some native selects hold nothing until they are touched.
+                # Either way they get opened and read before anyone is asked --
+                # handing back a text box to type a dropdown answer into is not
+                # an answer to the question.
                 result.needs_options.append(observed.fingerprint)
             result.questions.append(question)
             continue

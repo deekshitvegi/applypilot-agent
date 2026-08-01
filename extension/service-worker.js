@@ -39,16 +39,41 @@ async function callInFrames(tabId, expression, args) {
     .map((entry) => ({ frameId: entry.frameId, value: entry.result.value }));
 }
 
-async function callInTop(tabId, expression, args) {
-  await ensureInjected(tabId, false);
+/**
+ * Run one injected function in the frame the control actually lives in.
+ *
+ * Applications are very often inside a frame. Acting only on the top frame
+ * meant every one of those fields came back as "no longer on the page", or
+ * worse, matched something else that happened to be up there.
+ */
+async function callInFrame(tabId, frameId, expression, args) {
+  const target = { tabId: tabId };
+  if (frameId !== undefined && frameId !== null && frameId !== "") {
+    target.frameIds = [Number(frameId)];
+  }
+  await ensureInjected(tabId, target.frameIds ? true : false);
   const [entry] = await chrome.scripting.executeScript({
-    target: { tabId: tabId },
+    target: target,
     func: runNamed,
     args: [expression, args || []],
   });
   if (!entry || !entry.result) return null;
   if (!entry.result.ok) throw new Error(entry.result.error);
   return entry.result.value;
+}
+
+/**
+ * Try every frame and take the first that succeeds.
+ *
+ * For controls named by their text rather than by a fingerprint, where which
+ * frame holds them is not known in advance.
+ */
+async function callAnywhere(tabId, expression, args, accept) {
+  const results = await callInFrames(tabId, expression, args);
+  for (const entry of results) {
+    if (!accept || accept(entry.value)) return entry.value;
+  }
+  return results.length ? results[0].value : null;
 }
 
 /**
@@ -122,43 +147,54 @@ async function scanTab(tabId) {
  * handed to the page as a File. The page is never given a way to reach the
  * local service itself.
  */
-async function attachDocument(tabId, fingerprint, base64, filename, mime) {
-  return callInTop(tabId, "act.attachFile", [fingerprint, base64, filename, mime]);
-}
-
 const HANDLERS = {
   async scan(message) {
     return scanTab(message.tabId);
   },
   async perform(message) {
-    return callInTop(message.tabId, "act.perform", [message.action]);
+    return callInFrame(message.tabId, message.frameId, "act.perform", [message.action]);
   },
   async openOptions(message) {
-    return callInTop(message.tabId, "act.openOptions", [message.fingerprint, message.filter || ""]);
+    return callInFrame(message.tabId, message.frameId, "act.openOptions", [
+      message.fingerprint,
+      message.filter || "",
+    ]);
   },
   async addRepeat(message) {
-    return callInTop(message.tabId, "act.addRepeat", [message.text || ""]);
+    return callAnywhere(
+      message.tabId,
+      "act.addRepeat",
+      [message.text || ""],
+      (value) => value && value.outcome === "verified"
+    );
   },
   async click(message) {
-    return callInTop(message.tabId, "act.clickByText", [message.text]);
+    return callAnywhere(
+      message.tabId,
+      "act.clickByText",
+      [message.text],
+      (value) => value && value.outcome !== "failed"
+    );
   },
   async highlight(message) {
-    return callInTop(message.tabId, "act.highlight", [message.fingerprint]);
+    return callInFrame(message.tabId, message.frameId, "act.highlight", [message.fingerprint]);
   },
   async signInSettled(message) {
-    return callInTop(message.tabId, "act.signInSettled", [message.timeout || 8000]);
+    return callInFrame(message.tabId, 0, "act.signInSettled", [message.timeout || 8000]);
   },
   async confirmation(message) {
-    return callInTop(message.tabId, "scan.confirmationText", []);
+    return callAnywhere(message.tabId, "scan.confirmationText", [], (value) => Boolean(value));
   },
   async attach(message) {
-    return attachDocument(
-      message.tabId,
+    // The bytes are fetched here, where the origin is the extension's own, and
+    // handed to the page as a File. The page never gets a way to reach the
+    // local service itself.
+    return callInFrame(message.tabId, message.frameId, "act.attachFile", [
       message.fingerprint,
       message.base64,
       message.filename,
-      message.mime
-    );
+      message.mime,
+    ]);
   },
   async navigate(message) {
     await chrome.tabs.update(message.tabId, { url: message.url });

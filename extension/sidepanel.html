@@ -6,78 +6,97 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-  <header class="bar">
-    <div class="bar-main">
+  <header>
+    <div class="head-row">
       <button id="run" class="run">Start</button>
-      <span id="activity" class="activity">Not running.</span>
+      <div class="head-text">
+        <div id="activity" class="activity">Open a job page to begin</div>
+        <div id="page-detail" class="sub"></div>
+      </div>
+      <button id="settings" class="icon" title="Settings" aria-label="Settings">&#9881;</button>
     </div>
-    <button id="settings" class="ghost" title="Settings">Settings</button>
+    <div id="progress" class="progress hidden"><div id="progress-bar"></div></div>
   </header>
 
   <div id="alerts"></div>
 
   <main>
-    <!-- Onboarding takes over the panel until the questions everyone asks are
-         answered, because with nothing saved every form asks them again. -->
-    <section id="onboarding" class="card hidden">
-      <h2>Set up your answers</h2>
-      <p id="onboarding-progress" class="muted"></p>
-      <div id="onboarding-notes"></div>
-      <div class="upload">
-        <label for="resume-file">Start from your resume (.docx)</label>
-        <input id="resume-file" type="file" accept=".docx">
-        <p id="resume-result" class="muted"></p>
+    <!-- Setup owns the panel until the questions every form asks are answered. -->
+    <section id="onboarding" class="card accent hidden">
+      <div class="card-head">
+        <h2>Set up your answers</h2>
+        <span id="onboarding-progress" class="pill"></span>
       </div>
+      <p id="onboarding-note" class="sub"></p>
+
+      <label class="file-drop" for="resume-file">
+        <span class="file-drop-title">Start from your r&eacute;sum&eacute;</span>
+        <span class="sub">A .docx file. I take only what it says.</span>
+        <input id="resume-file" type="file" accept=".docx" hidden>
+      </label>
+      <p id="resume-result" class="sub"></p>
+
       <div id="onboarding-step"></div>
-      <button id="onboarding-skip" class="ghost">Answer the rest later</button>
+      <button id="onboarding-later" class="link">Finish this later</button>
     </section>
 
-    <section id="page" class="card">
-      <h2 id="page-kind">No page scanned yet</h2>
-      <p id="page-detail" class="muted"></p>
-      <div class="row">
-        <button id="rescan" class="ghost">Rescan this page</button>
-        <button id="fill" class="primary">Fill what you can</button>
+    <!-- The one thing being asked, and nothing else competing with it. -->
+    <section id="question" class="card accent hidden">
+      <div class="card-head">
+        <h2>I need one answer</h2>
+        <span id="question-remaining" class="pill"></span>
       </div>
-    </section>
+      <p id="question-label" class="ask"></p>
+      <p id="question-reason" class="sub"></p>
 
-    <!-- One question at a time. A wall of them is how a thirteen-question form
-         turned into thirty. -->
-    <section id="question" class="card hidden">
-      <h2>One thing I need from you</h2>
-      <p id="question-label" class="question-label"></p>
-      <p id="question-reason" class="muted"></p>
       <div id="question-input"></div>
-      <div class="row">
-        <button id="question-save" class="primary">Save and continue</button>
-        <button id="question-skip" class="ghost">Leave it blank</button>
-        <button id="question-show" class="ghost">Show me on the page</button>
+      <p id="question-hint" class="sub hint hidden"></p>
+
+      <div class="actions">
+        <button id="question-save" class="primary">Save &amp; next</button>
+        <button id="question-skip" class="quiet">Skip</button>
+        <button id="question-show" class="quiet">Find it</button>
       </div>
-      <p id="question-remaining" class="muted"></p>
     </section>
 
-    <section id="checklist-card" class="card">
-      <h2>Checklist <span id="checklist-count" class="muted"></span></h2>
-      <ul id="checklist" class="checklist"></ul>
-      <p class="muted tiny">
-        Click any row to scroll to that field and highlight it on the page.
-      </p>
+    <section id="idle" class="card">
+      <p id="idle-text" class="sub">Press Start on a job page and I will fill what I can.</p>
+      <div class="actions">
+        <button id="rescan" class="quiet">Rescan</button>
+        <button id="fill" class="primary">Fill this page</button>
+      </div>
     </section>
 
     <section class="card">
-      <h2>Chat</h2>
-      <div id="log" class="log"></div>
+      <button id="checklist-toggle" class="disclosure" aria-expanded="false">
+        <span class="chev">&#9656;</span>
+        <span id="checklist-summary">Nothing scanned yet</span>
+      </button>
+      <div id="checklist-body" class="hidden">
+        <div class="tabs" id="checklist-tabs"></div>
+        <ul id="checklist" class="checklist"></ul>
+        <p class="sub tiny">Click a row to find that field on the page.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <button id="log-toggle" class="disclosure" aria-expanded="false">
+        <span class="chev">&#9656;</span>
+        <span>Activity</span>
+        <span id="log-badge" class="pill quiet-pill hidden"></span>
+      </button>
+      <div id="log" class="log hidden"></div>
       <form id="chat-form" class="chat">
-        <input id="chat-input" type="text" autocomplete="off"
-               placeholder="e.g. state texas, middle name Kumar, change my last answer to No">
-        <button type="submit" class="primary">Send</button>
+        <input id="chat-input" type="text" autocomplete="off" placeholder="Tell me what to change">
+        <button type="submit" class="primary" id="chat-send">Send</button>
       </form>
+      <p class="sub tiny">e.g. <em>state texas</em> &middot; <em>middle name Kumar</em> &middot; <em>change my last answer to No</em></p>
     </section>
   </main>
 
-  <footer class="bar tiny">
+  <footer>
     <span id="versions"></span>
-    <span id="applications" class="muted"></span>
+    <span id="applications" class="sub"></span>
   </footer>
 
   <script src="sidepanel.js"></script>

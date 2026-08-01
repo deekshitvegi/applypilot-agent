@@ -217,3 +217,47 @@ mean Mississippi to an education field and Master's to an address field,
 whichever loaded last.
 *Mechanism.* Synonyms are grouped by subject and unlocked by the fact being
 answered. States are only in play for a state; degrees only for a degree.
+
+---
+
+## Found on a real application
+
+**30. A dropdown was handed back as a text box.** A required select whose
+options load only when it is touched looked, to a scan, like a choice with no
+choices — so the panel asked the applicant to type the answer to a dropdown.
+*Mechanism.* A choice control with fewer than two usable options is marked as
+needing its options opened. The panel opens it, reads what it owns, and only
+then asks — and if a saved answer matches one of them, it does not ask at all.
+Native selects are touched to populate before being read, and before being
+chosen from.
+→ `test_lazy_dropdowns.py::test_such_a_question_is_flagged_as_needing_its_options_opened`
+
+**31. The applicant was asked for today's date.**
+*Mechanism.* Facts may be computed rather than stored. The current date is
+written in the shape the control asks for, read off its own placeholder. "Date
+of Birth" is guarded off by the birth modifier, and "Start Date" and "End Date"
+by their own leading words.
+→ `test_the_current_date_is_filled_not_asked`, `test_a_date_of_birth_is_never_filled_with_today`
+
+**32. Option labels in a fingerprint made identity unstable.** A dropdown that
+populated when opened changed fingerprint at that moment, so every action on it
+afterwards reported the control as gone.
+*Mechanism.* Option labels identify a radio group, whose buttons are all present
+from the start. They no longer identify a dropdown.
+→ `test_a_saved_answer_matching_an_opened_option_is_chosen_not_asked`
+
+**33. Actions only ever ran in the top frame.** Applications are very often
+inside a frame; every field in one came back as missing, or matched something
+else that happened to be up top.
+*Mechanism.* Each field reports its frame, and each action runs in it. Controls
+named by their text are tried across every frame.
+
+**34. Pressing Save gave no sign it had worked, so it got pressed again** — and
+each press advanced past a question. Four went by unanswered.
+*Mechanism.* Every control shows that it is working and cannot be pressed while
+it is. A question only advances after the value is actually on the page, and a
+failed fill keeps the question up with the reason.
+
+**35. Two copies of a date hint produced a backwards date.** `MM/DD/YYYY` joined
+to itself contains "yyyy mm/dd", which matched the ISO pattern.
+*Mechanism.* Each hint is tested on its own.

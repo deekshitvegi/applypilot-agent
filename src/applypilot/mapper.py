@@ -23,7 +23,9 @@ The rules, all structural:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
+from datetime import date
 
 from .facts import (
     BY_KEY,
@@ -56,6 +58,7 @@ from .text import (
     has_question_shape,
     is_conditional,
     leading_phrase_remainder,
+    looks_like_placeholder,
     normalise,
     numeric_suffix,
     tokens,
@@ -335,10 +338,55 @@ def _record_value(profile: Profile, spec: FactSpec, field: FieldObservation) -> 
     return str(raw or "")
 
 
+#: Date shapes a form asks for, read off the control rather than assumed.
+_DATE_SHAPES = (
+    (r"y{4}\W*m{2}\W*d{2}", "%Y-%m-%d"),
+    (r"d{1,2}\W*m{1,2}\W*y{4}", "%d/%m/%Y"),
+    (r"m{1,2}\W*d{1,2}\W*y{4}", "%m/%d/%Y"),
+    (r"m{1,2}\W*d{1,2}\W*y{2}", "%m/%d/%y"),
+)
+
+
+def format_date_for(field: FieldObservation, value: date) -> str:
+    """Write a date the way this particular control asks for it."""
+    # A native date input only accepts the ISO form, whatever it displays.
+    if field.input_type == "date":
+        return value.isoformat()
+    # Each hint is tested on its own. Running them together once produced a
+    # "yyyy mm/dd" sequence out of two copies of "MM/DD/YYYY" and wrote the
+    # date backwards.
+    for hint in (field.placeholder, field.attr_label):
+        text = (hint or "").lower()
+        if not text:
+            continue
+        for pattern, form in _DATE_SHAPES:
+            if re.search(pattern, text):
+                return value.strftime(form)
+    return value.strftime("%m/%d/%Y")
+
+
+def computed_value(profile: Profile, spec: FactSpec, field: FieldObservation) -> str:
+    """A value worked out now rather than stored.
+
+    Today's date is not something to hand back as a question, and neither is a
+    signature line that wants the name already in the profile.
+    """
+    if spec.computed == "today":
+        return format_date_for(field, date.today())
+    if spec.computed == "full_name":
+        return profile.fact("full_name")
+    return ""
+
+
 def fact_value(profile: Profile, spec: FactSpec, field: FieldObservation) -> str:
     if spec.record:
         return _record_value(profile, spec, field)
-    return profile.fact(spec.key)
+    stored = profile.fact(spec.key)
+    if stored:
+        return stored
+    if spec.computed:
+        return computed_value(profile, spec, field)
+    return ""
 
 
 def is_supplementary(field: FieldObservation, spec: FactSpec | None) -> bool:
@@ -387,7 +435,9 @@ def resolve_field(
             return Resolution(field=field, answer=answer)
         return Resolution(
             field=field,
-            question=_ask(field, "", "your saved answer is not one of the options offered here"),
+            question=_ask(
+                field, "", "your saved answer is not one of the options offered here", profile
+            ),
         )
 
     if is_conditional(label):
@@ -396,7 +446,7 @@ def resolve_field(
         if field.required:
             return Resolution(
                 field=field,
-                question=_ask(field, "", "this is a follow-up to the question above it"),
+                question=_ask(field, "", "this is a follow-up to the question above it", profile),
             )
         return Resolution(field=field, skipped="follow-up question, left for you")
 
@@ -406,7 +456,7 @@ def resolve_field(
     if spec and spec.key in DEMOGRAPHIC_KEYS and not profile.answer_demographics:
         return Resolution(
             field=field,
-            question=_ask(field, spec.key, "voluntary question -- you decide each time"),
+            question=_ask(field, spec.key, "voluntary question -- you decide each time", profile),
             fact_key=spec.key,
         )
 
@@ -424,6 +474,7 @@ def resolve_field(
             question=_ask(
                 field, spec.key,
                 f"none of the options offered here match your saved answer '{value}'",
+                profile,
             ),
             fact_key=spec.key,
         )
@@ -431,7 +482,9 @@ def resolve_field(
     if field.required:
         return Resolution(
             field=field,
-            question=_ask(field, spec.key if spec else "", "required and not answered yet"),
+            question=_ask(
+                field, spec.key if spec else "", "required and not answered yet", profile
+            ),
             fact_key=spec.key if spec else "",
         )
 
@@ -480,7 +533,17 @@ def _shape_answer(
     )
 
 
-def _ask(field: FieldObservation, fact_key: str, reason: str) -> PendingQuestion:
+def _ask(
+    field: FieldObservation,
+    fact_key: str,
+    reason: str,
+    profile: Profile | None = None,
+) -> PendingQuestion:
+    saved = ""
+    if profile is not None and fact_key:
+        spec = BY_KEY.get(fact_key)
+        if spec is not None:
+            saved = fact_value(profile, spec, field)
     return PendingQuestion(
         fingerprint=field.fingerprint,
         label=field.display_label or field.attr_label,
@@ -490,7 +553,28 @@ def _ask(field: FieldObservation, fact_key: str, reason: str) -> PendingQuestion
         fact_key=fact_key,
         reason=reason,
         section=field.section,
+        frame=field.frame,
+        saved_value=saved,
+        options_pending=needs_its_options_opened(field),
     )
+
+
+def usable_options(field: FieldObservation) -> list:
+    """The options a control offers, with its placeholder rows removed."""
+    return [o for o in field.options if not o.disabled and not looks_like_placeholder(o.label)]
+
+
+def needs_its_options_opened(field: FieldObservation) -> bool:
+    """True when this control's choices are not known yet.
+
+    A custom dropdown keeps its options behind a popup it owns, and some native
+    selects hold nothing until they are touched. Either way there is nothing to
+    show, and handing back a text box for someone to type a dropdown answer into
+    is not an acceptable substitute.
+    """
+    if field.control not in CHOICE_CONTROLS:
+        return False
+    return len(usable_options(field)) < 2
 
 
 def resolve_page(

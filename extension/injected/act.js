@@ -146,9 +146,19 @@
     const reading = currentReading(found);
     if (AP.verify.same(reading.value, optionLabel)) return skipResult(found, optionLabel, reading);
 
-    const option = Array.from(el.options || []).find((candidate) =>
-      AP.verify.same((candidate.textContent || "").trim(), optionLabel)
-    );
+    const find = () =>
+      Array.from(el.options || []).find((candidate) =>
+        AP.verify.same((candidate.textContent || "").trim(), optionLabel)
+      );
+
+    let option = find();
+    if (!option && realOptionCount(el) < 2) {
+      // Nothing to choose from yet. Some forms only load a dropdown's contents
+      // once it is touched.
+      realClick(el);
+      await waitFor(() => realOptionCount(el) >= 2, OPEN_TIMEOUT);
+      option = find();
+    }
     if (!option) {
       return {
         changed: false,
@@ -213,6 +223,13 @@
     return trigger || el;
   }
 
+  /** Options a person could actually choose, placeholder rows removed. */
+  function realOptionCount(el) {
+    return Array.from(el.options || []).filter(
+      (option) => !option.disabled && !AP.verify.isPlaceholder(option.textContent || "")
+    ).length;
+  }
+
   /** The widget's own text box, when it has one. */
   function filterBox(el) {
     if ((el.tagName || "").toLowerCase() === "input") return el;
@@ -268,6 +285,14 @@
 
     const el = found.element;
     if ((el.tagName || "").toLowerCase() === "select") {
+      // A native select is not always populated before it is touched. One held
+      // nothing but its own "No Selection" row until something opened it, and a
+      // required choice with no choices in it became a text box for the
+      // applicant to type a dropdown answer into.
+      if (realOptionCount(el) < 2) {
+        realClick(el);
+        await waitFor(() => realOptionCount(el) >= 2, OPEN_TIMEOUT);
+      }
       return {
         options: Array.from(el.options || []).map((option) => ({
           label: (option.textContent || "").trim(),
@@ -276,7 +301,7 @@
         })),
         opened: true,
         source: "native",
-        note: "",
+        note: realOptionCount(el) ? "" : "this dropdown offers nothing at all",
       };
     }
 
