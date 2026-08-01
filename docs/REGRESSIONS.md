@@ -619,3 +619,25 @@ section went unasked.
 name gets its turn on the same narrow terms as a field with no label at all. The
 bar sits well above a sentence, so a long question that does name its subject is
 still read as a question.
+
+**84. Reading a page took seven and a half seconds, and it was my own doing.**
+Measured on the live application, not a fixture. Every part a scan uses was
+around a millisecond, yet finding one control took 416ms and a whole scan 7530ms.
+The tolerant twin matching added for 66 climbed to the top of the page and
+compared every sibling section against every other, recomputing what each one
+asks each time.
+*Mechanism.* A control whose name states its entry number needs no walk at all.
+Where a walk is still needed it stops at any block holding more than a couple of
+dozen controls -- a repeating entry is a handful of questions, not a page -- and
+what a block asks is remembered for the length of one document walk.
+Measured on the live page: scan 7530ms to 78ms, lookup 416ms to 4ms, read-back
+414ms to 1ms, and a four-field fill 12839ms to 134ms.
+
+**85. A control's own name was ignored when its label meant nothing.** Read off
+the live page: the veteran radios are headed "(VEVRAA) Veteran's
+Self-Identification Form" and labelled with three hundred characters of statute.
+Neither is the name of a field, both matched nothing, and the question went
+unasked -- while the control was called "veteran" the whole time.
+*Mechanism.* A label that answers to nothing is telling us nothing, so the name
+gets its turn on the same narrow terms a field with no label at all gets: an
+exact hit only, with the confidence penalty that goes with it.

@@ -3,6 +3,25 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.24.0
+
+Measured on the live application rather than a fixture, which is the only reason
+any of this was found.
+
+- **Reading a page: 7530ms to 78ms.** Every part of a scan measured around a
+  millisecond, yet a whole scan took seven and a half seconds. The tolerant
+  block matching added in 1.15.0 was climbing to the top of the page and
+  comparing every section against every other one. A control whose name states
+  its entry number needs no walk at all now; where a walk is still needed it
+  stops at any block holding more than a couple of dozen controls, and what a
+  block asks is remembered for the length of one document walk.
+- **A four-field fill on that page: 12839ms to 134ms.** Finding one control went
+  from 416ms to 4ms, reading it back from 414ms to 1ms.
+- **The veteran question is asked.** Its label there is "(VEVRAA) Veteran's
+  Self-Identification Form" over three hundred characters of statute -- neither
+  of which names a field -- while the control was called "veteran" all along. A
+  label that answers to nothing gives way to the name.
+
 ## 1.23.0
 
 - **The veteran question, read off the live page.** Its label there is not

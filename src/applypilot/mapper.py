@@ -304,13 +304,15 @@ def match_facts(field: FieldObservation) -> list[FactMatch]:
             matches = _match_against_label(field, plain, attribute_mode=False)
             if matches:
                 return matches
-        # A paragraph is not the name of a field. The veteran question on one
-        # real application is labelled with three hundred characters of VEVRAA
-        # statute, and the whole section went unasked because that matched
-        # nothing -- while the control's own name said "veteran" plainly. Prose
-        # that answers to nothing is worth less than a name, so the name gets
-        # its turn, on the same narrow terms as a field with no label at all.
-        if field.attr_label and _is_prose(label):
+        # A label that answers to nothing is, by definition, telling us nothing.
+        # The veteran question on one real application is headed "(VEVRAA)
+        # Veteran's Self-Identification Form" and labelled with three hundred
+        # characters of statute -- neither of which is the name of a field --
+        # while the control's own name said "veteran" the whole time, and the
+        # section went unasked. A name that means something beats a label that
+        # does not, on the same narrow terms a field with no label at all gets:
+        # an exact hit only, and the confidence penalty that goes with it.
+        if field.attr_label:
             return _match_against_label(field, field.attr_label, attribute_mode=True)
         return matches
     if field.attr_label:
@@ -318,18 +320,6 @@ def match_facts(field: FieldObservation) -> list[FactMatch]:
         # and only an exact hit counts, because employers name fields carelessly.
         return _match_against_label(field, field.attr_label, attribute_mode=True)
     return []
-
-
-#: Past this many words a label has stopped naming a field and started
-#: explaining something. Short questions are still questions -- "Are you legally
-#: authorised to work in the United States?" is thirteen words and names its
-#: subject perfectly well -- so the bar sits well above a sentence.
-_PROSE_WORDS = 25
-
-
-def _is_prose(label: str) -> bool:
-    """True when a label is explanatory text rather than the name of a field."""
-    return len(tokens(label)) > _PROSE_WORDS
 
 
 def _match_against_label(
