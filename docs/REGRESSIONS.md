@@ -397,3 +397,13 @@ backing input is part of one field, not a second one.
 **52. A widget showing the field's own name in its value box was read as having
 that value.** "School / education institution" came back as the chosen school.
 *Mechanism.* A rendered value equal to the control's own label is a placeholder.
+
+**53. The page watcher fought the fill and nothing finished.** Filling a form
+changes the page, and the watcher added to notice *someone else* changing it
+reacted to our own work: it re-planned on top of a fill in progress, over and
+over, so no field was ever completed and the panel sat there looking busy.
+*Mechanism.* Everything the panel initiates is counted as work in flight, and
+the watcher does nothing while any of it is. It also waits for the page to hold
+the same shape across two checks before acting, and ignores a page it has
+already planned against. A watcher that cannot tell its own effects from the
+world's is worse than no watcher.

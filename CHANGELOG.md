@@ -3,6 +3,17 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.10.1
+
+Fixes a regression introduced in 1.7.0.
+
+- **The page watcher no longer fights the fill.** Filling a form changes the
+  page, and the watcher reacted to that as though someone else had done it —
+  re-planning on top of work in progress, over and over, so nothing ever
+  finished and the panel sat there looking busy. It now stays out of the way
+  while anything is in flight, waits for the page to settle across two checks,
+  and ignores a page it has already planned against.
+
 ## 1.10.0
 
 Read off the live application rather than guessed at.

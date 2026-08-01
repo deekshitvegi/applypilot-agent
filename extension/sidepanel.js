@@ -41,6 +41,14 @@ const state = {
   unread: 0,
   autoContinue: false,
   autoAttach: true,
+  //: How many things the panel is doing right now. The page watcher stays out
+  //: of the way while any of them are in flight: filling a form changes the
+  //: page, and a watcher that reacts to our own work re-plans on top of it and
+  //: nothing ever finishes.
+  working: 0,
+  lastPlannedSignature: "",
+  stableSignature: "",
+  stableTicks: 0,
   submissionPolicy: "confirm",
   primaryResumeId: "",
 };
@@ -98,6 +106,16 @@ function fieldFor(fingerprint) {
   return ((state.observation && state.observation.fields) || []).find(
     (f) => f.fingerprint === fingerprint
   ) || null;
+}
+
+/** Run something, counting it as work in flight for as long as it takes. */
+async function inFlight(fn) {
+  state.working += 1;
+  try {
+    return await fn();
+  } finally {
+    state.working -= 1;
+  }
 }
 
 /* --------------------------------------------------------------- feedback */
@@ -351,6 +369,7 @@ async function planPage() {
   const plan = await post("/plan", state.observation);
   state.plan = plan;
   state.questionIndex = 0;
+  state.lastPlannedSignature = state.observation.signature || "";
 
   const name = KIND_NAMES[state.observation.kind] || state.observation.kind;
   const adapter = plan.adapter && plan.adapter !== "generic" ? ` · ${plan.adapter}` : "";
@@ -521,6 +540,10 @@ function showHint(text, suggested) {
  * Returns true when the question answered itself and the panel has moved on.
  */
 async function resolveOptions(question) {
+  return inFlight(() => resolveOptionsInner(question));
+}
+
+async function resolveOptionsInner(question) {
   try {
     const opened = await browser({
       type: "openOptions",
@@ -609,6 +632,10 @@ async function suggestFor(question, control) {
 }
 
 async function answerQuestion(value, button, restoreLabel) {
+  return inFlight(() => answerQuestionInner(value, button, restoreLabel));
+}
+
+async function answerQuestionInner(value, button, restoreLabel) {
   if (state.busy) return;
   const question = currentQuestion();
   if (!question) return;
@@ -696,6 +723,10 @@ function reportOne(result) {
 }
 
 async function fillPage() {
+  return inFlight(fillPageInner);
+}
+
+async function fillPageInner() {
   if (!state.plan) await planPage();
 
   // Make room for every entry on file before filling, so the second school and
@@ -824,6 +855,10 @@ function blockCount(pattern) {
 const MAX_STEPS = 15;
 
 async function runToCompletion() {
+  return inFlight(runToCompletionInner);
+}
+
+async function runToCompletionInner() {
   for (let step = 1; step <= MAX_STEPS; step += 1) {
     await fillPage();
 
@@ -1280,13 +1315,29 @@ function renderChoiceCard(outcome) {
  */
 function watchThePage() {
   setInterval(async () => {
-    if (state.busy || !state.tab) return;
+    // Anything in flight means the page is being changed by us.
+    if (state.working > 0 || state.busy || !state.tab || !state.observation) {
+      state.stableTicks = 0;
+      return;
+    }
     try {
       const tab = await browser({ type: "activeTab" });
       if (!tab || tab.id !== state.tab.id) return;
       const fresh = await browser({ type: "scan", tabId: state.tab.id });
-      if (!fresh || !state.observation) return;
-      if (fresh.signature === state.observation.signature) return;
+      if (!fresh || !fresh.signature) return;
+
+      // Wait for the page to settle before acting on it: a form mid-render
+      // looks different on every tick.
+      if (fresh.signature !== state.stableSignature) {
+        state.stableSignature = fresh.signature;
+        state.stableTicks = 0;
+        return;
+      }
+      state.stableTicks += 1;
+      if (state.stableTicks < 2) return;
+
+      // And only when it is not simply the page we already planned against.
+      if (fresh.signature === state.lastPlannedSignature) return;
 
       state.observation = fresh;
       say("The page changed, so I have looked at it again.");
