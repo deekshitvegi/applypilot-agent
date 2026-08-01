@@ -332,7 +332,9 @@ FACTS: tuple[FactSpec, ...] = (
         "resume", "resume", "cv", "resume cv", "curriculum vitae",
         "upload resume", "attach resume", "resume upload",
         kind="file", topics=("resume", "cv"),
-        prompt="Resume", onboarding_group="documents",
+        # Not a setup question: it is uploaded in Settings, and asking for it as
+        # a line of text to type is no use to anyone.
+        prompt="Resume",
     ),
     _f(
         "cover_letter", "cover letter", "covering letter", "upload cover letter",

@@ -3,6 +3,18 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.12.0
+
+- **A dependent field is filled once it becomes answerable.** State holds nothing
+  but "Choose" until a Country is chosen, so retrying State was useless — the
+  answer did not exist yet. After any choice, the page is read again and the
+  fields that now have options are filled.
+- **A page takes seconds, not minutes.** Every control was given six seconds to
+  come back from a search, including ones with nothing to type into, and a
+  control that had already refused a value was asked again on every pass.
+- **The résumé is not a setup question.** It is a document, uploaded in Settings;
+  asking for it as a line of text to type was no use to anyone.
+
 ## 1.11.0
 
 All three found by driving the live application, and confirmed there.

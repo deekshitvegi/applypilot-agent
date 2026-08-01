@@ -322,6 +322,9 @@
         await waitFor(() => offeredLabels(el).length > 0, SEARCH_TIMEOUT);
         popup = D.ownedPopup(el) || popup;
       }
+      // No box to type into means no search will happen, so there is nothing
+      // to wait for. Waiting anyway cost six seconds per control, several
+      // times over, and turned one page into ten minutes.
     }
     return popup;
   }

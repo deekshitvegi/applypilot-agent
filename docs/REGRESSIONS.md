@@ -430,3 +430,22 @@ so there was never a file control to attach anything to.
 *Mechanism.* A file input hidden outright still counts when something visible
 wraps it. Attaching to it is how the widget is meant to work, and the attachment
 is still verified from the input's own file list afterwards.
+
+**57. A dependent field could never be answered, however many times it was
+retried.** State holds nothing but "Choose" until a Country is chosen, and the
+page then picks the first state in the list for you. Retrying State was useless:
+the answer did not exist yet.
+*Mechanism.* After any choice is made, the page is read again and the fields
+that now have options are filled. Correcting a value is not the same as waiting
+for it to become answerable.
+
+**58. One page took ten minutes.** Every control was given six seconds to come
+back from a search, including controls with nothing to type into, and a control
+that had already refused a value was asked for it again on every pass. With the
+auto-continue loop repeating the whole cycle, the waits added up.
+*Mechanism.* A control with no filter box is not waited on, and a value a
+control has already refused is not offered to it again in the same run.
+
+**59. The resume was asked for as a line of text to type.** It is a document; it
+is uploaded in Settings.
+*Mechanism.* It is no longer a setup question.

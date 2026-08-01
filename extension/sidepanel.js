@@ -757,12 +757,40 @@ async function fillPageInner() {
   }
   progress(actions.length, actions.length);
 
+  // A choice can bring a whole field to life: State holds nothing but "Choose"
+  // until a Country is picked, and no amount of retrying State first will get
+  // Texas into it. Once the choices are in, look again -- the fields that
+  // depend on them have options now.
+  const hadChoices = actions.some((a) => a.kind === "choose");
+  if (hadChoices) {
+    await scan();
+    const dependent = await post("/plan", state.observation);
+    const onPage = new Map((state.observation.fields || []).map((f) => [f.fingerprint, f]));
+    const nowAnswerable = (dependent.actions || []).filter((action) => {
+      const field = onPage.get(action.fingerprint);
+      const wanted = (action.option_label || action.value || "").trim().toLowerCase();
+      return field && (field.value || "").trim().toLowerCase() !== wanted;
+    });
+    for (const action of nowAnswerable) {
+      try {
+        results.push(await applyAndReport(action));
+      } catch (err) {
+        say(String(err.message), "bad");
+      }
+    }
+  }
+
   // A page can change its own mind after we fill it: choosing a country
   // rebuilds the address block, and one of them set the State to the first
   // entry in the list on its own. Look again and fill whatever the page no
   // longer holds. Filling is idempotent, so anything already right is untouched
   // and an extra pass costs nothing.
   const loose = (text) => String(text || "").trim().toLowerCase();
+  const refused = new Set(
+    results
+      .filter((r) => r && r.outcome === "failed")
+      .map((r) => r.fingerprint + "|" + loose(r.requested))
+  );
   for (let pass = 2; pass <= 4; pass += 1) {
     const after = await scan();
     const replan = await post("/plan", after);
@@ -770,7 +798,11 @@ async function fillPageInner() {
     const wrong = (replan.actions || []).filter((action) => {
       const field = onPage.get(action.fingerprint);
       if (!field) return false;
-      return loose(field.value) !== loose(action.option_label || action.value);
+      const wanted = action.option_label || action.value;
+      // A control that has already refused this value will refuse it again;
+      // trying four more times only costs time.
+      if (refused.has(action.fingerprint + "|" + loose(wanted))) return false;
+      return loose(field.value) !== loose(wanted);
     });
     if (!wrong.length) break;
 
