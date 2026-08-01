@@ -1,57 +1,66 @@
 /*
- * Settings.
+ * Settings: soft UI, the same light as the panel.
  *
- * The same rules as the panel: space rather than nested boxes, text large
- * enough to read, and one accent colour used only where something is either
- * the main action or a warning.
+ * One surface throughout, a single light source at the top left, and no
+ * borders. What a thing does is said by its depth: sunken is something to fill
+ * in, raised is something to press. The two sections that carry consequences --
+ * bringing your data in, and erasing it -- are the ones that sit highest off
+ * the page.
  *
- * A section is a heading, a line, and its contents. Nothing is wrapped in a
- * tinted card for decoration -- the tinted cards are the two that carry
- * consequences, and they stand out because nothing else does.
+ * Text keeps full contrast. Soft UI is a way of shaping surfaces, not an excuse
+ * for grey writing on grey.
  */
 
 :root {
   color-scheme: light dark;
 
-  --bg: #ffffff;
-  --surface: #f6f7f9;
-  --line: #e2e5ea;
-  --line-strong: #ccd2da;
+  --bg: #e9edf2;
+  --surface: #e9edf2;
+  --line: transparent;
+  --line-strong: transparent;
 
-  --text: #16181d;
-  --text-soft: #5c6470;
-  --text-faint: #878e99;
+  --text: #1b2028;
+  --text-soft: #5a6472;
+  --text-faint: #8a94a3;
 
-  --accent: #2f6df6;
+  --accent: #3f74e8;
   --accent-text: #ffffff;
-  --accent-soft: #eff4fe;
-  --accent-line: #bcd0fb;
+  --accent-soft: #e9edf2;
+  --accent-line: transparent;
 
-  --bad: #c02b2b;
-  --bad-soft: #fdeeee;
+  --bad: #b83232;
+  --bad-soft: #e9edf2;
 
-  --radius: 10px;
-  --radius-sm: 7px;
+  --lit: #ffffff;
+  --shade: #c2c9d4;
+
+  --up: -5px -5px 12px var(--lit), 5px 5px 12px var(--shade);
+  --up-sm: -3px -3px 7px var(--lit), 3px 3px 7px var(--shade);
+  --up-lg: -8px -8px 20px var(--lit), 8px 8px 20px var(--shade);
+  --down: inset -4px -4px 9px var(--lit), inset 4px 4px 9px var(--shade);
+  --down-sm: inset -2px -2px 5px var(--lit), inset 2px 2px 5px var(--shade);
+
+  --radius: 16px;
+  --radius-sm: 12px;
+  --press: 150ms ease;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #16181c;
-    --surface: #1d2026;
-    --line: #2c313a;
-    --line-strong: #3a414c;
+    --bg: #262a31;
+    --surface: #262a31;
 
-    --text: #eceef2;
-    --text-soft: #a3abb8;
-    --text-faint: #7b8492;
+    --text: #f0f2f6;
+    --text-soft: #a9b2c0;
+    --text-faint: #7e8899;
 
-    --accent: #5c8dff;
-    --accent-text: #0d1117;
-    --accent-soft: #1a2131;
-    --accent-line: #33477a;
+    --accent: #6d97ff;
+    --accent-text: #10141a;
 
-    --bad: #f07171;
-    --bad-soft: #2a1b1b;
+    --bad: #f58080;
+
+    --lit: #30353e;
+    --shade: #1a1d23;
   }
 }
 
@@ -71,30 +80,24 @@ h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
 h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
 p { margin: 0; }
 
-/* Space and a rule, not a box. */
+/* Each section sits on the page rather than inside a box. */
 section {
-  margin-top: 36px;
-  padding-top: 28px;
-  border-top: 1px solid var(--line);
+  margin-top: 30px;
+  padding: 24px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--up);
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-/* The two that carry consequences are the only ones that look like anything. */
+/* The two that carry consequences sit highest. */
 section.feature,
-section.danger {
-  padding: 18px;
-  border: 1px solid var(--accent-line);
-  border-top: 1px solid var(--accent-line);
-  border-radius: var(--radius);
-  background: var(--accent-soft);
-}
+section.danger { box-shadow: var(--up-lg); }
 
-section.danger {
-  border-color: var(--bad);
-  background: var(--bad-soft);
-}
+section.danger h2, section.danger p { color: var(--bad); }
 
 .muted { color: var(--text-soft); }
 .tiny { font-size: 13px; line-height: 1.55; }
@@ -121,16 +124,23 @@ label.check {
   cursor: pointer;
 }
 
-label.check input { width: auto; margin: 5px 0 0; flex: none; }
+label.check input {
+  width: auto;
+  margin: 5px 0 0;
+  flex: none;
+  accent-color: var(--accent);
+}
 
+/* Sunken means fill me in. */
 input, select, textarea {
   font: inherit;
   width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--line-strong);
+  padding: 11px 14px;
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
+  box-shadow: var(--down);
 }
 
 input:focus-visible,
@@ -148,35 +158,30 @@ button:focus-visible {
 
 /* ----------------------------------------------------------------- buttons */
 
+/* Raised means press me. */
 button {
   font: inherit;
   font-weight: 600;
-  padding: 9px 16px;
-  border: 1px solid var(--line-strong);
+  padding: 11px 20px;
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   cursor: pointer;
+  box-shadow: var(--up);
+  transition: box-shadow var(--press), transform var(--press);
 }
 
-button:hover { border-color: var(--text-faint); }
+button:hover { transform: translateY(-1px); }
+button:active { transform: none; box-shadow: var(--down-sm); }
 
 /* A button is as wide as its label. A section is a column, and without this
    every Save stretched the full width of the page like a banner. */
 section > button, section > .import-grid + button { align-self: flex-start; }
 
-.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-.primary:hover { border-color: var(--accent); filter: brightness(1.06); }
-
-.ghost { background: transparent; }
-
-.bad { background: var(--bad); border-color: var(--bad); color: #fff; }
-.bad:hover { border-color: var(--bad); filter: brightness(1.06); }
+.primary { background: var(--accent); color: var(--accent-text); }
+.ghost { background: var(--surface); }
+.bad { background: var(--bad); color: #fff; }
 
 /* ------------------------------------------------------------ bringing data in */
 
@@ -191,13 +196,12 @@ section > button, section > .import-grid + button { align-self: flex-start; }
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 16px;
-  border: 1px dashed var(--line-strong);
+  padding: 18px;
+  border: none;
   border-radius: var(--radius);
-  background: var(--bg);
+  background: var(--surface);
+  box-shadow: var(--down);
 }
-
-.import-card:hover { border-color: var(--accent); }
 .import-card strong { font-weight: 600; }
 .import-card em { font-style: normal; color: var(--text); }
 .import-card input, .import-card button { margin-top: 8px; }
@@ -205,11 +209,12 @@ section > button, section > .import-grid + button { align-self: flex-start; }
 /* ------------------------------------------------- education and experience */
 
 .record {
-  padding: 16px;
-  margin-top: 12px;
-  border: 1px solid var(--line);
+  padding: 18px;
+  margin-top: 14px;
+  border: none;
   border-radius: var(--radius);
   background: var(--surface);
+  box-shadow: var(--down-sm);
 }
 
 .record .grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
@@ -224,15 +229,19 @@ section > button, section > .import-grid + button { align-self: flex-start; }
 
 /* ------------------------------------------------------------------ tables */
 
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+table { width: 100%; font-size: 14px; }
+
+table { border-spacing: 0 8px; border-collapse: separate; }
 
 td {
-  padding: 10px 6px;
-  border-bottom: 1px solid var(--line);
+  padding: 12px 10px;
+  background: var(--surface);
   vertical-align: top;
 }
 
-tr:last-child td { border-bottom: none; }
+tr { box-shadow: var(--up-sm); }
+td:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+td:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 
 td.actions { text-align: right; white-space: nowrap; }
 td button { padding: 4px 10px; font-size: 13px; }

@@ -1,73 +1,95 @@
 /*
- * The panel's appearance.
+ * The panel's appearance: soft UI.
  *
- * Written for someone opening it for the first time. Three things drive it:
+ * Everything sits on one colour. Depth comes from light rather than from lines:
+ * a single light source at the top left, so a raised thing carries a pale
+ * highlight above it and a soft shadow below, and a thing you type into is
+ * pressed into the surface instead of drawn on top of it. There is not a
+ * border anywhere in this file.
  *
- *   One thing at a time. Whatever is being asked right now is the only thing
- *   with a border and a colour. Everything else steps back.
+ * Three rules keep it usable rather than only pretty:
  *
- *   Space instead of boxes. Sections are separated by air, not by nested
- *   rectangles. Boxes inside boxes inside boxes is what made a short list of
- *   fields feel like a second form to fill in.
+ *   Depth says what a thing does. Raised means press me. Sunken means fill me
+ *   in. The question being asked is the most raised thing on the screen.
  *
- *   Readable at a glance. Body text is 14px with room to breathe, so a long
- *   legal question can be read without leaning towards the screen.
+ *   Text ignores the style. Soft UI is a way of shaping surfaces, and it is
+ *   known for washing out at exactly the moment someone needs to read
+ *   something. Foreground text stays at full contrast throughout.
  *
- * Light and dark both follow the browser's own setting, so the panel matches
- * the window it is docked to.
+ *   Nothing depends on shadow alone. Colour and weight carry the same meaning
+ *   for anyone whose display, or eyes, flatten the depth away.
+ *
+ * Light and dark both follow the browser's own setting.
  */
 
 :root {
   color-scheme: light dark;
 
-  --bg: #ffffff;
-  --surface: #f6f7f9;
-  --surface-2: #eef0f4;
-  --line: #e2e5ea;
-  --line-strong: #ccd2da;
+  /* One surface, everywhere. Soft UI has no second background colour: the
+     shapes are made of light, so anything tinted breaks the illusion. */
+  --bg: #e9edf2;
+  --surface: #e9edf2;
+  --surface-2: #e9edf2;
+  --line: transparent;
+  --line-strong: transparent;
 
-  --text: #16181d;
-  --text-soft: #5c6470;
-  --text-faint: #878e99;
+  --text: #1b2028;
+  --text-soft: #5a6472;
+  --text-faint: #8a94a3;
 
-  --accent: #2f6df6;
+  --accent: #3f74e8;
   --accent-text: #ffffff;
-  --accent-soft: #eff4fe;
-  --accent-line: #bcd0fb;
+  --accent-soft: #e9edf2;
+  --accent-line: transparent;
 
   --good: #1d7a4c;
-  --warn: #9a6206;
-  --warn-soft: #fdf5e6;
-  --bad: #c02b2b;
-  --bad-soft: #fdeeee;
+  --warn: #8a5a08;
+  --warn-soft: #e9edf2;
+  --bad: #b83232;
+  --bad-soft: #e9edf2;
 
-  --radius: 10px;
-  --radius-sm: 7px;
-  --pad: 16px;
+  /* The light source: pale above-left, shadow below-right. */
+  --lit: #ffffff;
+  --shade: #c2c9d4;
+
+  --up: -5px -5px 12px var(--lit), 5px 5px 12px var(--shade);
+  --up-sm: -3px -3px 7px var(--lit), 3px 3px 7px var(--shade);
+  --up-lg: -8px -8px 20px var(--lit), 8px 8px 20px var(--shade);
+  --down: inset -4px -4px 9px var(--lit), inset 4px 4px 9px var(--shade);
+  --down-sm: inset -2px -2px 5px var(--lit), inset 2px 2px 5px var(--shade);
+
+  --radius: 16px;
+  --radius-sm: 12px;
+  --pad: 18px;
+  --press: 150ms ease;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #16181c;
-    --surface: #1d2026;
-    --surface-2: #24282f;
-    --line: #2c313a;
-    --line-strong: #3a414c;
+    --bg: #262a31;
+    --surface: #262a31;
+    --surface-2: #262a31;
+    --line: transparent;
+    --line-strong: transparent;
 
-    --text: #eceef2;
-    --text-soft: #a3abb8;
-    --text-faint: #7b8492;
+    --text: #f0f2f6;
+    --text-soft: #a9b2c0;
+    --text-faint: #7e8899;
 
-    --accent: #5c8dff;
-    --accent-text: #0d1117;
-    --accent-soft: #1a2131;
-    --accent-line: #33477a;
+    --accent: #6d97ff;
+    --accent-text: #10141a;
+    --accent-soft: #262a31;
+    --accent-line: transparent;
 
-    --good: #4fbf85;
-    --warn: #d9a441;
-    --warn-soft: #272117;
-    --bad: #f07171;
-    --bad-soft: #2a1b1b;
+    --good: #58c98d;
+    --warn: #e0ad55;
+    --warn-soft: #262a31;
+    --bad: #f58080;
+    --bad-soft: #262a31;
+
+    /* The same light, from the same corner, at night. */
+    --lit: #30353e;
+    --shade: #1a1d23;
   }
 }
 
@@ -100,7 +122,8 @@ header {
   z-index: 5;
   padding: var(--pad);
   background: var(--bg);
-  border-bottom: 1px solid var(--line);
+  /* The shadow does the work a rule used to. */
+  box-shadow: 0 6px 14px -10px var(--shade);
 }
 
 .head-row { display: flex; align-items: flex-start; gap: 12px; }
@@ -119,35 +142,47 @@ header {
 /* The one control that starts and stops everything. */
 .run {
   flex: none;
-  min-width: 72px;
-  padding: 7px 14px;
-  border: 1px solid var(--accent);
+  min-width: 74px;
+  padding: 9px 16px;
+  border: none;
   border-radius: 999px;
   background: var(--accent);
   color: var(--accent-text);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: var(--up);
+  transition: box-shadow var(--press), transform var(--press);
 }
 
-.run:hover { filter: brightness(1.06); }
-.run.running { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+.run:hover { transform: translateY(-1px); }
+.run:active { transform: none; box-shadow: var(--down-sm); }
+
+/* Stopping is a different act, so it looks like one: pressed in, and red. */
+.run.running {
+  background: var(--surface);
+  color: var(--bad);
+  box-shadow: var(--down);
+}
 
 .icon {
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: none;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface);
   color: var(--text-soft);
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
+  box-shadow: var(--up-sm);
+  transition: box-shadow var(--press);
 }
 
-.icon:hover { background: var(--surface-2); color: var(--text); }
+.icon:hover { color: var(--text); }
+.icon:active { box-shadow: var(--down-sm); }
 
 /* The one setting that changes how much the panel does by itself. */
 .switch { display: flex; align-items: flex-start; gap: 10px; margin-top: 14px; cursor: pointer; }
@@ -155,26 +190,28 @@ header {
 
 .track {
   flex: none;
-  width: 34px;
-  height: 20px;
+  width: 40px;
+  height: 22px;
   margin-top: 1px;
   border-radius: 999px;
-  background: var(--line-strong);
-  transition: background 120ms ease;
+  background: var(--surface);
+  box-shadow: var(--down-sm);
+  transition: box-shadow var(--press);
 }
 
 .knob {
   display: block;
   width: 16px;
   height: 16px;
-  margin: 2px;
+  margin: 3px;
   border-radius: 50%;
-  background: #fff;
-  transition: transform 120ms ease;
+  background: var(--surface);
+  box-shadow: var(--up-sm);
+  transition: transform var(--press), background var(--press);
 }
 
-.switch input:checked + .track { background: var(--accent); }
-.switch input:checked + .track .knob { transform: translateX(14px); }
+.switch input:checked + .track .knob { background: var(--accent); }
+.switch input:checked + .track .knob { transform: translateX(18px); }
 .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .switch-text { display: block; min-width: 0; }
@@ -182,14 +219,15 @@ header {
 .switch-text .sub { display: block; }
 
 .progress {
-  height: 3px;
-  margin-top: 14px;
+  height: 8px;
+  margin-top: 16px;
   border-radius: 999px;
-  background: var(--surface-2);
+  background: var(--surface);
+  box-shadow: var(--down-sm);
   overflow: hidden;
 }
 
-#progress-bar { height: 100%; width: 0; background: var(--accent); transition: width 160ms ease; }
+#progress-bar { height: 100%; width: 0; border-radius: 999px; background: var(--accent); transition: width 160ms ease; }
 
 /* -------------------------------------------------------------------- body */
 
@@ -202,31 +240,33 @@ main {
 }
 
 /*
- * A section is space and a heading. Only the thing being asked gets a border,
- * so the eye has exactly one place to land.
+ * A section is space and a heading. The thing being asked is the only one that
+ * rises off the surface, so the eye has exactly one place to land.
  */
-.card { display: flex; flex-direction: column; gap: 10px; }
+.card { display: flex; flex-direction: column; gap: 12px; }
 
 .card.accent {
-  padding: 14px;
-  border: 1px solid var(--accent-line);
+  padding: 18px;
+  border: none;
   border-radius: var(--radius);
-  background: var(--accent-soft);
+  background: var(--surface);
+  box-shadow: var(--up-lg);
 }
 
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 
 .pill {
   flex: none;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text-soft);
   font-size: 11px;
   font-weight: 600;
+  box-shadow: var(--down-sm);
 }
 
-.quiet-pill { background: var(--surface-2); }
+.quiet-pill { box-shadow: var(--down-sm); }
 
 /* The question itself: the largest text in the panel, because it is the point. */
 .ask {
@@ -241,6 +281,7 @@ main {
 
 /* ------------------------------------------------------------------ inputs */
 
+/* Sunken means fill me in. */
 input[type="text"],
 input[type="search"],
 input[type="password"],
@@ -249,12 +290,13 @@ input[type="date"],
 select,
 textarea {
   width: 100%;
-  padding: 9px 11px;
-  border: 1px solid var(--line-strong);
+  padding: 11px 14px;
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   font: inherit;
+  box-shadow: var(--down);
 }
 
 input:focus-visible,
@@ -271,37 +313,37 @@ button:focus-visible {
 .choices { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .choices button {
-  padding: 7px 12px;
-  border: 1px solid var(--line-strong);
+  padding: 9px 15px;
+  border: none;
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  box-shadow: var(--up-sm);
+  transition: box-shadow var(--press), color var(--press);
 }
 
-.choices button:hover { border-color: var(--accent); }
+.choices button:hover { color: var(--accent); }
 
-.choices button.picked {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 600;
-}
+/* An answer you have chosen is pressed in, and stays pressed in. */
+.choices button.picked { color: var(--accent); font-weight: 700; box-shadow: var(--down); }
 
-/* What the model put forward. Marked, never chosen on anyone's behalf. */
-.choices button.suggested { border-color: var(--accent); border-style: dashed; }
+/* What the model put forward. Coloured, but left raised: a suggestion has not
+   been chosen by anyone yet, and should not look as though it has. */
+.choices button.suggested { color: var(--accent); }
 
 /* A long list stops being buttons and becomes a column you can scroll. */
 .choices.many {
   flex-direction: column;
   flex-wrap: nowrap;
-  max-height: 220px;
-  padding: 4px;
-  border: 1px solid var(--line);
+  max-height: 230px;
+  padding: 8px;
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--bg);
+  background: var(--surface);
+  box-shadow: var(--down);
   overflow-y: auto;
 }
 
@@ -316,21 +358,32 @@ button:focus-visible {
 button { font: inherit; cursor: pointer; }
 
 .primary, .quiet, .ghost, .danger {
-  padding: 8px 14px;
+  padding: 11px 18px;
+  border: none;
   border-radius: var(--radius-sm);
-  border: 1px solid transparent;
   font-weight: 600;
+  box-shadow: var(--up);
+  transition: box-shadow var(--press), transform var(--press);
 }
 
-.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-.primary:hover { filter: brightness(1.06); }
+.primary:hover, .quiet:hover, .ghost:hover, .danger:hover { transform: translateY(-1px); }
 
-.quiet, .ghost { background: var(--bg); border-color: var(--line-strong); color: var(--text); }
-.quiet:hover, .ghost:hover { border-color: var(--text-faint); }
+.primary:active, .quiet:active, .ghost:active, .danger:active {
+  transform: none;
+  box-shadow: var(--down-sm);
+}
 
-.danger { background: none; border-color: var(--bad); color: var(--bad); }
+.primary { background: var(--accent); color: var(--accent-text); }
+.quiet, .ghost { background: var(--surface); color: var(--text); }
+.danger { background: var(--surface); color: var(--bad); }
 
-button:disabled { opacity: 0.55; cursor: default; }
+/* Pressed in and going nowhere. */
+button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+  transform: none;
+  box-shadow: var(--down-sm);
+}
 
 /* Every control says whether it is working, and cannot be pressed twice. */
 button.busy { position: relative; color: transparent !important; }
@@ -373,32 +426,35 @@ button.done {
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .tabs button {
-  padding: 4px 10px;
-  border: 1px solid var(--line-strong);
+  padding: 6px 13px;
+  border: none;
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text-soft);
   font-size: 12px;
   font-weight: 600;
+  box-shadow: var(--up-sm);
 }
 
-.tabs button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.tabs button.on { color: var(--accent); box-shadow: var(--down-sm); }
 
 /* ------------------------------------------------------------- résumé drop */
 
 .file-drop {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 16px;
-  border: 1px dashed var(--line-strong);
+  gap: 3px;
+  padding: 22px;
+  border: none;
   border-radius: var(--radius);
-  background: var(--bg);
+  background: var(--surface);
+  box-shadow: var(--down);
   text-align: center;
   cursor: pointer;
+  transition: color var(--press);
 }
 
-.file-drop:hover { border-color: var(--accent); }
+.file-drop:hover { color: var(--accent); }
 .file-drop-title { font-weight: 600; }
 
 /* ------------------------------------------------------------------ report */
@@ -421,17 +477,20 @@ button.done {
 
 .report { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
 
+.report { gap: 8px; }
+
 .report li {
   display: flex;
-  gap: 10px;
-  padding: 9px 8px;
+  gap: 11px;
+  padding: 11px 14px;
   border-radius: var(--radius-sm);
-  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--up-sm);
   cursor: pointer;
+  transition: box-shadow var(--press);
 }
 
-.report li:last-child { border-bottom: none; }
-.report li:hover { background: var(--surface); }
+.report li:hover { box-shadow: var(--down-sm); }
 
 .mark { flex: none; width: 15px; font-weight: 700; text-align: center; }
 .mark.verified { color: var(--good); }
@@ -450,7 +509,10 @@ button.done {
  */
 .log {
   max-height: 210px;
-  padding: 2px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--down-sm);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -458,17 +520,18 @@ button.done {
 }
 
 .line {
-  padding: 5px 0 5px 10px;
-  border-left: 2px solid var(--line);
+  padding: 6px 2px 6px 12px;
+  border-left: 3px solid transparent;
   color: var(--text-soft);
   font-size: 12.5px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
-.line.warn { border-left-color: var(--warn); color: var(--warn); }
-.line.bad { border-left-color: var(--bad); color: var(--bad); }
-.line.you { border-left-color: var(--accent); color: var(--text); font-weight: 500; }
+/* Colour and weight, not the rule alone: the meaning survives a flat display. */
+.line.warn { border-left-color: var(--warn); color: var(--warn); font-weight: 500; }
+.line.bad { border-left-color: var(--bad); color: var(--bad); font-weight: 500; }
+.line.you { border-left-color: var(--accent); color: var(--text); font-weight: 600; }
 
 .loading { color: var(--text-faint); font-size: 12.5px; }
 
@@ -484,41 +547,46 @@ button.done {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--warn);
+  gap: 12px;
+  padding: 13px 16px;
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--warn-soft);
+  background: var(--surface);
   color: var(--warn);
   font-size: 13px;
+  font-weight: 500;
+  box-shadow: var(--up);
 }
 
-.alert.bad { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+.alert.bad { color: var(--bad); }
 
 .alert button {
   flex: none;
-  padding: 5px 10px;
-  border: 1px solid currentcolor;
+  padding: 7px 13px;
+  border: none;
   border-radius: var(--radius-sm);
-  background: none;
+  background: var(--surface);
   color: inherit;
   font-size: 12px;
   font-weight: 600;
+  box-shadow: var(--up-sm);
 }
+
+.alert button:active { box-shadow: var(--down-sm); }
 
 /* ------------------------------------------------------- what happens next */
 
 .cta-bar {
   position: sticky;
   bottom: 0;
-  padding: 12px var(--pad);
-  border-top: 1px solid var(--line);
+  padding: 14px var(--pad);
   background: var(--bg);
+  box-shadow: 0 -6px 14px -10px var(--shade);
   text-align: center;
 }
 
-.cta { width: 100%; padding: 11px; }
-.cta:disabled { background: var(--surface-2); border-color: var(--line); color: var(--text-faint); }
+.cta { width: 100%; padding: 14px; border-radius: 999px; font-size: 15px; }
+.cta:disabled { background: var(--surface); color: var(--text-faint); }
 #cta-note { margin-top: 6px; }
 
 footer {

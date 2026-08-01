@@ -3,6 +3,17 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.20.0
+
+- **Soft UI.** Both the panel and Settings sit on a single colour with no
+  borders anywhere. Depth comes from one light source at the top left, and it
+  carries meaning rather than decoration: raised means press me, sunken means
+  fill me in. The question being asked is the thing standing highest off the
+  surface; an answer you have picked stays pressed in.
+- Text keeps full contrast throughout, and every state that depth signals is
+  also carried by colour and weight -- soft UI is a way of shaping surfaces, and
+  it must not become the reason something cannot be read.
+
 ## 1.19.0
 
 - **The race question stops coming back.** A form that asks "Are you Hispanic or
