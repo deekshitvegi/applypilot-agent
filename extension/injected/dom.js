@@ -72,7 +72,38 @@
    * Document order is not a nicety: the options of a Yes/No group come back in
    * the order the applicant sees them, and a list of fields reads top to bottom.
    */
+  /*
+   * One pass over the document is enough.
+   *
+   * Finding a control by fingerprint re-reads every control on the page, and
+   * every read walked the document again and re-measured every ancestor. The
+   * caches below live for one turn of the event loop -- long enough for a scan
+   * or an action, short enough that nothing stale is ever acted on.
+   */
+  let documentElements = null;
+  let cacheArmed = false;
+
+  function armCache() {
+    if (cacheArmed) return;
+    cacheArmed = true;
+    setTimeout(() => {
+      documentElements = null;
+      cacheArmed = false;
+    }, 0);
+  }
+
   function deepElements(root) {
+    if (!root || root === document) {
+      if (documentElements) return documentElements;
+      const all = collectElements(document);
+      documentElements = all;
+      armCache();
+      return all;
+    }
+    return collectElements(root);
+  }
+
+  function collectElements(root) {
     const out = [];
     const visit = (node) => {
       const kids = node && node.children ? node.children : [];
@@ -83,7 +114,7 @@
         visit(el);
       }
     };
-    visit(root || document);
+    visit(root);
     return out;
   }
 
@@ -121,8 +152,9 @@
 
   /* ---------------------------------------------------------- visibility */
 
+  // Visibility is deliberately not cached: a dropdown opens and closes within a
+  // single turn, and a stale answer there is worse than a slow one.
   function isVisible(el) {
-    if (!el || !el.getBoundingClientRect) return false;
     if (el.hidden) return false;
     const style = getComputedStyle(el);
     if (!style) return false;

@@ -386,8 +386,10 @@ def test_the_api_key_is_stored_but_never_read_back(client):
 
 
 def test_a_stored_document_can_be_fetched_for_attaching(client):
+    # Built once: a .docx is a zip, and rebuilding it gives different bytes.
+    document = make_resume()
     upload = client.post(
-        "/resume", files={"file": ("resume.docx", make_resume(), "application/octet-stream")}
+        "/resume", files={"file": ("resume.docx", document, "application/octet-stream")}
     ).json()
     document_id = upload["document"]["id"]
 
@@ -397,7 +399,7 @@ def test_a_stored_document_can_be_fetched_for_attaching(client):
 
     import base64
 
-    assert base64.b64decode(body["base64"]) == make_resume(), "the bytes come back intact"
+    assert base64.b64decode(body["base64"]) == document, "the bytes come back intact"
     assert client.get("/documents/nope/content").status_code == 404
 
 

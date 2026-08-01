@@ -94,6 +94,32 @@ function browser(message) {
   });
 }
 
+/**
+ * Wait until the page is actually on screen.
+ *
+ * A background tab stops laying itself out, so every control measures as
+ * invisible and every action comes back "the control is no longer on the page".
+ * Switching windows produced a screenful of those.
+ */
+async function waitForTheTab() {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    try {
+      const visible = await browser({ type: "visible", tabId: state.tab.id });
+      if (visible) {
+        if (attempt) activity("Carrying on", "");
+        return true;
+      }
+    } catch (err) {
+      return true; // cannot tell; better to try than to stall
+    }
+    if (!attempt) {
+      activity("Waiting for that tab", "I will carry on when it is on screen again.");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return false;
+}
+
 /** Which frame a control lives in. Applications are often inside one. */
 function frameOf(fingerprint) {
   const field = (state.observation && state.observation.fields || []).find(
@@ -696,6 +722,7 @@ async function answerQuestionInner(value, button, restoreLabel) {
 /* ----------------------------------------------------------------- filling */
 
 async function applyAndReport(action) {
+  await waitForTheTab();
   const result = await browser({
     type: "perform",
     tabId: state.tab.id,

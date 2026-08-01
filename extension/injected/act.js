@@ -103,7 +103,26 @@
         el.focus();
       }
     }
-    for (const type of ["pointerup", "mouseup", "click"]) pointerAt(el, type);
+    for (const type of ["pointerup", "mouseup"]) pointerAt(el, type);
+
+    // One click, not two. A native click() is the more convincing of the pair --
+    // some libraries only answer to a real activation -- so it is used when it
+    // exists and a dispatched event stands in when it does not. Doing both
+    // pressed "Add other education" twice and added two entries.
+    if (typeof el.click === "function") {
+      try {
+        el.click();
+        return;
+      } catch (err) {
+        /* fall through to the dispatched click */
+      }
+    }
+    pointerAt(el, "click");
+  }
+
+  /** Whether the page is on screen. A hidden tab stops laying anything out. */
+  function pageIsVisible() {
+    return document.visibilityState !== "hidden";
   }
 
   function fireInput(el) {

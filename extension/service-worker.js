@@ -19,12 +19,38 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 });
 
-/** Put the injected functions into a tab. Idempotent: each file guards itself. */
+/**
+ * Put the injected functions into a tab, once.
+ *
+ * Each file guards itself, but executeScript still fetches and evaluates all
+ * five every time it is called -- and it was being called before every single
+ * action. Filling one field carried the cost of loading the whole toolkit, and
+ * a form took minutes instead of seconds.
+ */
+const injectedTabs = new Map();
+
+function forgetTab(tabId) {
+  injectedTabs.delete(tabId);
+}
+
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.status === "loading") forgetTab(tabId);
+});
+chrome.tabs.onRemoved.addListener(forgetTab);
+
 async function ensureInjected(tabId, allFrames) {
+  const key = allFrames ? "all" : "top";
+  const done = injectedTabs.get(tabId);
+  if (done && done.has(key)) return;
   await chrome.scripting.executeScript({
     target: { tabId: tabId, allFrames: Boolean(allFrames) },
     files: INJECTED,
   });
+  const set = done || new Set();
+  set.add(key);
+  // Injecting into every frame covers the top one too.
+  if (allFrames) set.add("top");
+  injectedTabs.set(tabId, set);
 }
 
 async function callInFrames(tabId, expression, args) {
@@ -150,6 +176,15 @@ async function scanTab(tabId) {
 const HANDLERS = {
   async scan(message) {
     return scanTab(message.tabId);
+  },
+  async visible(message) {
+    // Read from the page itself: a tab can be "active" in a window that is not
+    // on screen, and it is the rendering that matters.
+    try {
+      return await callInFrame(message.tabId, 0, "act.pageIsVisible", []);
+    } catch (err) {
+      return true;
+    }
   },
   async perform(message) {
     return callInFrame(message.tabId, message.frameId, "act.perform", [message.action]);

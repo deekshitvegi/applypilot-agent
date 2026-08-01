@@ -182,6 +182,7 @@ async function refresh() {
   el("key-state").textContent = settings.model_configured
     ? "A key is saved. Type a new one to replace it."
     : "No key saved yet.";
+  el("model-name").value = settings.model_name || "";
   el("submission").value = settings.submission_policy;
   el("easy-apply").checked = settings.prefer_easy_apply;
   el("demographics").checked = settings.answer_demographics;
@@ -280,8 +281,12 @@ el("resume-file").addEventListener("change", () =>
 
 el("save-key").addEventListener("click", async () => {
   const key = el("api-key").value.trim();
-  if (!key) return;
-  await send("PUT", "/settings", { model_api_key: key });
+  const name = el("model-name").value.trim();
+  const payload = {};
+  if (key) payload.model_api_key = key;
+  if (name) payload.model_name = name;
+  if (!Object.keys(payload).length) return;
+  await send("PUT", "/settings", payload);
   el("api-key").value = "";
   refresh();
 });

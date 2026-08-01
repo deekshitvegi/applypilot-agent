@@ -3,6 +3,22 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.13.0
+
+- **Filling is fast again.** The five injected files were being fetched and
+  evaluated before *every single action*, so each field carried the cost of
+  loading the whole toolkit. A tab is injected once now and remembered until it
+  navigates.
+- **Switching tabs no longer breaks the run.** A hidden tab stops laying itself
+  out, so every control measured as invisible and every action came back "the
+  control is no longer on the page". Work waits for the page to be on screen and
+  says so.
+- **"Add other education" presses once.** Dispatching a click *and* calling
+  click() ran the handler twice and added two entries.
+- The model name is settable in Settings, so any model your key can reach will
+  do. A small fast one is the right choice: the model is only ever asked to
+  suggest an option a form already offers.
+
 ## 1.12.0
 
 - **A dependent field is filled once it becomes answerable.** State holds nothing

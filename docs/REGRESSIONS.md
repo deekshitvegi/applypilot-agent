@@ -449,3 +449,20 @@ control has already refused is not offered to it again in the same run.
 **59. The resume was asked for as a line of text to type.** It is a document; it
 is uploaded in Settings.
 *Mechanism.* It is no longer a setup question.
+
+**60. Every action reloaded the whole toolkit.** The five injected files were
+fetched and evaluated before each individual action, so filling one field
+carried the cost of loading everything, and a form took minutes.
+*Mechanism.* A tab is injected once and remembered until it navigates.
+
+**61. A background tab reported every control as gone.** A hidden tab stops
+laying itself out, so everything measures as invisible and every action comes
+back "the control is no longer on the page" -- a screenful of them on switching
+windows.
+*Mechanism.* Work waits for the page to be on screen and says so, rather than
+failing against a page nobody is looking at.
+
+**62. A click that fired twice added two entries.** Dispatching a click event
+*and* calling click() ran the handler once each.
+*Mechanism.* One click: the native call when it exists, a dispatched event when
+it does not.
