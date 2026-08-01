@@ -663,3 +663,14 @@ never read, and three required questions stayed unasked and invisible.
 *Mechanism.* A Continue that does not move the page on is followed by a fresh
 look and a fresh plan, because that is exactly when the page has stated its
 case. What it asks for is then handed back to be answered.
+
+**88. A question two radio groups were asking turned out to be the sign-in
+choice from the top of the page.** Read off the live application. Looking for a
+radio group's question walked outward four levels through previous siblings, and
+on that page it reached past the question entirely and came back with "I have an
+account Login I'm applying for the first time". That text carries no asterisk,
+so both groups were read as optional, left blank, continued past and refused --
+which is the whole of "it is not asking me questions to fill them".
+*Mechanism.* The question is looked for inside the block, above the buttons,
+where it actually lives, before anything walks outward at all; and text nobody
+can see is never a label, which is what let a hidden sign-in prompt become one.

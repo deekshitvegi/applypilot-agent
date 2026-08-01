@@ -3,6 +3,18 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.28.0
+
+- **The "Other info" step asks its questions.** Two radio groups there thought
+  the question they were asking was "I have an account Login I'm applying for
+  the first time" -- the sign-in choice from the top of the page, hidden, four
+  levels away. Looking for a group's question walked outward until it found any
+  text at all, and that text carries no asterisk, so both were read as optional,
+  left blank, continued past and refused. The question is now looked for inside
+  the block where it lives, before anything walks outward; and text nobody can
+  see is never a label. Checked on the live page: both now carry their real
+  question and are correctly required.
+
 ## 1.27.0
 
 - **A step that refuses to move on is read again, not given up on.** Several

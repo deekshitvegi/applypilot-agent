@@ -179,12 +179,36 @@
     }
     const container = commonAncestor(elements);
     if (!container) return "";
+
+    // The question is usually inside the block, above the buttons, rather than
+    // before the block. Look there first: walking outward reaches the rest of
+    // the page, and the rest of the page is not the question.
+    const inside = Array.from(container.querySelectorAll("label,p,legend,h1,h2,h3,h4,div,span"))
+      .find((node) => {
+        if (elements.some((one) => node.contains(one))) return false;
+        if (node.querySelector("input,select,textarea")) return false;
+        const text = D.textOf(node);
+        return text && text.length <= 300 && D.isVisible(node);
+      });
+    if (inside) return D.textOf(inside);
+
     let node = container;
     for (let depth = 0; depth < 4 && node; depth += 1) {
       let sibling = node.previousElementSibling;
       while (sibling) {
         const text = D.textOf(sibling);
-        if (text && !sibling.querySelector("input,select,textarea") && text.length <= 300) {
+        // Only text somebody can actually see. Climbing four levels reaches
+        // past the question and into the page around it, and on one real
+        // application it came back with the sign-in choice from the top of the
+        // page -- "I have an account Login I'm applying for the first time" --
+        // as the question two radio groups were asking. That text carries no
+        // asterisk, so both were read as optional, left blank, and refused.
+        if (
+          text &&
+          text.length <= 300 &&
+          !sibling.querySelector("input,select,textarea") &&
+          D.isVisible(sibling)
+        ) {
           return text;
         }
         sibling = sibling.previousElementSibling;
