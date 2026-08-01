@@ -3,6 +3,16 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.8.0
+
+- **Only the step on screen is offered.** A wizard keeps every step in the
+  document, and the check for a styled control was returning true outright
+  instead of going on to look at whether an ancestor was hidden — so every
+  checkbox and radio in the document counted as visible. The panel offered a
+  veteran form and a login choice from steps that were not showing, while the
+  text fields on the step that *was* showing were judged hidden and left out.
+  Found by driving a real application rather than a fixture.
+
 ## 1.7.0
 
 - **A search-as-you-type control is opened with the answer typed into it.** A

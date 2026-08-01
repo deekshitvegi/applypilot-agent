@@ -127,18 +127,30 @@
     const style = getComputedStyle(el);
     if (!style) return false;
     if (style.display === "none" || style.visibility === "hidden") return false;
-    if (Number(style.opacity) === 0) return false;
+
+    // A checkbox, radio or file input is routinely drawn as a 1px transparent
+    // control sitting behind a styled box. The box is what the applicant sees,
+    // so that is what gets measured. What must not happen is calling such a
+    // control visible outright: a wizard keeps every step in the document, and
+    // treating all of their checkboxes and radios as on screen meant the panel
+    // offered a veteran form and a login choice from steps that were not
+    // showing, while the text fields on the step that was showing were
+    // correctly judged hidden and left out.
+    const tag = (el.tagName || "").toLowerCase();
+    const type = (el.type || "").toLowerCase();
+    const drawable = tag === "input" && (type === "checkbox" || type === "radio" || type === "file");
     const rect = el.getBoundingClientRect();
-    if (rect.width <= 1 && rect.height <= 1) {
-      // A styled checkbox is often a 1px input behind a drawn box; the drawn
-      // box is what the applicant sees, so treat it as visible.
-      const tag = (el.tagName || "").toLowerCase();
-      const type = (el.type || "").toLowerCase();
-      if (tag === "input" && (type === "checkbox" || type === "radio" || type === "file")) {
-        return Boolean(el.offsetParent) || style.position === "fixed" || true;
-      }
-      return false;
+
+    if (!drawable) {
+      if (Number(style.opacity) === 0) return false;
+      if (rect.width <= 1 && rect.height <= 1) return false;
+    } else if (rect.width <= 1 && rect.height <= 1) {
+      const drawn = (el.labels && el.labels[0]) || el.parentElement;
+      if (!drawn) return false;
+      const box = drawn.getBoundingClientRect();
+      if (box.width <= 1 && box.height <= 1) return false;
     }
+    // Either way the ancestor checks below still apply, which is the point.
     for (const node of ancestors(el)) {
       const s = getComputedStyle(node);
       if (!s) continue;

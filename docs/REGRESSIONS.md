@@ -334,3 +334,15 @@ in employment blocks; the heading says which.
 notice-period question owned "start", which is the ordinary word in "Start date"
 and "Start year", so neither history start date could ever resolve.
 *Mechanism.* Only words that dominate a label are owned. "start" is not one.
+
+**46. Questions from steps that were not on screen.** A wizard keeps every step
+in the document and shows one at a time. The check for a styled control returned
+true outright instead of going on to look at whether any ancestor was hidden, so
+every checkbox and radio in the document counted as visible. The panel offered a
+veteran form and a login choice from steps that were not showing, while the text
+fields on the step that *was* showing were correctly judged hidden and left out
+-- a page of questions from nowhere, and nothing filled.
+*Mechanism.* A checkbox, radio or file input drawn as a 1px transparent control
+is measured by the box drawn for it, and then the ancestor checks still run. Not
+being on screen is not something a control type can exempt itself from.
+→ `test_hidden_steps.py::test_only_the_step_on_screen_is_offered`

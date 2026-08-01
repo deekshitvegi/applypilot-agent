@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Application</title>
+<!--
+  A wizard that keeps every step in the document and shows one at a time.
+
+  Checkboxes and radios were treated as visible wherever they were, so the panel
+  offered questions from steps that were not on screen -- a veteran form, a
+  login choice -- while the text fields on the step that *was* showing were
+  correctly judged hidden and left out. The result was a page of questions from
+  nowhere and nothing filled.
+-->
+<style>
+  .step { display: none; }
+  .step.active { display: block; }
+  /* The usual trick: a 1px input behind a drawn box. */
+  .pretty input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .pretty { display: block; min-height: 22px; padding-left: 26px; }
+</style>
+
+<main>
+  <section class="step active" id="step1">
+    <div class="section-title">Personal info</div>
+    <div class="block">
+      <div class="field">
+        <span class="txt">First name</span><span class="mandatory">*</span>
+        <input name="firstName" placeholder="First name">
+      </div>
+      <div class="field">
+        <span class="txt">Email address</span><span class="mandatory">*</span>
+        <input name="email" type="email" placeholder="Email address">
+      </div>
+      <label class="pretty"><input type="checkbox" name="subscribe"> Keep me posted about roles</label>
+    </div>
+    <button type="button">Next</button>
+  </section>
+
+  <section class="step" id="step2">
+    <div class="section-title">EEO Questions</div>
+    <div class="block">
+      <fieldset>
+        <legend>(VEVRAA) Veteran's Self-Identification Form</legend>
+        <label><input type="radio" name="vet" value="y"> Yes, I am a veteran</label>
+        <label><input type="radio" name="vet" value="n"> No, I am not a veteran</label>
+        <label><input type="radio" name="vet" value="d"> I prefer not to answer</label>
+      </fieldset>
+      <fieldset>
+        <legend>I have an account Login I'm applying for the first time Apply</legend>
+        <label><input type="radio" name="acct" value="a"> I have an account</label>
+        <label><input type="radio" name="acct" value="b"> I'm applying for the first time</label>
+      </fieldset>
+    </div>
+  </section>
+
+  <section class="step" id="step3">
+    <div class="section-title">Other info</div>
+    <div class="block">
+      <label class="pretty">
+        <input type="checkbox" name="arbitration">
+        I have read and agree to the terms of the Mutual Arbitration Agreement.
+      </label>
+    </div>
+  </section>
+</main>
