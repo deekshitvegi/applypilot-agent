@@ -3,6 +3,19 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.30.0
+
+- **A tick box is answered by ticking it.** It carries no options of its own, so
+  it was going down the same path as a free-text field -- and an agreement came
+  back as somewhere to type, which is not how anyone accepts an arbitration
+  clause. Yes and No, as two things to press.
+- **"Tick the agreements an application requires" is in Settings.** Off until
+  you turn it on. On, agreements are accepted and the wording of each goes into
+  the activity log, so there is a record of what was agreed to rather than a
+  silent tick. Off, each one is handed back for you to read. The setting reaches
+  agreements and nothing else -- a saved Yes from elsewhere in your profile has
+  never been able to answer one of these and still cannot.
+
 ## 1.29.0
 
 - **An agreement is asked, not skipped.** "I have read and agree to the terms of

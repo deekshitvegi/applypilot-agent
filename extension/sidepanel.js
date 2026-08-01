@@ -538,9 +538,16 @@ async function renderQuestion() {
   // offering a box to type into. Typing the exact wording of a radio button
   // does not select that radio button; it does nothing at all.
   const live = fieldFor(question.fingerprint);
-  const offered = (question.options || []).length
+  let offered = (question.options || []).length
     ? question.options
     : (isChoice(question.control) && live ? live.options || [] : []);
+  // A tick box is answered by ticking it or not, so those are the two things
+  // to offer. It has no options of its own, which sent it down the same path
+  // as a free-text field -- and an agreement came back as a box to type into,
+  // which is not how anyone accepts an arbitration clause.
+  if (!offered.length && question.control === "checkbox") {
+    offered = [{ label: "Yes" }, { label: "No" }];
+  }
   const choices = offered
     .map((o) => o.label)
     .filter((label) => label && label.trim() && !isPlaceholderLabel(label));

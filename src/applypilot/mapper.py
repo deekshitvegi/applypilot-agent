@@ -525,8 +525,28 @@ def resolve_field(
         # should: what is being agreed to is different every time. So it was
         # falling through to "optional and nothing saved answers it" and being
         # left blank -- which is how a step got refused with an arbitration
-        # agreement unticked and nothing on screen saying why. It is asked now.
-        # Never ticked from a saved answer, whatever the label resembles.
+        # agreement unticked and nothing on screen saying why.
+        #
+        # Either it is asked, or the applicant has said in advance that ticking
+        # these is fine. What never happens is a saved Yes from somewhere else
+        # in the profile leaking in: this is answered by the setting or by the
+        # person, and by nothing else.
+        if profile.accept_agreements:
+            return Resolution(
+                field=field,
+                answer=Answer(
+                    fingerprint=field.fingerprint,
+                    label=pretty_label(field.display_label or field.label),
+                    value="Yes",
+                    source=AnswerSource.PROFILE,
+                    fact_key="",
+                    confidence=1.0,
+                    reason=(
+                        "you chose to accept the agreements an application requires: "
+                        f'"{pretty_label(field.display_label or field.label)}"'
+                    ),
+                ),
+            )
         return Resolution(
             field=field,
             question=_ask(field, "", "an agreement -- yours to read and accept", profile),

@@ -84,3 +84,17 @@ def test_a_saved_yes_does_not_leak_into_it():
     resolution = resolve_field(box(ARBITRATION), profile)
     assert resolution.answer is None
     assert resolution.question is not None
+
+
+def test_switched_on_it_is_ticked_and_says_what_was_agreed_to():
+    resolution = resolve_field(box(ARBITRATION), Profile(accept_agreements=True))
+    assert resolution.answer is not None
+    assert resolution.answer.value == "Yes"
+    # The record of what was accepted, not just that something was.
+    assert "Mutual Arbitration Agreement" in resolution.answer.reason
+
+
+def test_the_setting_does_not_reach_anything_that_is_not_an_agreement():
+    profile = Profile(accept_agreements=True)
+    resolution = resolve_field(box("This is my most recent education"), profile)
+    assert resolution.answer is None or resolution.answer.value != "Yes", resolution

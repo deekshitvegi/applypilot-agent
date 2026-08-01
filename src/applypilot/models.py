@@ -282,6 +282,15 @@ class Profile(BaseModel):
     #: Continue each time. Off by default; pressing final Submit is governed
     #: separately by submission_policy and is never implied by this.
     auto_advance: bool = False
+    #: Tick the agreements an application requires -- terms, arbitration,
+    #: privacy consent -- rather than stopping to ask each time. Off by default,
+    #: because it is the one setting here that has legal weight; on, because
+    #: reading every arbitration clause on every application is not what anyone
+    #: actually does, and pretending otherwise just makes the tool slower
+    #: without making anyone better informed. The wording of whatever was
+    #: agreed to is written into the activity log either way, so there is a
+    #: record of it rather than a silent tick.
+    accept_agreements: bool = False
     #: Attach the resume on file whenever a form asks for one. Attaching a
     #: document you uploaded yourself, to a form you are filling, is the whole
     #: point; it is a toggle because it is still an action on a page.

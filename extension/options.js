@@ -186,6 +186,7 @@ async function refresh() {
   el("submission").value = settings.submission_policy;
   el("easy-apply").checked = settings.prefer_easy_apply;
   el("demographics").checked = settings.answer_demographics;
+  el("accept-agreements").checked = settings.accept_agreements;
   el("auto-attach").checked = settings.auto_attach_resume !== false;
 
   profile = await service("/profile");
@@ -297,6 +298,7 @@ el("save-behaviour").addEventListener("click", async () => {
     prefer_easy_apply: el("easy-apply").checked,
     auto_attach_resume: el("auto-attach").checked,
     answer_demographics: el("demographics").checked,
+    accept_agreements: el("accept-agreements").checked,
   });
   refresh();
 });

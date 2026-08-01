@@ -684,3 +684,10 @@ unticked, and the step was refused with nothing on screen saying why.
 however much its wording resembles a Yes/No the profile happens to hold. A
 checkbox is not an agreement merely for being a checkbox: "This is my most
 recent education" and "Have you ever been employed by us before?" are not.
+
+**90. A tick box was asked as a box to type into.** A checkbox carries no
+options of its own, so it went down the same path as a free-text field -- and an
+arbitration agreement came back as somewhere to type, which is not how anyone
+accepts one.
+*Mechanism.* A tick box is answered by ticking it or not, so those are the two
+things offered.
