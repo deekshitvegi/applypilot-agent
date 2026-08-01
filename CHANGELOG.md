@@ -3,6 +3,16 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.23.0
+
+- **The veteran question, read off the live page.** Its label there is not
+  "Please identify your Veteran status" at all -- it is three hundred characters
+  of VEVRAA statute, which names no field and matched nothing, while the
+  control's own name said "veteran" plainly. A label that is prose rather than a
+  name now gives way to the name, on the same narrow terms as a field with no
+  label at all. The bar sits well above a sentence, so a long question that does
+  name its subject is still read as a question.
+
 ## 1.22.0
 
 - **The same question asked a different way gets the same answer.** A saved "25"

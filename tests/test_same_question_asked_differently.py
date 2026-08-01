@@ -113,3 +113,52 @@ def test_the_label_as_written_is_always_tried_first():
     """Stripping is a fallback, so a field really called "Select" is unharmed."""
     match = best_fact(ask("Preferred name"))
     assert match is not None and match.spec.key == "preferred_name"
+
+
+# ---------------------------------------------------------------------------
+# 83. Read off the live page: labels that are not names.
+# ---------------------------------------------------------------------------
+
+#: The label a real application puts on its veteran radios. Not a field name --
+#: three hundred characters of VEVRAA statute -- while the control's own name
+#: says "veteran" plainly. The whole section went unasked because of it.
+VEVRAA = (
+    "* If you believe you belong to any of the categories of protected veterans "
+    "listed above, please indicate by checking the appropriate box below. As a "
+    "Government contractor subject to VEVRAA, we request this information in order "
+    "to measure the effectiveness of the outreach and positive recruitment efforts "
+    "we undertake pursuant to VEVRAA."
+)
+
+
+def named(label: str, attr: str) -> FieldObservation:
+    return FieldObservation(
+        fingerprint="f", label=label, display_label=label, attr_label=attr,
+        control=ControlKind.RADIO, visible=True,
+        options=[Option(label="Yes"), Option(label="No")],
+    )
+
+
+def test_a_paragraph_is_not_the_name_of_a_field():
+    match = best_fact(named(VEVRAA, "veteran"))
+    assert match is not None, "the veteran question went unasked because of this"
+    assert match.spec.key == "veteran_status"
+
+
+def test_a_long_question_that_names_its_subject_is_still_read_as_one():
+    """The bar sits above a sentence: this must not go near the attribute."""
+    label = (
+        "Are you legally authorized to work in the United States without "
+        "sponsorship now or in the future?"
+    )
+    match = best_fact(named(label, "custom_field_7"))
+    assert match is not None and match.spec.key == "work_authorization"
+
+
+def test_prose_whose_name_means_nothing_still_matches_nothing():
+    label = (
+        "A very long paragraph of legal text about many unrelated things that goes "
+        "on and on for a great many words indeed without ever naming any field at "
+        "all whatsoever in any way at any point"
+    )
+    assert best_fact(named(label, "custom_field_7")) is None

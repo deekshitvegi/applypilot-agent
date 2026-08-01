@@ -609,3 +609,13 @@ marked all of it.
 *Mechanism.* The wording is narrow: a complaint says what is missing, not what
 to do. And the search stops at the first ancestor holding a control that belongs
 to a different question.
+
+**83. A label that is a paragraph, not a name.** Read off the live page: the
+veteran radios on one real application are labelled with three hundred
+characters of VEVRAA statute, which names no field and matched nothing -- while
+the control's own name said "veteran" plainly. The whole self-identification
+section went unasked.
+*Mechanism.* Prose that answers to nothing is worth less than a name, so the
+name gets its turn on the same narrow terms as a field with no label at all. The
+bar sits well above a sentence, so a long question that does name its subject is
+still read as a question.
