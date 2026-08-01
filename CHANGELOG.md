@@ -3,6 +3,29 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.1.0
+
+Fixes from the first run on a real application.
+
+- **A dropdown is never handed back as a text box.** Options that load only when
+  a control is touched are opened and read before anyone is asked, and a saved
+  answer that matches one of them is chosen rather than asked about.
+- **Actions run in the frame their control lives in.** Applications are very
+  often inside one; every field in one used to come back missing.
+- **Option labels no longer identify a dropdown.** A control that populated when
+  opened changed fingerprint at that moment, so every action on it afterwards
+  reported it as gone.
+- **Today's date is filled, not asked**, in the shape the control asks for.
+  "Date of Birth" is guarded off.
+- **Buttons say when they are working and cannot be pressed twice.** Pressing
+  Save with no feedback skipped four questions in a row.
+- **The panel is rebuilt around one thing at a time.** The question owns the
+  card, options are shown as options with the suggested one marked, and the
+  checklist and activity log collapse behind summaries.
+- The model can now suggest one of the page's own options for a question nothing
+  saved covers. Its answer is checked against that same list before it is
+  offered, and a suggestion is never filled in without being accepted.
+
 ## 1.0.0
 
 Rebuilt from nothing. The previous tree is gone; the history is not.
