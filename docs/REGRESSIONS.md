@@ -486,3 +486,31 @@ renders a new entry from the server -- or renders it collapsed -- looked like a
 click that had done nothing, and adding stopped.
 *Mechanism.* Every field in the page counts, drawn or not, and a page that
 fetches gets time to answer.
+
+**66. Every entry of a list reported itself as the first one.** The first entry
+of a repeating block carries something the others do not -- "This is my most
+recent education" -- and later ones carry a remove button the first lacks.
+Comparing blocks for an exact match found no twins anywhere.
+*Mechanism.* The index the page states in a control's own name is believed
+first; structure is the fallback, and blocks that ask mostly the same questions
+are repeats of each other.
+
+**67. The same school was filled into every education entry.** A consequence of
+66: with every entry numbered zero, every entry took the first record on file.
+*Mechanism.* Covered by 66's test, which asserts the second entry takes the
+second record and a third takes the third.
+
+**68. Adding stopped after announcing it had failed, while entries appeared.**
+Also a consequence of 66: the count of entries never rose, whatever was added.
+*Mechanism.* Covered by 66's test.
+
+**69. The extension made the page slow, and it was blamed on the site.** A
+predicate asked every sixty milliseconds for twelve seconds is two hundred walks
+of the whole document, and one of them ran a full page scan each time.
+*Mechanism.* Polling eases off the longer it waits, and no poll runs a scan: a
+cheap reading of the page's shape says whether anything moved.
+
+**70. Texas was tried three times against a list holding only "Choose".** The
+State list does not exist until a Country is picked.
+*Mechanism.* A choice offering nothing usable yet goes last, so everything that
+can be answered is answered first. Nothing in the rule knows what a State is.

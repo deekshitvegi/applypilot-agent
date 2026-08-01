@@ -37,8 +37,33 @@
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  /**
+   * A cheap reading of what is on the page.
+   *
+   * Enough to tell that a step moved on or an entry appeared, and cheap enough
+   * to ask repeatedly: no layout is forced and nothing is walked by hand.
+   */
+  function pageShape() {
+    const body = document.body;
+    return [
+      location.href,
+      document.querySelectorAll("input,select,textarea,button").length,
+      body ? body.textContent.length : 0,
+    ].join("|");
+  }
+
+  /**
+   * Wait for something to become true, without holding the page down.
+   *
+   * Asking every sixty milliseconds for twelve seconds is two hundred passes
+   * over the whole document, and on a large application that is enough to make
+   * the page itself feel slow to the person using it -- the form was fine until
+   * the panel started work. Answers usually arrive immediately, so ask quickly
+   * at first and then ease off.
+   */
   async function waitFor(predicate, timeout) {
-    const deadline = Date.now() + (timeout || OPEN_TIMEOUT);
+    const started = Date.now();
+    const deadline = started + (timeout || OPEN_TIMEOUT);
     for (;;) {
       let value;
       try {
@@ -48,7 +73,8 @@
       }
       if (value) return value;
       if (Date.now() > deadline) return null;
-      await sleep(60);
+      const waited = Date.now() - started;
+      await sleep(waited < 600 ? 60 : waited < 2500 ? 200 : 500);
     }
   }
 
@@ -491,13 +517,11 @@
   async function clickByText(text) {
     const button = S.pressable(text);
     if (!button) return { outcome: "failed", evidence: `no control on this page reads "${text}"` };
-    const before = location.href;
-    const signatureBefore = AP.scan.run().signature;
+    const before = pageShape();
     realClick(button);
-    const moved = await waitFor(() => {
-      if (location.href !== before) return true;
-      return AP.scan.run().signature !== signatureBefore;
-    }, SLOW_PAGE_TIMEOUT);
+    // Not a full scan: this runs on a loop, and scanning a large application
+    // over and over was the extension making the page slow, not the site.
+    const moved = await waitFor(() => pageShape() !== before, SLOW_PAGE_TIMEOUT);
     return {
       outcome: moved ? "verified" : "attempted",
       evidence: moved

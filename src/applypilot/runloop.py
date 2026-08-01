@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .mapper import Resolution, _entry_context, resolve_page
+from .mapper import Resolution, _entry_context, resolve_page, usable_options
 from .models import (
     ActionResult,
     Answer,
@@ -155,7 +155,36 @@ def plan_page(
         result.notes.append(
             "There is a CAPTCHA on this page waiting for a person. I will not touch it."
         )
+    result.actions = _answerable_first(result.actions, observation)
     return result
+
+
+def _answerable_first(
+    actions: list[PlannedAction],
+    observation: PageObservation,
+) -> list[PlannedAction]:
+    """Fields that can be answered now, before the ones that cannot yet.
+
+    A State list holds nothing but "Choose" until a Country is picked, so
+    reaching it first meant three goes at putting Texas into a list of one
+    placeholder -- three failures on screen -- before Country was set and the
+    list finally existed.
+
+    Nothing here knows about States or Countries. A control offering no real
+    option yet is a control whose turn has not come, whatever it asks about.
+    """
+    fields = {f.fingerprint: f for f in observation.fields}
+
+    def waiting(action: PlannedAction) -> bool:
+        observed = fields.get(action.fingerprint)
+        if observed is None or observed.control not in {CK.SELECT, CK.COMBOBOX, CK.MULTISELECT}:
+            return False
+        # Nothing real on offer yet -- either the list is waiting on another
+        # field, or its choices have still to be opened. Either way it is not
+        # the thing to do first, and only the order changes: nothing is dropped.
+        return not usable_options(observed)
+
+    return [a for a in actions if not waiting(a)] + [a for a in actions if waiting(a)]
 
 
 def build_checklist(

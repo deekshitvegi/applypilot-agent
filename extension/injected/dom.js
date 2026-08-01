@@ -454,22 +454,87 @@
    * own. Which entry it is comes from its position among those siblings, so
    * adding an entry does not renumber the ones already filled.
    */
+  /**
+   * An index the page states outright.
+   *
+   * ``custom[education][1][school]`` is the second education whatever the
+   * markup around it looks like. Believing the page when it says so is worth
+   * more than any amount of reading its structure.
+   */
+  const NAME_INDEX = /\[(\d{1,3})\]|[._-](\d{1,3})(?=[._-])/g;
+
+  function indexedName(el) {
+    const name = el.getAttribute("name") || el.getAttribute("id") || "";
+    if (!name) return null;
+    let last = null;
+    let match = null;
+    NAME_INDEX.lastIndex = 0;
+    while ((match = NAME_INDEX.exec(name))) {
+      last = { index: Number(match[1] !== undefined ? match[1] : match[2]), at: match.index };
+    }
+    return last ? { index: last.index, group: name.slice(0, last.at) } : null;
+  }
+
+  /**
+   * Which entry of a repeating block a control belongs to.
+   *
+   * The first entry of a list usually carries something the others do not --
+   * "This is my most recent education" sits in the first block only. That made
+   * the blocks structurally unalike, so no block ever had a twin, every entry
+   * reported itself as the first one, and every entry was filled from the first
+   * record on file. Two schools, both the same school, and a form that said it
+   * had not added anything while entries piled up on screen.
+   *
+   * So: take the index the page states in the control's own name, and fall back
+   * to structure only when it does not state one. Blocks that ask mostly the
+   * same questions are repeats of each other -- an extra checkbox in one of them
+   * does not make it a different kind of thing.
+   */
   function repeatBlock(el) {
+    const named = indexedName(el);
     let node = el.parentElement;
     while (node && node !== document.body) {
       const parent = node.parentElement;
-      if (parent) {
-        const signature = blockSignature(node);
-        const twins = Array.from(parent.children).filter(
-          (child) => blockSignature(child) === signature
+      if (parent && controlCount(node) > 0) {
+        const asks = blockAsks(node);
+        const twins = Array.from(parent.children).filter((child) =>
+          child === node ? true : alike(blockAsks(child), asks)
         );
-        if (twins.length > 1 && controlCount(node) > 0) {
-          return { group: "g" + hash(signature), index: twins.indexOf(node) };
+        if (twins.length > 1) {
+          return {
+            group: named ? "n" + hash(named.group) : "g" + hash(asks.join(",")),
+            index: named ? named.index : twins.indexOf(node),
+          };
         }
       }
       node = parent;
     }
+    if (named && named.index > 0) return { group: "n" + hash(named.group), index: named.index };
     return { group: "", index: 0 };
+  }
+
+  /** What a block asks for, with any entry number taken out of the question. */
+  function blockAsks(el) {
+    if (!el || !el.tagName) return [];
+    return deepQuery("input,select,textarea", el).map((c) => {
+      const label = normalise(visibleLabel(c));
+      if (label) return label;
+      const name = c.getAttribute("name") || "";
+      return name.replace(NAME_INDEX, "") || c.type || "";
+    });
+  }
+
+  /**
+   * Whether two blocks ask the same things.
+   *
+   * Not identically: the first entry of a list carries an extra checkbox, a
+   * later one carries a remove button. Mostly the same is the same.
+   */
+  function alike(a, b) {
+    if (!a.length || !b.length) return false;
+    const theirs = new Set(b);
+    const shared = a.filter((ask) => theirs.has(ask)).length;
+    return shared >= Math.max(2, Math.min(a.length, b.length) * 0.6);
   }
 
   /**

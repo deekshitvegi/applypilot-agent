@@ -3,6 +3,26 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.15.0
+
+- **Every education and every job gets its own entry, with its own record.**
+  The first entry of a repeating block carries something the others do not --
+  "This is my most recent education" -- and later ones carry a remove button the
+  first lacks, so comparing blocks for an exact match found no twins at all.
+  Every entry then reported itself as the first one, which meant the same school
+  was filled into all of them, and the count of entries never rose, so adding
+  announced it had failed while entries appeared on screen. The entry number
+  stated in a control's own name is believed first now, and blocks that ask
+  mostly the same questions count as repeats. However many records are on file,
+  that many entries get made and each takes its own.
+- **The extension no longer slows the page down.** Waiting for something to
+  happen meant asking every sixty milliseconds -- two hundred walks of the whole
+  document over a twelve-second wait, one of them a full page scan each time.
+  Polling eases off the longer it waits, and nothing on a loop scans any more.
+- **Texas is not tried against an empty list.** A choice with nothing real on
+  offer yet goes last, so Country is set before State is reached. Nothing in the
+  rule knows what a State is.
+
 ## 1.14.0
 
 - **"Back Next" is gone.** The row at the foot of a form holds two buttons, and

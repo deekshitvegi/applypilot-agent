@@ -204,6 +204,11 @@
    * had worked was reported as having added nothing.
    */
   function formElementCount() {
+    // The plain query first: this is asked on a loop, and walking the document
+    // by hand each time was the extension making the page feel slow. The hand
+    // walk is only needed where a page keeps its form inside a shadow root.
+    const plain = document.querySelectorAll("input,select,textarea," + CUSTOM_CONTROLS).length;
+    if (plain) return plain;
     return D.deepQuery("input,select,textarea," + CUSTOM_CONTROLS, document).length;
   }
 
