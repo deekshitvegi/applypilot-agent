@@ -182,7 +182,13 @@
     }
 
     const rendered = renderedValue(el);
-    if (rendered) return { value: rendered, signal: "rendered_value" };
+    // A widget that shows the field's own name in its value box is showing a
+    // placeholder, not an answer. Reading "School / education institution" back
+    // as the chosen school is exactly the kind of self-reported success this
+    // whole module exists to prevent.
+    if (rendered && !same(rendered, D.visibleLabel(el))) {
+      return { value: rendered, signal: "rendered_value" };
+    }
 
     if (filtering) {
       // There is a text box here, but what is in it came from this agent.

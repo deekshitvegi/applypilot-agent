@@ -233,10 +233,27 @@
     ).length;
   }
 
-  /** The widget's own text box, when it has one. */
+  /**
+   * The box a widget filters by, wherever it keeps it.
+   *
+   * Some widgets put their search field inside the dropdown they hang off
+   * <body>, so looking only within the control finds nothing to type into.
+   */
   function filterBox(el) {
     if ((el.tagName || "").toLowerCase() === "input") return el;
-    return D.deepQuery("input", AP.verify.widgetOf(el)).find((node) => D.isVisible(node)) || null;
+    const inWidget = D.deepQuery("input,textarea", AP.verify.widgetOf(el)).find((node) =>
+      D.isVisible(node)
+    );
+    if (inWidget) return inWidget;
+    // The search box usually sits beside the results rather than inside them,
+    // so the dropdown's own container is looked at as well.
+    const popup = D.ownedPopup(el);
+    for (const scope of [popup, popup && popup.parentElement]) {
+      if (!scope) continue;
+      const box = D.deepQuery("input,textarea", scope).find((node) => D.isVisible(node));
+      if (box) return box;
+    }
+    return null;
   }
 
   /**

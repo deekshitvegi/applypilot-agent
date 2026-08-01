@@ -257,9 +257,21 @@
     // label -- one was read as the name of a file input.
     let node = el;
     for (let depth = 0; depth < 3 && node; depth += 1) {
+      // A label belongs to a field's own row. Once the walk reaches a container
+      // holding several controls it has left that row, and its neighbours are
+      // other fields -- one EEO question labelled only with an asterisk took the
+      // *previous* field's label and answered as that field instead.
+      if (depth > 0 && visibleControlCount(node) >= 2) return "";
       let sibling = node.previousElementSibling;
       while (sibling) {
         if (sibling.matches("input,select,textarea,button")) {
+          sibling = sibling.previousElementSibling;
+          continue;
+        }
+        // A neighbour that holds a control of its own is another field's row,
+        // not this field's name. One question labelled with a bare asterisk took
+        // the label of the field above it and answered as that field.
+        if (sibling.querySelector && sibling.querySelector("input,select,textarea")) {
           sibling = sibling.previousElementSibling;
           continue;
         }
@@ -304,12 +316,29 @@
       .trim();
   }
 
-  /** A weak, last-resort name derived from the control's own attributes. */
+  /**
+   * A weak, last-resort name derived from the control's own attributes.
+   *
+   * A name written in bracket notation puts the meaningful part last:
+   * custom[eeo][race] is a question about race, and custom[education][0][school]
+   * is a school. Reading the whole string matched nothing.
+   */
+  function lastBracketedSegment(name) {
+    const parts = String(name || "").match(/\[([^\]]+)\]/g);
+    if (!parts || !parts.length) return "";
+    for (let i = parts.length - 1; i >= 0; i -= 1) {
+      const inner = parts[i].slice(1, -1).trim();
+      if (inner && !/^\d+$/.test(inner)) return inner;
+    }
+    return "";
+  }
+
   function attributeLabel(el) {
     if (!el) return "";
     const candidates = [
       el.getAttribute("placeholder"),
       el.getAttribute("data-automation-id"),
+      lastBracketedSegment(el.getAttribute("name")),
       el.getAttribute("name"),
       el.getAttribute("id"),
     ];
@@ -420,6 +449,17 @@
     return deepQuery("input,select,textarea", el).length;
   }
 
+  /**
+   * Controls a person can actually see.
+   *
+   * A widget's own hidden backing input is part of one field, not a second one,
+   * so counting it made a picker's container look like a whole section and the
+   * search for its label stopped before it started.
+   */
+  function visibleControlCount(el) {
+    return deepQuery("input,select,textarea", el).filter(isVisible).length;
+  }
+
   /* ---------------------------------------------------------- combo boxes */
 
   /**
@@ -481,6 +521,21 @@
       );
       if (list) return list;
     }
+
+    // Some widgets hang their dropdown off <body> rather than keeping it inside
+    // themselves, so looking within the control finds nothing at all. When this
+    // control says it is open and there is exactly one open list on the page,
+    // that list is this control's -- which is a long way from scraping every
+    // option-shaped element in the document, because both halves must hold.
+    const expanded =
+      el.getAttribute("aria-expanded") === "true" ||
+      Boolean(closestDeep(el, "[aria-expanded='true']"));
+    if (expanded) {
+      const open = deepQuery("[role='listbox'],[role='tree'],[role='grid']", document).filter(
+        (node) => isVisible(node) && hasOptionRows(node)
+      );
+      if (open.length === 1) return open[0];
+    }
     return null;
   }
 
@@ -507,10 +562,12 @@
     blockSignature,
     closestDeep,
     controlCount,
+    visibleControlCount,
     deepElements,
     deepQuery,
     hash,
     isComboboxInput,
+    lastBracketedSegment,
     isVisible,
     looksLikeQuestion,
     normalise,

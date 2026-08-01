@@ -368,3 +368,32 @@ the selection had worked, the control had simply stopped being findable.
 *Mechanism.* A widget's own furniture -- its value display, placeholder, arrow,
 menu -- is skipped when looking for a label.
 → `test_async_picker.py::test_choosing_from_it_is_verified_from_the_pages_own_state`
+
+**49. A dropdown hung off <body> could never be found.** The school picker keeps
+a hidden select with no options at all for its value, shows a span with
+role="combobox", and appends its dropdown -- search box inside it -- to the end
+of the document. Looking for a control's list inside that control found nothing,
+so the field could never be filled, and there was nothing to type into because
+the search box did not exist until the list opened somewhere else.
+*Mechanism.* A control that says it is expanded, with exactly one open list on
+the page, owns that list. Both halves must hold, so regression 11 stands: a
+control that is not open still owns nothing. The filter box is looked for in the
+dropdown and in the dropdown's own container, because it usually sits beside the
+results rather than inside them.
+→ `test_detached_dropdown.py::test_a_dropdown_hung_off_the_body_is_still_this_controls_own`
+
+**50. A name in bracket notation matched nothing.** `custom[eeo][race]` is a
+question about race and `custom[education][0][school]` is a school, but read
+whole they are neither.
+*Mechanism.* The last meaningful bracketed segment is used, indices skipped.
+
+**51. A field labelled with a bare asterisk took the label of the field above
+it** and answered as that field.
+*Mechanism.* A label belongs to a field's own row. A neighbour holding a control
+of its own is another field's row, and once the walk reaches a container with
+several visible controls it has left the row entirely. A widget's own hidden
+backing input is part of one field, not a second one.
+
+**52. A widget showing the field's own name in its value box was read as having
+that value.** "School / education institution" came back as the chosen school.
+*Mechanism.* A rendered value equal to the control's own label is a placeholder.

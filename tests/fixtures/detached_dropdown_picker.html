@@ -1,0 +1,129 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Education</title>
+<!--
+  Built from the structure of a real application, read off the live page.
+
+  A hidden <select> with no options at all carries the value; beside it sits a
+  span with role="combobox" that the applicant actually sees; and the dropdown,
+  with its search box inside it, is appended to <body> when opened -- outside
+  the widget entirely.
+
+  Looking for a control's list inside that control found nothing here, so the
+  school field could never be filled, and the search box could never be typed
+  into because it did not exist until the list opened somewhere else.
+
+  The field names are in bracket notation, where the meaningful part is last.
+-->
+<style>
+  .hidden-select { position: absolute !important; width: 1px !important; height: 1px !important;
+                  padding: 0 !important; margin: -1px !important; overflow: hidden !important;
+                  clip: rect(0 0 0 0) !important; border: 0 !important; }
+  .drop { position: absolute; top: 200px; left: 20px; width: 320px; border: 1px solid #999; background: #fff; }
+  .drop[hidden] { display: none; }
+  .results { list-style: none; margin: 0; padding: 0; max-height: 150px; overflow: auto; }
+  .results li { padding: 3px 6px; }
+</style>
+
+<main>
+  <div class="section-title">Education</div>
+  <div class="block">
+    <div class="form-group">
+      <label class="main-label">*School / education institution</label>
+      <select class="hidden-select" name="custom[education][0][school]"></select>
+      <span class="picker-container">
+        <span class="selection">
+          <span class="picker-selection" role="combobox" tabindex="0" aria-expanded="false">
+            <span class="picker-rendered">School / education institution</span>
+          </span>
+        </span>
+      </span>
+    </div>
+    <div class="form-group">
+      <label class="main-label">*Area of study</label>
+      <input name="custom[education][0][area]">
+    </div>
+    <div class="form-group">
+      <label class="main-label">Graduation Year</label>
+      <input name="custom[education][0][grad]">
+    </div>
+    <div class="form-group">
+      <label class="main-label">*GPA</label>
+      <input name="custom[education][0][gpa]">
+    </div>
+    <div class="form-group">
+      <label class="main-label">*</label>
+      <select name="custom[eeo][race]">
+        <option value="">Choose</option>
+        <option>I prefer not to answer</option>
+        <option>White</option>
+        <option>Asian</option>
+      </select>
+    </div>
+  </div>
+</main>
+
+<!-- Appended to body, the way the real widget does it. -->
+<div class="drop" id="drop" hidden>
+  <input class="drop-search" type="search">
+  <ul class="results" id="results" role="listbox"></ul>
+</div>
+
+<script>
+  const SCHOOLS = [
+    "University of North Texas", "University of Texas at Austin",
+    "IIITDM Kurnool", "Northwestern University",
+  ];
+  const trigger = document.querySelector(".picker-selection");
+  const drop = document.getElementById("drop");
+  const results = document.getElementById("results");
+  const search = document.querySelector(".drop-search");
+  const store = document.querySelector('select[name="custom[education][0][school]"]');
+  const rendered = document.querySelector(".picker-rendered");
+  let timer = null;
+
+  const show = (rows) => {
+    results.innerHTML = "";
+    for (const text of rows) {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.textContent = text;
+      results.appendChild(li);
+    }
+  };
+
+  trigger.addEventListener("mousedown", () => {
+    drop.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    // The list points back at the control only once it is open.
+    trigger.setAttribute("aria-owns", "results");
+    show(["Please enter 1 or more characters"]);
+    search.focus();
+  });
+
+  search.addEventListener("keyup", () => {
+    const needle = search.value.trim().toLowerCase();
+    clearTimeout(timer);
+    if (!needle) return show(["Please enter 1 or more characters"]);
+    show(["Loading…"]);
+    timer = setTimeout(() => {
+      const hits = SCHOOLS.filter((s) => s.toLowerCase().includes(needle));
+      show(hits.length ? hits : ["No results found"]);
+    }, 700);
+  });
+
+  results.addEventListener("click", (event) => {
+    const row = event.target.closest("[role=option]");
+    if (!row || /please enter|loading|no results/i.test(row.textContent)) return;
+    const option = document.createElement("option");
+    option.textContent = row.textContent;
+    option.value = row.textContent;
+    option.selected = true;
+    store.appendChild(option);
+    rendered.textContent = row.textContent;
+    drop.hidden = true;
+    search.value = "";
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.removeAttribute("aria-owns");
+  });
+</script>

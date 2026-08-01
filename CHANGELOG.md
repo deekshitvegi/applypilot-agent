@@ -3,6 +3,22 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.10.0
+
+Read off the live application rather than guessed at.
+
+- **A dropdown appended to `<body>` is found.** The school picker keeps a hidden
+  select with no options for its value, shows a `role="combobox"` span, and hangs
+  its dropdown — search box inside it — off the end of the document. A control
+  that says it is open, with exactly one open list on the page, owns that list.
+- **A name in bracket notation is read from its last meaningful part**, so
+  `custom[eeo][race]` is a question about race.
+- **A label belongs to its own field's row.** A field labelled with a bare
+  asterisk was taking the label of the field above it and answering as that
+  field.
+- **A widget showing the field's own name is showing a placeholder**, not an
+  answer.
+
 ## 1.9.0
 
 - **A picker that searches a remote list is typed into properly and waited for.**
