@@ -154,6 +154,31 @@ def _refused_question(
     )
 
 
+def _unread_list_question(
+    observed: FieldObservation, answer: Answer, profile: Profile
+) -> PendingQuestion:
+    """A control we have an answer for but whose choices are still unknown.
+
+    It goes out as a question so that the control gets opened and read, and it
+    carries the saved answer along -- so that when the answer is among what the
+    control offers, it is chosen and nobody is asked anything at all.
+    """
+    return PendingQuestion(
+        fingerprint=observed.fingerprint,
+        label=pretty_label(observed.display_label or observed.attr_label),
+        control=observed.control,
+        operation=observed.operation,
+        options=usable_options(observed),
+        required=observed.required,
+        fact_key=answer.fact_key,
+        reason=answer.reason,
+        section=_entry_context(observed),
+        frame=observed.frame,
+        saved_value=answer.value,
+        options_pending=True,
+    )
+
+
 def plan_page(
     observation: PageObservation,
     profile: Profile,
@@ -185,6 +210,27 @@ def plan_page(
                 if needs_its_options_opened(observed):
                     result.needs_options.append(observed.fingerprint)
                 continue
+
+            # Read the list before choosing from it.
+            #
+            # Having a saved answer is not the same as knowing this control
+            # will take it. Acting blind typed a whole sentence into a box that
+            # filters a list, and the list answered "No results were found"
+            # while the sentence sat in the box above it -- the answer visible
+            # on screen, and the field empty.
+            #
+            # This is not a new path. It is the one a question already takes:
+            # open the control, read what it actually offers, rank the saved
+            # answer against those, and choose when one fits. Where it fits
+            # nobody is asked anything, so nothing slows down except a control
+            # whose options could not be read in the first place.
+            if needs_its_options_opened(observed):
+                result.questions.append(
+                    _unread_list_question(observed, resolution.answer, profile)
+                )
+                result.needs_options.append(observed.fingerprint)
+                continue
+
             result.answers.append(resolution.answer)
             result.actions.append(_action_for(observed, resolution.answer))
             continue

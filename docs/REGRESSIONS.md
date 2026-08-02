@@ -1187,3 +1187,20 @@ a form that the applicant deliberately withheld. Scored below a wording match,
 so a control offering the exact saved sentence still wins with it, and two
 options meaning the same thing tie -- which is refused, because a tie is a
 question for the applicant and not a coin flip.
+
+**139. A saved answer was typed into a list without ever reading the list.**
+Having an answer is not the same as knowing the control will take it. A veteran
+question on a live application is a box that filters a list; handed the saved
+answer in full it answered "No results were found" and the field stayed empty,
+with the answer visible in the box above a list saying there was no such thing.
+The same control, opened and read, offers that exact sentence as a row.
+*Mechanism.* A control whose choices have not been read is opened and read
+before anything is chosen -- which is the path a question already took. It
+carries the saved answer with it, so where the answer is among what the control
+offers it is chosen and nobody is asked anything. Only controls whose options
+could not be read in the first place go this way; a list already on the page is
+still chosen from straight away, and a text box never goes near it.
+*And a filter gets a filter.* Where a box really must be typed into, the whole
+answer is tried first and then shorter beginnings of it -- "No, I am", "No" --
+which is what a person types. Whatever the list then offers is matched against
+the whole answer, never against the fragment typed to reveal it.

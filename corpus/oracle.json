@@ -1,0 +1,26 @@
+{
+ "url": "https://edbz.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX/job/25009788",
+ "title": "Workflow Automation Engineer | GenAI Focused - Texas Instruments Careers",
+ "kind": "listing",
+ "fields": [],
+ "apply_controls": [
+  {
+   "text": "Apply Now",
+   "fingerprint": "btn:1m8ca7",
+   "href": ""
+  }
+ ],
+ "submit_controls": [],
+ "next_controls": [],
+ "add_controls": [],
+ "captcha": "none",
+ "hints": [
+  "edbz.fa.us2.oraclecloud.com",
+  "static.oracle.com",
+  "www.ti.com"
+ ],
+ "signature": "jk76pq",
+ "notes": [
+  "a single posting with its own apply control"
+ ]
+}

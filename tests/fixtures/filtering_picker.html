@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>A picker that filters what it offers</title>
+<!--
+  Copied in behaviour from a live Oracle application. The control is a search
+  box over a fixed list: whatever is typed filters the rows, and when nothing
+  matches it says so.
+
+  Handed the saved answer in full -- "No, I am not a veteran under one of the
+  classifications listed above" -- the list showed "No results were found" and
+  the field stayed empty, with the answer sitting visibly in the box above a
+  list saying there was no such thing.
+-->
+<label for="vet">Veteran Status</label>
+<div>
+  <input id="vet" role="combobox" aria-controls="vet-list" aria-expanded="false"
+         aria-autocomplete="list" type="text" placeholder="Search">
+  <ul id="vet-list" role="listbox" hidden></ul>
+</div>
+
+<label for="plain">Full Name</label>
+<input id="plain" type="text">
+
+<script>
+  const OPTIONS = [
+    "No, I am not a veteran under one of the classifications listed above",
+    "Yes, I identify as one or more of the classifications of a protected veteran",
+    "I do not wish to answer",
+  ];
+  const box = document.getElementById("vet");
+  const list = document.getElementById("vet-list");
+
+  function draw() {
+    const typed = box.value.trim().toLowerCase();
+    // The whole point: it matches on what the row STARTS with, so a long
+    // sentence typed in full matches nothing at all.
+    const rows = typed
+      ? OPTIONS.filter((o) => o.toLowerCase().startsWith(typed) && o.toLowerCase() !== typed)
+      : OPTIONS;
+    list.innerHTML = "";
+    if (!rows.length) {
+      const empty = document.createElement("li");
+      empty.textContent = "No results were found.";
+      empty.setAttribute("aria-disabled", "true");
+      list.appendChild(empty);
+    }
+    for (const text of rows) {
+      const row = document.createElement("li");
+      row.setAttribute("role", "option");
+      row.textContent = text;
+      row.addEventListener("click", () => {
+        box.value = text;
+        list.hidden = true;
+        box.setAttribute("aria-expanded", "false");
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      list.appendChild(row);
+    }
+    list.hidden = false;
+    box.setAttribute("aria-expanded", "true");
+  }
+
+  box.addEventListener("input", draw);
+  box.addEventListener("focus", draw);
+</script>

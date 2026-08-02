@@ -252,22 +252,71 @@
    * at. Returns false when nothing suitable appeared, and the fill then ends
    * the ordinary way.
    */
-  async function pickSuggestion(el, value) {
-    const popup = await waitFor(() => D.ownedPopup(el), SEARCH_TIMEOUT);
-    if (!popup) return false;
+  /*
+   * What to type into a box that answers with a list.
+   *
+   * A filter narrows a list. A whole sentence narrows it to nothing: one form
+   * offers "No, I am not a veteran under one of the classifications listed
+   * above" as a row, and handed that exact text as a filter it answered "No
+   * results were found" and the field stayed empty. The applicant could see
+   * the answer sitting in the box and the list underneath saying there was no
+   * such thing.
+   *
+   * So the whole answer first -- plenty of boxes take it -- and then shorter
+   * and shorter beginnings of it, which is what a person types. Whatever the
+   * list then offers is matched against the whole answer, never against the
+   * fragment that was typed to reveal it.
+   */
+  function filterAttempts(value) {
+    const whole = String(value || "").trim();
+    const words = whole.split(/\s+/).filter(Boolean);
+    const tries = [whole];
+    for (const take of [3, 1]) {
+      if (words.length > take) {
+        const shorter = words.slice(0, take).join(" ").replace(/[,;:]$/, "");
+        if (shorter && tries.indexOf(shorter) === -1) tries.push(shorter);
+      }
+    }
+    return tries;
+  }
+
+  /** The row a list is offering that answers *value*, or nothing. */
+  function matchingRow(popup, value) {
     const rows = D.optionRows(popup).filter((row) => {
       const text = D.textOf(row);
       return text && !AP.verify.isPlaceholder(text);
     });
-    if (!rows.length) return false;
+    if (!rows.length) return null;
     const exact = rows.find((row) => AP.verify.same(D.textOf(row), value));
-    const leading = rows.find((row) =>
-      D.normalise(D.textOf(row)).startsWith(D.normalise(value))
-    );
-    const chosen = exact || leading;
-    if (!chosen) return false;
-    realClick(chosen);
-    return true;
+    if (exact) return exact;
+    const wanted = D.normalise(value);
+    const leading = rows.find((row) => D.normalise(D.textOf(row)).startsWith(wanted));
+    if (leading) return leading;
+    // The list is showing the answer in its own longer wording. Only when one
+    // row does: two would be a guess, and a guess here writes an answer.
+    const inside = rows.filter((row) => wanted && D.normalise(D.textOf(row)).includes(wanted));
+    return inside.length === 1 ? inside[0] : null;
+  }
+
+  async function pickSuggestion(el, value) {
+    for (const attempt of filterAttempts(value)) {
+      if (attempt !== String(value || "").trim()) {
+        // Retype: the box is still holding whatever did not work.
+        if (el.focus) el.focus();
+        setNativeValue(el, "");
+        fireInput(el);
+        setNativeValue(el, attempt);
+        fireInput(el);
+      }
+      const popup = await waitFor(() => D.ownedPopup(el), SEARCH_TIMEOUT);
+      if (!popup) continue;
+      const chosen = matchingRow(popup, value);
+      if (chosen) {
+        realClick(chosen);
+        return true;
+      }
+    }
+    return false;
   }
 
   async function chooseNativeOption(found, optionLabel) {
