@@ -3,6 +3,16 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.44.0
+
+- **A block heading finishes a label that cannot stand alone.** A repeating
+  block headed "Phones (1)" holds fields called "Type" and "Number", and
+  "Number" means nothing by itself -- so a saved phone number sat in the profile
+  while the form asked for it in red. Heading and label together are
+  unmistakable. Only reached when the label alone matched nothing, only for a
+  label short enough to be missing half of itself, and it never invents a
+  meaning: "Type" under "Phones" still comes back to you.
+
 ## 1.43.0
 
 - **A picker that declares nothing is still recognised.** The rule added last

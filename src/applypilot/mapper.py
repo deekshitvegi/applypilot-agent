@@ -299,6 +299,15 @@ def match_facts(field: FieldObservation) -> list[FactMatch]:
         # whole self-identification section went unasked because of it. Only
         # tried when the label as written matched nothing, so a field that
         # genuinely begins with one of those words is unaffected.
+        # A block heading finishes a label that cannot stand on its own. A
+        # field called "Number" sitting under "Phones (1)" is a phone number,
+        # and saying so needs both halves -- on its own "Number" is nothing at
+        # all, which is why a saved phone sat there while the form asked for it.
+        for qualified in _section_qualified(field.section, label):
+            matches = _match_against_label(field, qualified, attribute_mode=False)
+            if matches:
+                return matches
+
         plain = without_request(label)
         if plain != label and normalise(plain):
             matches = _match_against_label(field, plain, attribute_mode=False)
@@ -320,6 +329,32 @@ def match_facts(field: FieldObservation) -> list[FactMatch]:
         # and only an exact hit counts, because employers name fields carelessly.
         return _match_against_label(field, field.attr_label, attribute_mode=True)
     return []
+
+
+#: How many words a label may have before its block heading stops being the
+#: missing half of it. "Number" needs finishing; a sentence does not.
+_NEEDS_FINISHING = 3
+
+
+def _section_qualified(section: str, label: str) -> list[str]:
+    """The label with its block heading in front, singular and plural.
+
+    A repeating block is headed "Phones (1)" and its fields are called "Type"
+    and "Number". Neither means anything alone; together with the heading they
+    are unmistakable. The count is dropped, and the heading is tried both as it
+    appears and without a trailing s, because a block of phones holds a phone
+    number rather than a phones number.
+    """
+    head = re.sub(r"\s*\(\s*\d+\s*\)\s*$", "", (section or "")).strip()
+    if not head or not label or len(tokens(label)) > _NEEDS_FINISHING:
+        return []
+    if normalise(head) == normalise(label):
+        return []
+    singular = head[:-1] if len(head) > 3 and head.endswith("s") else head
+    out = [f"{singular} {label}"]
+    if singular != head:
+        out.append(f"{head} {label}")
+    return out
 
 
 def _match_against_label(

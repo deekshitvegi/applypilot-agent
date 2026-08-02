@@ -822,3 +822,13 @@ what they do: the text is gone the moment focus leaves.
 *Mechanism.* A box that empties itself has rejected what it was given, which is
 proof enough to try again through its list. It costs nothing anywhere else,
 because a box that kept the value never reaches that path.
+
+**105. A label that could not stand on its own.** A repeating block headed
+"Phones (1)" holds fields called "Type" and "Number". "Number" matches no fact
+at all, so a saved phone number sat in the profile while the form asked for it
+in red.
+*Mechanism.* The block heading finishes the label: "Phones (1)" and "Number"
+together are a phone number. The count is dropped and the heading is tried both
+as it appears and without a trailing s, because a block of phones holds a phone
+number. Only reached when the label alone matched nothing, and only for a label
+short enough to be missing half of itself -- a sentence says what it is about.
