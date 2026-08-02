@@ -3,6 +3,20 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.41.0
+
+- **A form is allowed to write your answer its own way.** One puts a dialling
+  code on a phone number it was handed without one; another lists its states as
+  "TX - Texas" and shows that once Texas is picked. The value went in and was
+  accepted both times, and both came back as failures -- red crosses on a page
+  that was correctly filled. A code in front of a name counts as the name now,
+  and a dialling code in front of a whole number counts as the number.
+- Nothing about verified is loosened. It is still a fresh read of state the page
+  owns, and the page still has to hold the answer that was asked for. Ten tests
+  hold the other side: a different state, one end of a range, a single digit
+  out, and a form showing back fewer digits than it was given are all still
+  different answers.
+
 ## 1.40.0
 
 - **Settings are switches, not tick boxes.** These are preferences that stay on,

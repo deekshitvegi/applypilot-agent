@@ -790,3 +790,15 @@ question whose whole point is that several are true at once.
 again takes it away, and each pick is its own action against the same control.
 Ticking is idempotent, so nothing already ticked is toggled back off. A question
 with one answer still replaces rather than accumulates.
+
+**102. A form restating what it was given read as a failure.** One writes a
+phone number back as "+1 940 843 6087" after being handed "9408436087"; another
+lists its states as "TX - Texas". The value went in and was accepted both times,
+and both were reported as failures -- four red crosses on a page that was
+correctly filled.
+*Mechanism.* A code in front of the name counts as the name, and a dialling code
+in front of a whole number counts as the number. Nothing about verified is
+loosened: it is still a fresh read of state the page owns, and the page still
+has to hold the answer that was asked for. Ten tests hold the other side of it,
+including that one end of a range is not the answer to anything and that a form
+showing back fewer digits than it was given has dropped some.

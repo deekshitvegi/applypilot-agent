@@ -43,13 +43,60 @@
     return PLACEHOLDER.test(D.normalise(text || ""));
   }
 
+  /**
+   * Whether two readings are the same answer.
+   *
+   * A form is entitled to restate what it was given. One writes a phone number
+   * back as "+1 940 843 6087" after being handed "9408436087"; another lists
+   * its states as "TX - Texas" and shows that once Texas is picked. In both the
+   * value went in and was accepted, and in both the read-back was reported as a
+   * failure -- four red crosses on a page that was correctly filled.
+   *
+   * This does not loosen what verified means. It is still a fresh read of state
+   * the page owns, and the page still has to hold the answer that was asked
+   * for. What it allows is the page's own way of writing it down.
+   */
   function same(a, b) {
     const left = D.normalise(a || "");
     const right = D.normalise(b || "");
     if (!left || !right) return false;
     if (left === right) return true;
+
     const squash = (s) => s.replace(/[^a-z0-9]/g, "");
-    return squash(left) === squash(right);
+    if (squash(left) === squash(right)) return true;
+
+    // A code in front of the name: "TX - Texas" is Texas, and "3 - 5 years" is
+    // not 3, so only a whole part counts and never a fragment of one.
+    if (partOf(left, right) || partOf(right, left)) return true;
+
+    // A dialling code the form put on itself. Only for something long enough
+    // to be a phone number, and only when the rest matches exactly.
+    return sameNumber(squash(left), squash(right));
+  }
+
+  const SEPARATORS = /\s+[-–—:|/]\s+|\s*[()]\s*/;
+
+  function partOf(whole, part) {
+    if (!SEPARATORS.test(whole)) return false;
+    // A word, not a number. "TX - Texas" is Texas, but "3 - 5 years" is a
+    // range and 3 is one end of it, not the answer to anything.
+    if (!/[a-z]{2}/.test(part)) return false;
+    return whole
+      .split(SEPARATORS)
+      .map((piece) => piece.trim())
+      .filter(Boolean)
+      .some((piece) => piece === part);
+  }
+
+  function sameNumber(left, right) {
+    if (!/^\d+$/.test(left) || !/^\d+$/.test(right)) return false;
+    const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+    // Long enough to be a whole number in its own right, with only a dialling
+    // code in front of it. A form that shows back fewer digits than it was
+    // given has dropped some, and that is not the same answer.
+    if (shorter.length < 9) return false;
+    if (longer.length - shorter.length > 4) return false;
+    return longer.endsWith(shorter);
   }
 
   /**
