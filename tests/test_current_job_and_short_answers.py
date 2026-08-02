@@ -65,12 +65,34 @@ def test_the_title_follows_the_same_job():
     assert answer is not None and answer.value == "AI Engineer"
 
 
-@pytest.mark.parametrize("index,expected", [(0, "Innomatics Research Labs"), (1, "HCLTech")])
-def test_inside_a_block_the_page_still_says_which_entry(index, expected):
-    """A form with room for several is not asking only about the current one."""
+@pytest.mark.parametrize("index,expected", [(0, "HCLTech"), (1, "Innomatics Research Labs")])
+def test_a_block_is_filled_newest_first(index, expected):
+    """Changed deliberately in 1.67.0.
+
+    This asserted the order the records happen to be stored in, which is the
+    order they were typed in. A form with room for a single education entry was
+    then given the school attended before the most recent one. Every form that
+    offers several of these lists them newest first, and a form that offers one
+    is asking for the newest.
+    """
     field = box("Company", group="exp", group_index=index, section="Work Experience")
     answer = resolve_field(field, TWO_JOBS).answer
     assert answer is not None and answer.value == expected
+
+
+def test_a_form_with_one_slot_gets_the_most_recent_school():
+    """The report this came from: it filled the education before last."""
+    profile = Profile(
+        education=[
+            {"school": "Aalborg Universitet", "degree": "Bachelor's Degree",
+             "start_date": "2019-08", "end_date": "2022-05"},
+            {"school": "University of North Texas", "degree": "Master's Degree",
+             "start_date": "2023-08", "end_date": "2025-05"},
+        ]
+    )
+    only_slot = box("School", group="edu", group_index=0, section="Education")
+    answer = resolve_field(only_slot, profile).answer
+    assert answer is not None and answer.value == "University of North Texas"
 
 
 def test_the_latest_wins_when_nothing_is_marked_current():

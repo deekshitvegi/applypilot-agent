@@ -45,8 +45,8 @@ from .models import (
     AnswerSource,
     ControlKind,
     FieldObservation,
-    PendingQuestion,
     Operation,
+    PendingQuestion,
     Profile,
 )
 from .text import (
@@ -458,36 +458,39 @@ def best_fact(field: FieldObservation) -> FactMatch | None:
 # --------------------------------------------------------------------------
 
 
-def _latest_first(records: list) -> int:
-    """Which record is the current one.
+def _newest_first(records: list) -> list:
+    """The records in the order a form expects them: latest first.
 
-    A form asking for one employer without a block to put several in is asking
-    for the job you are in now, and a form asking for one school is asking for
-    the last one you attended. The order they happen to be stored in is not an
-    answer to that: "Current/Last Employer" came back with the job before the
-    current one, because that one was written down first.
+    The order they happen to be stored in is the order they were typed in, and
+    that is not an answer to anything. Two things went wrong for the same
+    reason: "Current/Last Employer" came back with the job before the current
+    one, and a form with room for a single education entry was given the school
+    attended before the most recent one -- both because those were written down
+    first.
+
+    Every form that offers several of these lists them newest first, and a form
+    that offers only one is asking for the newest. Sorting once serves both:
+    entry nought is the current job or the last school, entry one the one
+    before it.
     """
-    best, best_key = 0, None
-    for index, record in enumerate(records):
-        if getattr(record, "current", False):
-            return index
+
+    def when(record) -> tuple:
         # Still going beats a finish date, and a later finish beats an earlier.
-        key = (str(getattr(record, "end_date", "") or "~"), str(getattr(record, "start_date", "")))
-        if best_key is None or key > best_key:
-            best, best_key = index, key
-    return best
+        return (
+            1 if getattr(record, "current", False) else 0,
+            str(getattr(record, "end_date", "") or "~"),
+            str(getattr(record, "start_date", "") or ""),
+        )
+
+    return sorted(records, key=when, reverse=True)
 
 
 def _record_value(profile: Profile, spec: FactSpec, field: FieldObservation) -> str:
-    records = profile.education if spec.record == "education" else profile.experience
-    if not records:
+    stored = profile.education if spec.record == "education" else profile.experience
+    if not stored:
         return ""
-    if field.group:
-        index = field.group_index if 0 <= field.group_index < len(records) else 0
-    else:
-        # No block around it, so there is only one answer wanted: the current
-        # one. Inside a block the page has said which entry it means.
-        index = _latest_first(records)
+    records = _newest_first(stored)
+    index = field.group_index if 0 <= field.group_index < len(records) else 0
     record = records[index]
     raw = getattr(record, spec.record_field, "")
     if isinstance(raw, bool):

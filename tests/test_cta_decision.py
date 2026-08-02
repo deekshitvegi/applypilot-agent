@@ -129,7 +129,7 @@ def test_final_submit_is_refused_unless_it_was_set_deliberately(decide):
     )
     assert choice["action"] == "none"
     assert choice["disabled"] is True
-    assert 'Press "Submit Profile" yourself' == choice["label"]
+    assert choice["label"] == 'Press "Submit Profile" yourself'
 
 
 def test_final_submit_is_offered_only_on_the_saved_policy(decide):

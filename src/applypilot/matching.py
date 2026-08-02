@@ -365,13 +365,16 @@ def rank_options(
             # The same fact, asked at a different resolution.
             score = BAND_SCORE
             reason = f"{desired} falls inside {option.label}"
-        if score <= 0 and wanted_polarity in {"yes", "no"}:
-            # Said in the form's own words. Every option is scored the same way,
-            # so two options meaning the same thing tie -- and a tie is refused,
-            # which is the right answer when a form really is ambiguous.
-            if _polarity(option.label) == wanted_polarity:
-                score = SAME_MEANING
-                reason = f'both say "{wanted_polarity}", in different words'
+        # Said in the form's own words. Every option is scored the same way, so
+        # two options meaning the same thing tie -- and a tie is refused, which
+        # is the right answer when a form really is ambiguous.
+        if (
+            score <= 0
+            and wanted_polarity in {"yes", "no"}
+            and _polarity(option.label) == wanted_polarity
+        ):
+            score = SAME_MEANING
+            reason = f'both say "{wanted_polarity}", in different words'
         if score <= 0:
             plain = _opens_with_yes_or_no(desired)
             if plain and normalise(option.label) == plain:

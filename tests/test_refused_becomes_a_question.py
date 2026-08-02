@@ -11,7 +11,14 @@ from __future__ import annotations
 import pytest
 
 from applypilot import runloop
-from applypilot.models import ControlKind, FieldObservation, Operation, Option, PageObservation, Profile
+from applypilot.models import (
+    ControlKind,
+    FieldObservation,
+    Operation,
+    Option,
+    PageObservation,
+    Profile,
+)
 
 VETERAN = (
     "Are you a Veteran of the United States Military with a discharge of "

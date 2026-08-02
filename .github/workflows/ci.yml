@@ -53,10 +53,18 @@ jobs:
           import pathlib, sys
           forbidden = [".env", "applypilot.key"]
           patterns = ["*.sqlite", "*.sqlite3", "*.key", "*.docx", "*.pdf"]
+          # Only what is actually ours. A checkout on CI has no virtualenv in
+          # it, but a working copy does -- and one of the libraries ships a
+          # .docx template, so this failed for anyone running the same checks
+          # locally before pushing. Being unable to run the gate is how a red
+          # build reaches somebody's inbox instead of the terminal in front of
+          # the person who caused it.
+          SKIP = {".git", ".venv", "venv", "node_modules", "__pycache__", "corpus"}
           root = pathlib.Path(".")
-          found = [str(p) for name in forbidden for p in root.rglob(name)]
+          ours = lambda p: not (SKIP & set(p.parts))
+          found = [str(p) for name in forbidden for p in root.rglob(name) if ours(p)]
           for pattern in patterns:
-              found += [str(p) for p in root.rglob(pattern) if ".git" not in p.parts]
+              found += [str(p) for p in root.rglob(pattern) if ours(p)]
           if found:
               print("these must never be committed:", *found, sep="\n  ")
               sys.exit(1)

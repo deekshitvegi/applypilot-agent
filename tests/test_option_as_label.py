@@ -26,7 +26,7 @@ def test_each_group_is_labelled_with_its_question(scan):
     _, observation = scan("option_as_label.html")
     found = radios(observation)
     assert len(found) == 2, [f["label"] for f in observation["fields"]]
-    for field, expected in zip(found, QUESTIONS):
+    for field, expected in zip(found, QUESTIONS, strict=True):
         label = (field.get("display_label") or field["label"]).strip()
         assert expected in label, f"got {label!r}"
 

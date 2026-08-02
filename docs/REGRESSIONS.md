@@ -1204,3 +1204,22 @@ still chosen from straight away, and a text box never goes near it.
 answer is tried first and then shorter beginnings of it -- "No, I am", "No" --
 which is what a person types. Whatever the list then offers is matched against
 the whole answer, never against the fragment typed to reveal it.
+
+**140. A form with one education slot was given the school before the most
+recent one.** Inside a repeating block, records were indexed in the order they
+happen to be stored -- which is the order they were typed in. Every form that
+offers several of these lists them newest first, and a form that offers only
+one is asking for the newest.
+*Mechanism.* Sorted once, latest first: still going beats a finish date, and a
+later finish beats an earlier. Entry nought is the current job or the last
+school, entry one the one before it. The same sort answers a lone
+"Current/Last Employer" with no block around it at all.
+
+**141. The build was red and the only place that said so was an inbox.** Six
+lint findings, all from this week's changes. The check that fails a build if
+anything personal is committed also walked the virtualenv, where one library
+ships a .docx template -- so anyone running the same checks locally before
+pushing got a failure that CI would never see, and stopped running them.
+*Mechanism.* It looks at what is actually ours. Being unable to run the gate is
+how a red build reaches somebody's inbox instead of the terminal in front of
+the person who caused it.

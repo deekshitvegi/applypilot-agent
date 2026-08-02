@@ -518,7 +518,7 @@ HISTORY_ONLY_LABELS: frozenset[str] = frozenset(
         "most recent company", "most recent employer", "most recent title",
         "most recent job title", "most recent position",
         "most recent company name", "most recent employer name",
-        "current company name", "current employer name",
+        "current employer name",
         "current most recent company name", "current most recent job title",
         "current or most recent company", "current or most recent employer",
         "current or most recent job title", "current or most recent title",
