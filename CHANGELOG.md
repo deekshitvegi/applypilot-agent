@@ -3,6 +3,13 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.40.0
+
+- **Settings are switches, not tick boxes.** These are preferences that stay on,
+  and a switch says that where a tick box says "confirming something once".
+  Built out of the checkbox itself, so the label, the keyboard and the form all
+  behave exactly as before -- only the appearance changes.
+
 ## 1.39.0
 
 - **Pick as many as are true.** "Which of these have you used?" was offered as a
