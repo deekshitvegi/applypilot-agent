@@ -80,7 +80,7 @@ TOPIC_RANK: dict[str, int] = {
     "college": 2, "institution": 2, "employer": 2, "organization": 2,
     "organisation": 2, "title": 2, "notice": 2, "start": 2, "resume": 2,
     "cv": 2, "cover": 2, "linkedin": 2, "github": 2, "portfolio": 2,
-    "website": 2, "referral": 2, "hear": 2, "source": 2, "pay": 2,
+    "website": 2, "huggingface": 2, "hf": 2, "referral": 2, "hear": 2, "source": 2, "pay": 2,
     "rate": 2, "wage": 2, "18": 2, "age": 2, "before": 2,
     "previously": 2, "formerly": 2, "remote": 2, "onsite": 2, "hybrid": 2,
     # Subjects that dominate any sentence they appear in.

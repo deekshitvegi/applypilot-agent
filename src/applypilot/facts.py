@@ -170,6 +170,12 @@ FACTS: tuple[FactSpec, ...] = (
         topics=("website", "portfolio"), supplementary=True,
         prompt="Personal website or portfolio", onboarding_group="links",
     ),
+    _f(
+        "huggingface", "huggingface", "hugging face", "huggingface profile",
+        "huggingface url", "hugging face profile", "hf profile",
+        topics=("huggingface", "hf"), supplementary=True,
+        prompt="Hugging Face profile URL", onboarding_group="links",
+    ),
     # ---- eligibility ----------------------------------------------------
     _f(
         "work_authorization",

@@ -162,3 +162,16 @@ def test_prose_whose_name_means_nothing_still_matches_nothing():
         "all whatsoever in any way at any point"
     )
     assert best_fact(named(label, "custom_field_7")) is None
+
+
+def test_a_hugging_face_profile_has_somewhere_to_go():
+    """Its own fact, distinct from GitHub and from a personal site."""
+    for label, key in [
+        ("Hugging Face profile", "huggingface"),
+        ("HuggingFace URL", "huggingface"),
+        ("GitHub profile", "github"),
+        ("Portfolio", "website"),
+    ]:
+        match = best_fact(ask(label))
+        assert match is not None, label
+        assert match.spec.key == key, (label, match.spec.key)

@@ -3,6 +3,13 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.34.0
+
+- **A Hugging Face profile has somewhere to live.** Its own fact, alongside
+  GitHub and your personal site, and it appears in Settings under Links like
+  the others. A form asking for "Hugging Face profile" reaches it; one asking
+  for GitHub still reaches GitHub.
+
 ## 1.33.0
 
 - **A required marker drawn by CSS still counts.** The red asterisk on one
