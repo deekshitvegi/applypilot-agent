@@ -560,6 +560,79 @@
     return picked;
   }
 
+  /**
+   * A question answered by ticking some of a list.
+   *
+   * "Which of these have you used?" followed by eight boxes is one question
+   * with eight answers, not eight questions. Read as eight, each is a checkbox
+   * called "OpenAI" that answers to no saved fact and carries no requirement of
+   * its own -- the asterisk belongs to the question above them -- so the whole
+   * list was left blank and never asked about.
+   *
+   * One box on its own is not this. An agreement, or "this is my current job",
+   * is its own question and stays one.
+   */
+  function checkboxChoices(root) {
+    const found = [];
+    const seen = new Set();
+    for (const box of deepQuery("input[type='checkbox']", root || document)) {
+      const container = tickListParent(box);
+      if (!container || seen.has(container)) continue;
+      seen.add(container);
+      const boxes = deepQuery("input[type='checkbox']", container).filter(isVisible);
+      if (boxes.length < 2 || boxes.length > 30) continue;
+      found.push({ container: container, boxes: boxes });
+    }
+
+    // Tightest first, and a box belongs to one list only. A page whose every
+    // input happens to be a tick box has some ancestor holding all of them --
+    // usually the body -- and that ancestor is not a question. Letting the
+    // smallest claim its boxes first leaves a lone agreement further down as
+    // its own question, which is what it is.
+    found.sort((a, b) => a.boxes.length - b.boxes.length);
+    const claimed = new Set();
+    const groups = [];
+    for (const group of found) {
+      const boxes = group.boxes.filter((box) => !claimed.has(box));
+      if (boxes.length < 2) continue;
+      const labels = boxes.map((one) => visibleLabel(one));
+      if (!labels.every((text) => text && text.length <= 60)) continue;
+      if (new Set(labels).size !== labels.length) continue;
+      for (const box of boxes) claimed.add(box);
+      groups.push({ container: group.container, boxes: boxes, labels: labels });
+    }
+    return groups;
+  }
+
+  /**
+   * The nearest ancestor holding these tick boxes and nothing else.
+   *
+   * Climbing stops as soon as any other kind of control comes into view, and
+   * also as soon as text that is not one of their labels does -- a list must not
+   * swallow the question that follows it, and climbing greedily is what made a
+   * neighbouring Yes/No question come back wearing this one's name.
+   */
+  function tickListParent(box) {
+    let node = box.parentElement;
+    let best = null;
+    for (let depth = 0; depth < 5 && node; depth += 1) {
+      const controls = deepQuery("input,select,textarea", node);
+      const strays = controls.some((el) => {
+        const type = (el.getAttribute("type") || el.type || "").toLowerCase();
+        return type !== "checkbox";
+      });
+      if (strays) break;
+      if (controls.length > 1) {
+        // The tightest block that holds the whole list. Climbing further
+        // reaches the section, then the page, and a page is not a question.
+        best = node;
+        break;
+      }
+      node = node.parentElement;
+    }
+    return best;
+  }
+
   function repeatBlock(el) {
     const named = indexedName(el);
     // The page has stated the answer; there is nothing to work out.
@@ -773,6 +846,7 @@
     ownedPopup,
     referencedText,
     buttonChoices,
+    checkboxChoices,
     pickedButton,
     repeatBlock,
     sectionOf,

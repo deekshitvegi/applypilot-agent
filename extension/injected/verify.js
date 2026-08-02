@@ -132,6 +132,12 @@
     // page bothers to say, otherwise the one class the chosen button carries
     // that its siblings do not. Either way it is read from the page, never from
     // the fact that a button was clicked.
+    // A "which of these" question: what is ticked, read from the boxes.
+    if (kind === "ticklist" && group && group.length) {
+      const ticked = group.filter((b) => b.checked).map((b) => AP.dom.visibleLabel(b));
+      return { value: ticked.join(", "), signal: "native_checked" };
+    }
+
     if (kind === "buttons" && group && group.length) {
       const picked = AP.dom.pickedButton(group);
       if (!picked) return { value: "", signal: "page_class_state" };

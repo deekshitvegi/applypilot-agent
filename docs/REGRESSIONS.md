@@ -742,3 +742,16 @@ tracking system asks it plainly without.
 this box, you consent to..." is exactly the same act as "I consent to...", and
 only the second was recognised, so the first was left blank on a required box.
 *Mechanism.* Both persons count, as does "by checking" and "by submitting".
+
+**97. A list of tick boxes was read as one question per box.** "Which of these
+have you used?" followed by eight boxes became eight fields, each a checkbox
+called "OpenAI" answering to no saved fact and carrying no requirement of its
+own -- the asterisk belongs to the question above them. The whole list was left
+blank and never asked about.
+*Mechanism.* The tightest block holding two or more tick boxes and no other kind
+of control is the question; the boxes are its options. Tightest first, and a box
+belongs to one list only -- a page whose every input happens to be a tick box
+has some ancestor holding all of them, usually the body, and that ancestor is
+not a question. Two earlier attempts at this were reverted: the first would not
+parse, and the second climbed greedily and made a neighbouring Yes/No question
+come back wearing this one's name. Both cases are now tests.

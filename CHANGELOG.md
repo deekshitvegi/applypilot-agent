@@ -3,6 +3,19 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.36.0
+
+- **"Which of these have you used?" is one question.** A list of tick boxes was
+  read as one question per box -- eight fields called OpenAI, Anthropic, Llama
+  and so on, none of them answering to any saved fact and none carrying the
+  requirement, which belongs to the question above them. So the whole list was
+  left blank and never asked about. The boxes are its options now, ticking one
+  is verified from the boxes themselves, and anything already ticked is left
+  alone.
+- A lone tick box is still its own question. A page whose every input happens to
+  be a tick box has some ancestor holding all of them, and that ancestor is not
+  a question.
+
 ## 1.35.0
 
 - **Hugging Face actually appears in Settings.** It went into the catalogue last

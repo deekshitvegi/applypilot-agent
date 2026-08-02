@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Screening</title>
+<!--
+  Built from the structure of a live applicant tracking system. The question is
+  a heading beside the list, both inside the field's own block, and every box
+  is wrapped in its own label.
+
+  Read as eight separate fields, each is a checkbox called "OpenAI" that answers
+  to no saved fact and carries no requirement of its own -- the asterisk belongs
+  to the question above them -- so the whole list was left blank.
+-->
+<style>.heading._required::after { content: "*"; color: #d00; }</style>
+
+<main>
+  <div class="fieldEntry">
+    <label class="heading _required">Have you used any of the following LLM providers professionally?</label>
+    <div class="ticklist">
+      <label><input type="checkbox" name="p1"> OpenAI</label>
+      <label><input type="checkbox" name="p2"> Anthropic</label>
+      <label><input type="checkbox" name="p3"> Gemini</label>
+      <label><input type="checkbox" name="p4"> None</label>
+    </div>
+  </div>
+
+  <div class="fieldEntry">
+    <label class="heading">Do you need a work visa?</label>
+    <div class="yesno">
+      <button type="button" class="option">Yes</button>
+      <button type="button" class="option">No</button>
+    </div>
+  </div>
+
+  <div class="fieldEntry">
+    <label class="heading">Consent</label>
+    <label><input type="checkbox" name="solo"> I have read and agree to the terms</label>
+  </div>
+</main>

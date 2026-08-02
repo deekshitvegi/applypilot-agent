@@ -286,6 +286,11 @@
     const fields = [];
     const consumed = new Set();
 
+    /* A list of tick boxes under one heading is one question, so its boxes are
+       not also offered one at a time. */
+    const ticklists = checkboxChoiceFields(root);
+    for (const box of ticklists.consumed) consumed.add(box);
+
     /* Radio groups are one question with several answers. */
     const radios = controls.filter((el) => controlKind(el) === "radio");
     const byName = new Map();
@@ -350,6 +355,7 @@
       fields.push(field);
     }
 
+    for (const field of ticklists.fields) fields.push(field);
     return fields;
   }
 
@@ -495,6 +501,33 @@
    * question comes from the block around them, and what is currently chosen is
    * read from the page rather than remembered.
    */
+  /**
+   * Questions answered by ticking some of a list.
+   *
+   * The boxes are the options and the question is the block's own heading, the
+   * same way a radio group works. The boxes it used come back alongside, so they
+   * are not also offered one at a time.
+   */
+  function checkboxChoiceFields(root) {
+    const fields = [];
+    const consumed = [];
+    for (const group of D.checkboxChoices(root)) {
+      const label = groupLabel(group.boxes);
+      if (!label) continue;
+      const options = group.labels.map((text) => ({ label: text }));
+      const field = baseObservation(
+        group.boxes[0], label, D.attributeLabel(group.container), "multiselect", options
+      );
+      const ticked = group.boxes.filter((b) => b.checked).map((b) => D.visibleLabel(b));
+      field.value = ticked.join(", ");
+      field.required = group.boxes.some((b) => isRequired(b, label));
+      field.options_source = "native";
+      fields.push(field);
+      for (const box of group.boxes) consumed.push(box);
+    }
+    return { fields: fields, consumed: consumed };
+  }
+
   function buttonChoiceFields(root) {
     const out = [];
     for (const group of D.buttonChoices(root)) {
@@ -558,6 +591,17 @@
       }
     }
 
+    for (const group of D.checkboxChoices(document)) {
+      const options = group.labels.map((text) => ({ label: text }));
+      const candidate = baseObservation(
+        group.boxes[0], groupLabel(group.boxes),
+        D.attributeLabel(group.container), "multiselect", options
+      );
+      if (candidate.fingerprint === fingerprint) {
+        return { element: group.boxes[0], kind: "ticklist", group: group.boxes };
+      }
+    }
+
     for (const group of D.buttonChoices(document)) {
       const options = group.buttons.map((b) => ({ label: D.textOf(b) }));
       const candidate = baseObservation(
@@ -576,6 +620,7 @@
     confirmationText,
     controlKind,
     buttonChoiceFields,
+    checkboxChoiceFields,
     findByFingerprint,
     groupLabel,
     isRequired,

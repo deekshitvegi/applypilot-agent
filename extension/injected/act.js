@@ -520,6 +520,31 @@
     return { previous: already ? D.textOf(already) : "" };
   }
 
+  /**
+   * Answer a "which of these" question by ticking one of its boxes.
+   *
+   * Only the one asked for, and only when it is not already ticked -- ticking a
+   * ticked box clears it. Anything else already ticked stays where it is,
+   * because someone may have answered part of this themselves.
+   */
+  async function tickInList(found, desired) {
+    const boxes = found.group || [];
+    const ticked = () =>
+      boxes.filter((b) => b.checked).map((b) => D.visibleLabel(b)).join(", ");
+    const wanted = boxes.find((b) => AP.verify.same(D.visibleLabel(b), desired));
+    if (!wanted) {
+      const offered = boxes.map((b) => D.visibleLabel(b)).join(", ");
+      return {
+        failed: `"${desired}" is not one of the options here; this question offers ${offered}`,
+        previous: ticked(),
+      };
+    }
+    const before = ticked();
+    if (wanted.checked) return { outcome: "verified", changed: false, previous: before };
+    realClick(wanted);
+    return { previous: before };
+  }
+
   async function addRepeat(controlText) {
     const before = S.formElementCount();
     const button = S.pressable(controlText || S.ADD_TEXT);
@@ -673,6 +698,8 @@
       case "choose":
         if ((found.element.tagName || "").toLowerCase() === "select") {
           step = await chooseNativeOption(found, desired);
+        } else if (found.kind === "ticklist") {
+          step = await tickInList(found, desired);
         } else if (found.kind === "buttons") {
           step = await chooseButton(found, desired);
         } else if (found.kind === "radio") {
