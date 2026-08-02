@@ -3,6 +3,15 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.47.0
+
+- **"Unrecognised page" on a form that is plainly a form.** When the form sits
+  inside a frame, the frame's verdict only counted if it was exactly
+  "application". A page asking you to create an account calls itself a
+  registration, so its verdict was thrown away and the empty top frame's
+  "unknown" stood instead -- and all thirty-three of its fields were skipped.
+  The frame holding the fields decides what the page is, whatever it decided.
+
 ## 1.46.0
 
 - **A dropdown is never a text box.** Where a select's choices could not be read

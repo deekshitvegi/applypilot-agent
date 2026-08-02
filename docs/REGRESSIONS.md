@@ -847,3 +847,12 @@ does nothing at all, so every one of those was unanswerable.
 *Mechanism.* A choice control never renders a text box. When its options cannot
 be read the panel says so, hides Save, and scrolls the control into view, so the
 one thing that does work is the thing offered.
+
+**108. A form inside a frame read as an unrecognised page.** Frames are merged
+by taking the top frame's verdict and letting a child override it -- but only if
+the child said exactly "application". A page whose form sits in a frame and
+calls itself a registration, which is what a page asking you to make an account
+is, had its verdict discarded, and the empty top frame's "unknown" stood. Every
+one of its thirty-three fields was then skipped.
+*Mechanism.* The frame holding the fields decides what the page is, whatever it
+decided. An empty frame still changes nothing.

@@ -147,9 +147,18 @@ async function scanTab(tabId) {
       field.frame = String(entry.frameId);
       merged.fields.push(field);
     }
-    if (entry.frameId !== top.frameId && entry.value.kind === "application") {
-      merged.kind = "application";
-      merged.notes.push("the application is inside a frame on this page");
+    // The frame holding the fields decides what the page is. Only "application"
+    // used to count, so a form inside a frame that called itself a registration
+    // -- which is what a page asking you to make an account is -- had its
+    // verdict thrown away, and the empty top frame's "unknown" stood instead.
+    // Thirty-three fields were then read as an unrecognised page and skipped.
+    if (
+      entry.frameId !== top.frameId &&
+      entry.value.kind !== "unknown" &&
+      (merged.kind === "unknown" || entry.value.kind === "application")
+    ) {
+      merged.kind = entry.value.kind;
+      merged.notes.push(`the ${entry.value.kind} is inside a frame on this page`);
     }
   }
 
