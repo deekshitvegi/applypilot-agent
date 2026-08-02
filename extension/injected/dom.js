@@ -207,10 +207,30 @@
     return true;
   }
 
+  /*
+   * What a person can read on an element.
+   *
+   * innerText is the rendered text and already leaves scripts out. It is empty
+   * for anything not being laid out, though, and the fallback to textContent
+   * takes everything -- including the source of any <script> inside. A resume
+   * dropzone with a LinkedIn widget in it came back labelled
+   * "api_key: 78vjko9pszx261 extensions:AwliWidget@https://..." and was offered
+   * to the applicant as the name of a field.
+   */
+  const NOT_READABLE = "script,style,noscript,template,svg";
+
   function textOf(el) {
     if (!el) return "";
-    const text = el.innerText || el.textContent || "";
-    return text.replace(/\s+/g, " ").trim();
+    if (el.innerText) return el.innerText.replace(/\s+/g, " ").trim();
+    const raw = el.textContent || "";
+    if (!raw) return "";
+    // Only pay for the clone where there is something in there to strip.
+    if (el.querySelector && el.querySelector(NOT_READABLE)) {
+      const clone = el.cloneNode(true);
+      clone.querySelectorAll(NOT_READABLE).forEach((node) => node.remove());
+      return (clone.textContent || "").replace(/\s+/g, " ").trim();
+    }
+    return raw.replace(/\s+/g, " ").trim();
   }
 
   /* --------------------------------------------------------------- labels */
@@ -254,8 +274,17 @@
   const DECORATION_ONLY =
     /^[\s*†‡•()[\]{}:;.,\-–—_|]*(required|optional|mandatory|req)?[\s*†‡•()[\]{}:;.,\-–—_|]*$/i;
 
+  //: A word that joins two things rather than naming one. An upload area
+  //: offering LinkedIn, Dropbox, "or", and a Select File button gave the
+  //: file control the label "or" -- so nothing matched it, it was read as
+  //: an optional extra, and the resume was never attached.
+  const JOINING_WORD = /^(or|and|either|neither|nor|plus|also|of|to|from|with)$/i;
+
   function isDecoration(text) {
-    return !text || DECORATION_ONLY.test(String(text).trim());
+    const plain = String(text || "").trim();
+    if (!plain || DECORATION_ONLY.test(plain)) return true;
+    // A word on its own that joins rather than names is not a label.
+    return JOINING_WORD.test(plain);
   }
 
   function referencedText(el, attribute) {

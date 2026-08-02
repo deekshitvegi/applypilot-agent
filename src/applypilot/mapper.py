@@ -215,6 +215,39 @@ _NEVER_A_SENTENCE_TOPIC = frozenset(
 )
 
 
+#: The facts that are a file rather than a value, and the words a form uses
+#: when it is asking for each.
+_DOCUMENT_FACTS: tuple[tuple[str, str], ...] = (
+    ("cover_letter", r"cover\s*letter|covering\s*letter|motivation\s*letter"),
+    ("resume", r"\bresum|\bcv\b|curriculum\s+vitae"),
+)
+
+
+def document_wanted(field: FieldObservation) -> str:
+    """Which document a file control is asking for, read from what it says.
+
+    A dropzone is labelled with the sentence that explains it -- "Make
+    completing your job application easier by uploading your resume or CV" --
+    and that is not a phrase any alias lines up with, nor a question, so none
+    of the ordinary rules reached it and the resume went unattached on a form
+    that said what it wanted in plain words.
+
+    Only for a control that takes a file. Nothing is typed into one, so the
+    worst a wrong answer can do is attach a document to the wrong slot -- and
+    the cover letter is looked for first, because a page offering both says
+    "cover letter" on one of them and "resume or CV" on the other.
+    """
+    if field.control is not ControlKind.FILE:
+        return ""
+    text = " ".join(
+        part for part in (field.display_label, field.attr_label, field.section) if part
+    )
+    for key, pattern in _DOCUMENT_FACTS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return key
+    return ""
+
+
 def _question_score(alias: str, label: str, winners: frozenset[str]) -> tuple[int, str]:
     """Score a sentence question that this fact's own subject dominates.
 
@@ -789,6 +822,20 @@ def resolve_field(
     match = best_fact(field)
     spec = match.spec if match else None
 
+    # A dropzone explains itself in a sentence rather than naming itself, and
+    # no phrase rule lines up with one. What it is asking for is still plain to
+    # read, and a file control can only ever be asking for a document.
+    if spec is None:
+        wanted = document_wanted(field)
+        if wanted:
+            spec = BY_KEY[wanted]
+            match = FactMatch(
+                spec=spec,
+                score=SCORE_LEADING_QUALIFIED,
+                alias=wanted,
+                reason="a file control asking for this document in so many words",
+            )
+
     if spec and spec.key in DEMOGRAPHIC_KEYS and not profile.answer_demographics:
         return Resolution(
             field=field,
@@ -819,6 +866,23 @@ def resolve_field(
                 f"none of the options offered here match your saved answer '{value}'",
                 profile,
             ),
+            fact_key=spec.key,
+        )
+
+    # A document a form offers to take is never an optional extra.
+    #
+    # Plenty of applications mark the resume upload optional, and it was then
+    # skipped in silence -- on a page whose own words were "make completing
+    # your job application easier by uploading your resume". Attaching the
+    # resume is the point of the exercise, so it is put forward whether or not
+    # the form insists, and the panel attaches the one on file without asking
+    # anybody anything.
+    if spec is not None and spec.key in {key for key, _ in _DOCUMENT_FACTS}:
+        if _already_answered(field):
+            return Resolution(field=field, skipped="already attached on the page")
+        return Resolution(
+            field=field,
+            question=_ask(field, spec.key, "a document this form will take", profile),
             fact_key=spec.key,
         )
 

@@ -1236,3 +1236,23 @@ the field, which is the only thing there is to do with it. No fact key goes
 with the answer: a question about one employer belongs to that question rather
 than to the profile, so it is remembered against this wording and used again
 wherever it is asked.
+
+**143. The resume upload was labelled "or", and skipped.** An upload area
+offering LinkedIn, Dropbox, "or", and a Select File button gave the file
+control the label "or" -- the word between two buttons. Nothing matched it, it
+was read as an optional extra, and the resume was never attached.
+*Three things, in order.* A word on its own that joins rather than names is not
+a label. Then the search reached further out and found the LinkedIn widget's
+script, because `textContent` includes the source of any `<script>` inside --
+the field came back called "api_key: 78vjko9pszx261 extensions:AwliWidget@...";
+only what a person can read counts now. Then the real label turned out to be
+the sentence that explains the dropzone, "Make completing your job application
+easier by uploading your resume or CV", which is neither a phrase any alias
+lines up with nor a question, so no rule reached it. A file control can only be
+asking for a document, and which one is plain to read; the cover letter is
+looked for first, because a page offering both says "cover letter" on one and
+"resume or CV" on the other.
+*And a document a form will take is never an optional extra.* Plenty of
+applications leave the resume unmarked, and it was skipped in silence.
+Attaching it is the point of the exercise, so it is put forward whether or not
+the form insists.
