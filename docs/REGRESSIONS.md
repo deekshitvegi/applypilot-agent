@@ -755,3 +755,20 @@ has some ancestor holding all of them, usually the body, and that ancestor is
 not a question. Two earlier attempts at this were reverted: the first would not
 parse, and the second climbed greedily and made a neighbouring Yes/No question
 come back wearing this one's name. Both cases are now tests.
+
+**98. A required list of tick boxes read as optional.** The marker belongs to
+the question above the whole list, which from any single box is two levels up --
+one further than the marker search reaches. So the list was grouped correctly,
+shown as one question, and then skipped as an optional extra nobody had to
+answer.
+*Mechanism.* Required is asked of the list's own container, not of a box inside
+it. The same now goes for a group of buttons.
+
+**99. One box asking for several addresses was left blank.** "Please provide
+links to your GitHub, portfolio, demo, or AI projects" is about GitHub and about
+a portfolio, so neither fact can claim it -- and every address it asked for was
+sitting in the profile.
+*Mechanism.* A box that asks for links and names more than one of them gets each
+saved address written out with what it is. Only addresses already entered, only
+the ones the question names, and a box asking for a GitHub URL alone is still
+the GitHub field and takes the ordinary path.

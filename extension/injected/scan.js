@@ -520,7 +520,12 @@
       );
       const ticked = group.boxes.filter((b) => b.checked).map((b) => D.visibleLabel(b));
       field.value = ticked.join(", ");
-      field.required = group.boxes.some((b) => isRequired(b, label));
+      // Asked of the list, not of one box in it. The marker belongs to the
+      // question above the whole list, which from any single box is two levels
+      // up and one further than the marker search reaches -- so a required
+      // list read as optional and was skipped without ever being asked about.
+      field.required =
+        isRequired(group.container, label) || group.boxes.some((b) => isRequired(b, label));
       field.options_source = "native";
       fields.push(field);
       for (const box of group.boxes) consumed.push(box);
@@ -540,7 +545,9 @@
       );
       const picked = D.pickedButton(buttons);
       field.value = picked ? D.textOf(picked) : "";
-      field.required = buttons.some((b) => isRequired(b, label));
+      // Of the group, for the same reason a tick list is asked of its list.
+      field.required =
+        isRequired(group.container, label) || buttons.some((b) => isRequired(b, label));
       field.options_source = "native";
       out.push(field);
     }

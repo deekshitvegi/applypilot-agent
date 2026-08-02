@@ -3,6 +3,20 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.37.0
+
+- **The required tick list is asked about.** Last version grouped it correctly
+  into one question and then skipped it as optional: the marker belongs to the
+  question above the whole list, which from any single box is one level further
+  up than the marker search reaches. Required is asked of the list itself now,
+  and of a group of buttons the same way.
+- **"Please provide links to your GitHub, portfolio, demo, or AI projects" gets
+  filled.** It is about GitHub and about a portfolio at once, so neither fact
+  could claim it and it sat blank while every address it asked for was in your
+  profile. Each saved address the question names is written out with what it is
+  -- one per line in a textarea. Only what you entered, only what was asked for,
+  and a box wanting a GitHub URL alone is still the GitHub field.
+
 ## 1.36.0
 
 - **"Which of these have you used?" is one question.** A list of tick boxes was

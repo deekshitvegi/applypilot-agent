@@ -23,9 +23,14 @@ def field(page, control: str):
     return next(f for f in observe(page).fields if f.control == control)
 
 
+def providers(page):
+    """The LLM providers list. There is more than one list on this page."""
+    return next(f for f in observe(page).fields if "LLM providers" in (f.label or ""))
+
+
 def test_the_list_is_one_question_with_its_own_options(open_fixture):
     page = open_fixture("tick_lists.html")
-    got = field(page, "multiselect")
+    got = providers(page)
     assert got.label == "Have you used any of the following LLM providers professionally?"
     assert [o.label for o in got.options] == ["OpenAI", "Anthropic", "Gemini", "None"]
 
@@ -56,7 +61,7 @@ def test_the_question_beside_it_keeps_its_own_name(open_fixture):
 
 def test_ticking_one_is_verified_from_the_boxes(open_fixture):
     page = open_fixture("tick_lists.html")
-    got = field(page, "multiselect")
+    got = providers(page)
     result = page.evaluate(
         "async (a) => await ApplyPilot.act.perform(a)",
         {"kind": "choose", "fingerprint": got.fingerprint, "option_label": "Anthropic"},
@@ -69,7 +74,7 @@ def test_ticking_one_is_verified_from_the_boxes(open_fixture):
 
 def test_ticking_it_again_does_not_clear_it(open_fixture):
     page = open_fixture("tick_lists.html")
-    got = field(page, "multiselect")
+    got = providers(page)
     action = {"kind": "choose", "fingerprint": got.fingerprint, "option_label": "Anthropic"}
     page.evaluate("async (a) => await ApplyPilot.act.perform(a)", action)
     again = page.evaluate("async (a) => await ApplyPilot.act.perform(a)", action)
@@ -79,7 +84,7 @@ def test_ticking_it_again_does_not_clear_it(open_fixture):
 
 def test_an_option_it_does_not_offer_is_refused(open_fixture):
     page = open_fixture("tick_lists.html")
-    got = field(page, "multiselect")
+    got = providers(page)
     result = page.evaluate(
         "async (a) => await ApplyPilot.act.perform(a)",
         {"kind": "choose", "fingerprint": got.fingerprint, "option_label": "Cohere"},
@@ -91,10 +96,32 @@ def test_an_option_it_does_not_offer_is_refused(open_fixture):
 def test_something_already_ticked_is_left_where_it_is(open_fixture):
     page = open_fixture("tick_lists.html")
     page.evaluate("() => document.querySelector('[name=p1]').click()")
-    got = field(page, "multiselect")
+    got = providers(page)
     page.evaluate(
         "async (a) => await ApplyPilot.act.perform(a)",
         {"kind": "choose", "fingerprint": got.fingerprint, "option_label": "Gemini"},
     )
     assert page.evaluate("() => document.querySelector('[name=p1]').checked") is True
     assert page.evaluate("() => document.querySelector('[name=p3]').checked") is True
+
+
+def test_a_list_marked_required_is_required(open_fixture):
+    """The marker belongs to the question above the whole list.
+
+    From any single box that is two levels up -- one further than the marker
+    search reaches -- so a required list read as optional and was skipped
+    without ever being asked about. It is asked of the list now.
+    """
+    page = open_fixture("tick_lists.html")
+    got = next(
+        f for f in observe(page).fields if "LLM providers" in (f.label or "")
+    )
+    assert got.required is True
+
+
+def test_a_list_that_is_not_marked_stays_optional(open_fixture):
+    page = open_fixture("tick_lists.html")
+    got = next(
+        f for f in observe(page).fields if "happy to be contacted" in (f.label or "")
+    )
+    assert got.required is False

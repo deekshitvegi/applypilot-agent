@@ -481,6 +481,53 @@ _AGREEMENT_RE = re.compile(
 )
 
 
+#: The facts that are a link to somewhere, the words a form uses to ask for
+#: each, and what to call it when several are written out together.
+_LINK_FACTS: tuple[tuple[str, tuple[str, ...], str], ...] = (
+    ("github", ("github",), "GitHub"),
+    ("website", ("portfolio", "website", "personal site", "web site"), "Portfolio"),
+    ("linkedin", ("linkedin",), "LinkedIn"),
+    ("huggingface", ("huggingface", "hugging face"), "Hugging Face"),
+)
+
+#: A box asking for somewhere to look, rather than for one particular address.
+_ASKS_FOR_LINKS = re.compile(r"\b(links?|urls?|profiles?)\b", re.IGNORECASE)
+
+
+def composed_links(field: FieldObservation, profile: Profile) -> str:
+    """Several saved links written out as one answer.
+
+    "Please provide links to your GitHub, portfolio, demo, or AI projects" is
+    one box wanting several things, and no single fact answers it -- so it was
+    left blank while every address it asked for sat in the profile.
+
+    Only addresses that are saved, each labelled with what it is, and only when
+    the question names more than one of them. A box asking for a GitHub URL and
+    nothing else is still the GitHub field and is left to the ordinary path.
+    Nothing here writes anything the applicant did not enter themselves.
+    """
+    if field.control not in {ControlKind.TEXT, ControlKind.TEXTAREA, ControlKind.URL}:
+        return ""
+    label = normalise(field.display_label)
+    if not label or not _ASKS_FOR_LINKS.search(label):
+        return ""
+
+    named = [
+        (key, title)
+        for key, words, title in _LINK_FACTS
+        if any(word in label for word in words)
+    ]
+    if len(named) < 2:
+        return ""
+
+    parts = [f"{title}: {profile.fact(key)}" for key, title in named if profile.fact(key)]
+    if not parts:
+        return ""
+    # A textarea has room for a line each; a single-line box does not.
+    separator = "\n" if field.control is ControlKind.TEXTAREA else " · "
+    return separator.join(parts)
+
+
 def is_agreement(field: FieldObservation) -> bool:
     """True when this is a box asking you to agree to something."""
     if field.control is not ControlKind.CHECKBOX:
@@ -518,6 +565,21 @@ def resolve_field(
             field=field,
             question=_ask(
                 field, "", "your saved answer is not one of the options offered here", profile
+            ),
+        )
+
+    links = composed_links(field, profile)
+    if links:
+        return Resolution(
+            field=field,
+            answer=Answer(
+                fingerprint=field.fingerprint,
+                label=pretty_label(field.display_label),
+                value=links,
+                source=AnswerSource.PROFILE,
+                fact_key="",
+                confidence=0.9,
+                reason="the addresses you have saved, for each thing this asks about",
             ),
         )
 
