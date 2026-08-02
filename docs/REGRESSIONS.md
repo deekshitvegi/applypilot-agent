@@ -1078,3 +1078,38 @@ everything except the password.
 The plan already knows: it holds nothing to do on a job list or a posting, and
 something to do wherever there is. Decided by the same function the button
 uses, so there is no second rule to drift from the first.
+
+**128. "Current/Last Employer" answered with the job before the current one.**
+A history fact outside a repeating block took the first record stored, and the
+order things were written down in is not an answer to which job you are in now.
+*Mechanism.* A form asking for one employer without a block to put several in
+is asking for the current one, and one school means the last one attended. The
+record marked current wins; failing that, the latest to finish. Inside a block
+the page has said which entry it means, and that is still obeyed.
+
+**129. A veteran answer spelled out in full was refused by a Yes/No control.**
+One form asks the question in a sentence and offers the statute back as the
+answer; the next asks the same thing and offers Yes and No. The saved wording
+"No, I am not a veteran under one of the classifications listed above" was not
+among Yes and No, so a required question was left that nobody could clear.
+*Mechanism.* An answer that opens by saying which it is has already answered a
+Yes/No control. Only the first word counts -- a sentence merely containing "no"
+somewhere has settled nothing, and "Notarised" is not "No". Scored below an
+ordinary wording match, so a control that really does offer the full statute
+still gets the full statute.
+
+**130. Money written the way people write money was not a number.** A currency
+mark defeated the number parser and the separators between thousands defeated
+the band parser, so a saved salary never became a number and never fell inside
+a band. Every banded salary question on every form was refused -- "$100000" is
+not among "$50,000 - $74,999", "$75,000 - $99,999", "$100,000 - $124,999".
+*Mechanism.* The dress is not the number. Currency marks and thousands
+separators are removed before parsing, on both sides, and only where they were
+all that stood in the way: "25-35" is a band and must not become 2535 by having
+its middle taken out. "Region 25-35" is still a place.
+
+**131. Three questions every form asks had nothing to answer them with.**
+"Willingness to Travel" had no fact at all. "Higher Education Level" is a level
+rather than the name of a school or the title of a degree, so no education
+record field answered it. "Willingness to Relocate" was not among the wordings
+for relocating, though "Willing to relocate" was.

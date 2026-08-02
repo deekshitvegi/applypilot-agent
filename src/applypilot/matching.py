@@ -135,6 +135,31 @@ ACCEPT_THRESHOLD = 400
 #: tie is still a question rather than a coin flip.
 BAND_SCORE = 700
 
+#: A saved answer that opens by saying yes or no, offered a control that wants
+#: only yes or no. Above the accept threshold because it is not a guess -- the
+#: answer says which it is in its first word -- and below an ordinary wording
+#: match, so a control that really does offer the full statute still wins it.
+SAME_ANSWER_SHORTER = 500
+
+#: An answer whose first word settles it. Kept to exactly that: a sentence that
+#: merely contains "no" somewhere has settled nothing.
+_OPENS_YES_NO = re.compile(r"^\s*(yes|no)\b", re.IGNORECASE)
+
+
+def _opens_with_yes_or_no(desired: str) -> str:
+    """"No" or "yes" when the answer begins with it, otherwise "".
+
+    Only when there is more to the answer than the word itself -- a saved
+    answer of exactly "No" is matched perfectly well by the ordinary path, and
+    this one exists for the long-form wordings the equal-opportunity questions
+    use.
+    """
+    text = (desired or "").strip()
+    match = _OPENS_YES_NO.match(text)
+    if not match or len(text) <= len(match.group(1)) + 1:
+        return ""
+    return match.group(1).lower()
+
 
 @dataclass(frozen=True)
 class OptionMatch:
@@ -223,9 +248,25 @@ _BAND_UNIT_RE = re.compile(
 )
 
 
+#: How money is written down, as opposed to how a number is. A currency mark
+#: in front and separators between the thousands: "$100,000", "£75,000",
+#: "₹12,00,000". None of it changes the number, and all of it defeated the
+#: parser -- so a saved salary never became a number and never fell inside a
+#: band, and every banded salary question on every form was refused.
+_MONEY_DRESS_RE = re.compile(r"[$£€¥₹,\s]")
+
+
 def _as_number(text: str) -> float | None:
-    match = _NUMBER_RE.match(str(text or ""))
-    return float(match.group(1)) if match else None
+    raw = str(text or "")
+    match = _NUMBER_RE.match(raw)
+    if match:
+        return float(match.group(1))
+    bare = _MONEY_DRESS_RE.sub("", raw)
+    # Only when the dress was all that stood in the way. "25-35" is a band,
+    # not a number, and must not become 2535 by having its middle removed.
+    if bare and bare != raw and _NUMBER_RE.match(bare):
+        return float(bare)
+    return None
 
 
 def band_contains(label: str, value: float) -> bool:
@@ -237,6 +278,10 @@ def band_contains(label: str, value: float) -> bool:
     band counts -- "Region 25-35" is a place, not a range.
     """
     text = _BAND_UNIT_RE.sub("", normalise(label)).strip()
+    # A band of money is still a band. The currency marks and the separators
+    # between thousands are how it is written, not part of the arithmetic.
+    text = re.sub(r"[$£€¥₹]", "", text)
+    text = re.sub(r"(?<=\d),(?=\d{2,3}\b)", "", text).strip()
     for pattern, shape in _BAND_PATTERNS:
         found = re.match(pattern, text, re.IGNORECASE)
         if not found:
@@ -273,6 +318,16 @@ def rank_options(
             # The same fact, asked at a different resolution.
             score = BAND_SCORE
             reason = f"{desired} falls inside {option.label}"
+        if score <= 0:
+            plain = _opens_with_yes_or_no(desired)
+            if plain and normalise(option.label) == plain:
+                # The same question, asked shorter. One form spells the veteran
+                # question out in full and offers the statute back as the
+                # answer; the next offers Yes and No. An answer beginning "No,
+                # I am not..." has already said which it is, and refusing it
+                # left a required question nobody could clear.
+                score = SAME_ANSWER_SHORTER
+                reason = f'"{desired[:40]}" begins by saying {option.label}'
         if score <= 0:
             continue
         ranked.append(OptionMatch(option=option, score=score, reason=reason))

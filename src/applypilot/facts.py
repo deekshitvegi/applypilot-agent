@@ -262,10 +262,34 @@ FACTS: tuple[FactSpec, ...] = (
     _f(
         "willing_to_relocate", "are you willing to relocate", "willing to relocate",
         "open to relocation", "relocation", "would you relocate",
-        "willing to relocate for this role",
+        "willing to relocate for this role", "willingness to relocate",
         kind="choice", choices=YES_NO,
         topics=("relocate", "relocation"),
         prompt="Are you willing to relocate?", onboarding_group="preferences",
+    ),
+    _f(
+        # Asked as often as relocation is, and by the same forms, but there was
+        # nothing here to answer it with -- so it was left blank every time.
+        "willing_to_travel", "willingness to travel", "willing to travel",
+        "are you willing to travel", "travel", "travel requirement",
+        "amount of travel", "percentage of travel", "travel percentage",
+        kind="choice", supplementary=True,
+        topics=("travel",),
+        prompt="How much travel are you willing to do?",
+        help_text="Some forms ask yes or no, others ask for a percentage.",
+        onboarding_group="preferences",
+    ),
+    _f(
+        # "Higher Education Level" is a level, not the name of a school or the
+        # title of a degree, so neither education record field answered it.
+        "highest_education", "highest education level", "higher education level",
+        "education level", "highest level of education", "level of education",
+        "highest degree", "highest degree earned", "highest qualification",
+        "education completed",
+        kind="choice", supplementary=True,
+        topics=("education",),
+        prompt="Highest level of education completed",
+        onboarding_group="preferences",
     ),
     _f(
         "notice_period", "notice period", "notice", "how much notice",
