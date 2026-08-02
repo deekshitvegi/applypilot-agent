@@ -3,6 +3,15 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.33.0
+
+- **A required marker drawn by CSS still counts.** The red asterisk on one
+  applicant tracking system is not in the text at all -- the label reads "Have
+  you used Node.js professionally?" and carries a class saying it is required.
+  The marker search looked at text, found none, and every screening question on
+  the form read as optional: left blank, never asked about. A neighbouring
+  element whose class says required now counts as the marker.
+
 ## 1.32.0
 
 - **Questions answered by pressing a button are questions now.** One widely

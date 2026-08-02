@@ -18,6 +18,8 @@
 <style>
   .option { padding: 8px 24px; border: 1px solid #ccc; background: #fff; }
   .option.picked { border-color: #33f; }
+  /* The marker is drawn, not written. */
+  .heading._required::after { content: "*"; color: #d00; }
 </style>
 
 <main>
@@ -32,7 +34,7 @@
   </div>
 
   <div class="fieldEntry">
-    <label class="heading">Do you have at least 3 years of professional experience?</label>
+    <label class="heading _required">Do you have at least 3 years of professional experience?</label>
     <div class="yesno">
       <button type="button" class="option">Yes</button>
       <button type="button" class="option">No</button>

@@ -717,3 +717,12 @@ to be a button found nothing at all. Navigation is excluded by wording, because
 Back beside Next is the same shape and is not a question. What is chosen is read
 from the page: aria where the page says so, otherwise the one class the chosen
 button carries that its siblings do not.
+
+**93. Every screening question on a form read as optional.** The red asterisk on
+one applicant tracking system is drawn by CSS, not written in the text -- the
+label says only "Have you used Node.js professionally?" and carries a class
+saying it is required. So the marker search, which looked at text, found
+nothing, and seven required questions were left blank without ever being asked
+about.
+*Mechanism.* A neighbouring element whose class says required counts as the
+marker, the same as a written asterisk would, and "not-required" still does not.

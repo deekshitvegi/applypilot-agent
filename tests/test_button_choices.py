@@ -91,3 +91,20 @@ def test_the_question_it_asks_is_the_one_above_the_buttons(open_fixture):
     page = open_fixture("button_choices.html")
     field = question(page, "3 years")
     assert field.label == "Do you have at least 3 years of professional experience?"
+
+
+def test_a_marker_drawn_by_css_still_makes_it_required(open_fixture):
+    """The asterisk is not in the text: the class is the only thing that says so.
+
+    Every screening question on one real form is marked this way, so all of
+    them read as optional, were left blank, and were never asked about.
+    """
+    page = open_fixture("button_choices.html")
+    field = question(page, "3 years")
+    assert "*" not in (field.label or ""), "the marker is drawn, not written"
+    assert field.required is True
+
+
+def test_a_question_with_no_marker_is_still_optional(open_fixture):
+    page = open_fixture("button_choices.html")
+    assert question(page, "prefer to work").required is False

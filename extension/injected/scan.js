@@ -68,6 +68,16 @@
       for (const child of parent.children) {
         if (child === node || child.contains(el)) continue;
         if (child.querySelector("input,select,textarea")) continue;
+        // The marker is not always a character. One applicant tracking system
+        // draws its red asterisk with CSS and says so only in a class name, so
+        // every required question on the form read as optional and was left
+        // blank without ever being asked about.
+        if (
+          /(^|[^a-z])required($|[^a-z])/i.test(child.className || "") &&
+          !/not-?required|non-?required/i.test(child.className || "")
+        ) {
+          return true;
+        }
         const text = D.textOf(child);
         // Short and decorative: a marker, not "* indicates a required field".
         if (text && text.length <= 20 && /[*]|\b(required|mandatory)\b/i.test(text)) return true;
