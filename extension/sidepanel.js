@@ -635,12 +635,15 @@ async function renderQuestion() {
   }
 }
 
-/* A control's own "Choose" row is furniture, not an answer. */
-const PLACEHOLDER_LABEL =
-  /^(|-+|no selection|none selected|not selected|select|select.*|please select.*|choose|choose.*|pick one|--.*--|n\/?a)$/i;
-
+/* A control's own "Choose" row is furniture, not an answer.
+ *
+ * Read from the one shared list. The copy that used to live here fell behind
+ * the other two and tested the label exactly as written, so the em dashes a
+ * form decorates with defeated it: "— Make a Selection —" was not "make a
+ * selection", matched nothing, and was offered as an answer to pick. Pressing
+ * it did nothing, because it is not an answer -- it is the control asking. */
 function isPlaceholderLabel(label) {
-  return PLACEHOLDER_LABEL.test(String(label || "").trim());
+  return ApplyPilotPlaceholders.looksLikePlaceholder(label);
 }
 
 /** Put the resume on file into a file control, and verify it went in. */

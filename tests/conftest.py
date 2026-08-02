@@ -11,10 +11,15 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
-INJECTED_DIR = Path(__file__).resolve().parents[1] / "extension" / "injected"
+EXTENSION = Path(__file__).resolve().parents[1] / "extension"
+INJECTED_DIR = EXTENSION / "injected"
 
 #: Load order matters: each file reads the namespaces below it at load time.
+#: placeholders.js is not in injected/ because the panel loads it too -- one
+#: list of what counts as a control's own "Choose one" row, rather than a copy
+#: in each place that can drift.
 INJECTED_ORDER = ("dom.js", "surface.js", "verify.js", "scan.js", "act.js")
+SHARED_FIRST = (EXTENSION / "placeholders.js",)
 
 
 @pytest.fixture(scope="session")
@@ -44,6 +49,8 @@ def open_fixture(playwright_browser):
         page.route("http://**", lambda route: route.abort())
         page.route("https://**", lambda route: route.abort())
         page.goto((FIXTURES / name).as_uri())
+        for shared in SHARED_FIRST:
+            page.add_script_tag(path=str(shared))
         for filename in INJECTED_ORDER:
             page.add_script_tag(path=str(INJECTED_DIR / filename))
         return page

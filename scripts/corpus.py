@@ -39,6 +39,9 @@ SEEDS = Path(__file__).parent / "corpus_seeds.json"
 
 INJECTED_DIR = ROOT / "extension" / "injected"
 INJECTED_ORDER = ("dom.js", "surface.js", "verify.js", "scan.js", "act.js")
+#: Loaded before them, and by the panel too: one list of what counts as a
+#: control's own "Choose one" row, rather than a copy in each place.
+SHARED_FIRST = (ROOT / "extension" / "placeholders.js",)
 
 USER_AGENT = "ApplyPilot-corpus/1.0 (+https://github.com/deekshitvegi/applypilot-agent)"
 
@@ -208,7 +211,8 @@ def capture(limit: int, timeout: int) -> None:
 
     targets = json.loads(TARGETS.read_text(encoding="utf-8"))[:limit]
     FORMS.mkdir(parents=True, exist_ok=True)
-    scripts = [(INJECTED_DIR / name).read_text(encoding="utf-8") for name in INJECTED_ORDER]
+    scripts = [path.read_text(encoding="utf-8") for path in SHARED_FIRST]
+    scripts += [(INJECTED_DIR / name).read_text(encoding="utf-8") for name in INJECTED_ORDER]
 
     done = failed = 0
     with sync_playwright() as playwright:

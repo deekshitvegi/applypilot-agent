@@ -13,6 +13,9 @@
 const NO_CONTROL = "the control is no longer on the page";
 
 const INJECTED = [
+  // First: the panel loads this too, so that what counts as a control's own
+  // "Choose one" row is one list rather than three that drift apart.
+  "placeholders.js",
   "injected/dom.js",
   "injected/surface.js",
   "injected/verify.js",

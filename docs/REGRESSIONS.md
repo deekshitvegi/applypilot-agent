@@ -1125,3 +1125,22 @@ instead of tried again. The question says what was tried -- "the control would
 not take X, please pick one" -- and carries the control's own choices, because
 "this needs you" over a control is not a question anybody can act on. Nothing
 refused, nothing changes.
+
+**133. The panel offered a control's own "Choose one" row as an answer to
+pick.** There were three copies of the list of what counts as a placeholder --
+service, injected verifier, panel. Two were kept up to date and the panel's was
+not. Worse, it tested the label exactly as written: the em dashes a form
+decorates with are not part of the word, so "— Make a Selection —" was not
+"make a selection", matched nothing, and was drawn as a button. Pressing it did
+nothing, because it is not an answer. It is the control asking.
+*Mechanism.* One list, in `extension/placeholders.js`, with no dependencies so
+the panel and the page can both load it. Decoration is taken off before
+matching: every kind of dash, and the marks a form marks required with. The
+Python side and the JavaScript side are held to the same answers by test, so
+they cannot drift again without something going red.
+
+**134. Two new facts could never be given a value.** "Willingness to Travel"
+and "Higher Education Level" were added as supplementary, which means both
+"leave blank rather than ask" and "do not ask for this during setup" -- so they
+were skipped on every form and there was nowhere to fill them in. Every form
+asks both.
