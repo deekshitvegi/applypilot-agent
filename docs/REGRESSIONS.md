@@ -802,3 +802,15 @@ loosened: it is still a fresh read of state the page owns, and the page still
 has to hold the answer that was asked for. Ten tests hold the other side of it,
 including that one end of a range is not the answer to anything and that a form
 showing back fewer digits than it was given has dropped some.
+
+**103. An address line that threw the address away.** Several applicant tracking
+systems build the first address line as a list of places rather than a text box.
+Filling it typed the address and then looked away, and looking away is exactly
+what discards free text there -- so the address, and the city and postcode the
+list fills in for itself, all came back empty on a page that had just been
+filled, and all three were reported as failures.
+*Mechanism.* Where a control says in its own attributes that it offers
+suggestions, its suggestions are used before looking away. Only a suggestion
+that is what was asked for: a list coming back with somewhere else entirely is
+not an answer, and the applicant is better told than guessed at. An ordinary
+text box says nothing about suggestions, so nothing waits for any.

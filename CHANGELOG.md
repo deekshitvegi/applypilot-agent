@@ -3,6 +3,18 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.42.0
+
+- **An address line that is really a list of places gets filled.** Typing the
+  address and then looking away is exactly what discards it there, so the
+  address -- and the city and postcode the list fills in for itself -- all came
+  back empty on a page that had just been filled. Where a control says in its
+  own attributes that it offers suggestions, its suggestions are used before
+  looking away, and the fields beside it arrive with the choice.
+- Only a suggestion that is what was asked for. A list coming back with
+  somewhere else entirely is not an answer, and an ordinary text box says
+  nothing about suggestions, so nothing waits for any.
+
 ## 1.41.0
 
 - **A form is allowed to write your answer its own way.** One puts a dialling

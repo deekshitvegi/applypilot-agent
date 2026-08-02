@@ -193,8 +193,56 @@
     fireInput(el);
     setNativeValue(el, value);
     fireInput(el);
+
+    // A box that looks like a text field but answers with a list. An address
+    // line that says "Enter a location" is one: type into it, look away, and it
+    // throws the text out again, because nothing was chosen from what it
+    // offered. Blurring is what discards it -- so where the control says it
+    // suggests, its suggestions are used before looking away, and the fields it
+    // fills in for itself (city, postcode, county) arrive with it.
+    if (suggests(el)) {
+      const picked = await pickSuggestion(el, value);
+      if (picked) return { changed: true, previous: reading.value };
+    }
+
     dispatch(el, "blur", FocusEvent, { bubbles: true });
     return { changed: true, previous: reading.value };
+  }
+
+  /** Whether a text box says, in its own attributes, that it offers a list. */
+  function suggests(el) {
+    if (!el || !el.getAttribute) return false;
+    if ((el.getAttribute("role") || "").toLowerCase() === "combobox") return true;
+    for (const name of ["aria-autocomplete", "aria-controls", "aria-owns", "aria-expanded"]) {
+      if (el.getAttribute(name)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Take what the box is offering, if it offers the thing that was typed.
+   *
+   * Never a different suggestion: a list that comes back with somewhere else
+   * entirely is not an answer, and the applicant is better told than guessed
+   * at. Returns false when nothing suitable appeared, and the fill then ends
+   * the ordinary way.
+   */
+  async function pickSuggestion(el, value) {
+    const popup = await waitFor(() => D.ownedPopup(el), SEARCH_TIMEOUT);
+    if (!popup) return false;
+    const rows = D.optionRows(popup).filter((row) => {
+      const text = D.textOf(row);
+      return text && !AP.verify.isPlaceholder(text);
+    });
+    if (!rows.length) return false;
+    const exact = rows.find((row) => AP.verify.same(D.textOf(row), value));
+    const leading = rows.find((row) =>
+      D.normalise(D.textOf(row)).startsWith(D.normalise(value))
+    );
+    const chosen = exact || leading;
+    if (!chosen) return false;
+    realClick(chosen);
+    return true;
   }
 
   async function chooseNativeOption(found, optionLabel) {

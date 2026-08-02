@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Address</title>
+<!--
+  An address line that is really a list of places, as several applicant
+  tracking systems build it. Type into it and look away, and it throws the text
+  out again because nothing was chosen from what it offered -- which is why the
+  address, the city and the postcode all came back empty on a page that had
+  been filled.
+
+  Choosing a suggestion is also what fills in the fields beside it.
+-->
+<main>
+  <label class="main-label">Address Line 1</label>
+  <input id="line1" role="combobox" aria-expanded="false" aria-owns="places"
+         placeholder="Enter a location" autocomplete="off">
+  <ul id="places" role="listbox" hidden></ul>
+
+  <label class="main-label">City</label>
+  <input id="city">
+
+  <label class="main-label">Zip Code</label>
+  <input id="zip">
+</main>
+
+<script>
+  const PLACES = {
+    "1710 Northstar road": { city: "Denton", zip: "76208" },
+    "1710 Northgate drive": { city: "Irving", zip: "75038" },
+  };
+  const line1 = document.getElementById("line1");
+  const list = document.getElementById("places");
+
+  line1.addEventListener("input", () => {
+    const needle = line1.value.trim().toLowerCase();
+    list.innerHTML = "";
+    const hits = Object.keys(PLACES).filter((p) => p.toLowerCase().includes(needle));
+    if (!needle || !hits.length) {
+      list.hidden = true;
+      line1.setAttribute("aria-expanded", "false");
+      return;
+    }
+    for (const place of hits) {
+      const row = document.createElement("li");
+      row.setAttribute("role", "option");
+      row.textContent = place;
+      row.addEventListener("click", () => {
+        line1.value = place;
+        document.getElementById("city").value = PLACES[place].city;
+        document.getElementById("zip").value = PLACES[place].zip;
+        list.hidden = true;
+        line1.setAttribute("aria-expanded", "false");
+      });
+      list.appendChild(row);
+    }
+    list.hidden = false;
+    line1.setAttribute("aria-expanded", "true");
+  });
+
+  // The part that loses the answer: free text is discarded on the way out.
+  line1.addEventListener("blur", () => {
+    if (!PLACES[line1.value]) line1.value = "";
+  });
+</script>
