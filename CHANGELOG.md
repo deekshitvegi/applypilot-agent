@@ -3,6 +3,14 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.39.0
+
+- **Pick as many as are true.** "Which of these have you used?" was offered as a
+  list where choosing Anthropic un-chose OpenAI, on a question whose whole point
+  is that several are true at once. Pressing an option adds it, pressing it
+  again takes it away, and each pick is ticked on the page in turn. A question
+  with one answer still replaces rather than accumulates.
+
 ## 1.38.0
 
 - **The required tick list is finally asked about.** Last version asked the

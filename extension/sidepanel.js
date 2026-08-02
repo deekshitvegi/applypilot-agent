@@ -398,28 +398,42 @@ function renderOnboardingStep(step) {
 }
 
 /** One control for a question, whatever shape the question is. */
-function buildControl(kind, choices, value) {
+function buildControl(kind, choices, value, many) {
   if (choices && choices.length) {
     const wrap = document.createElement("div");
     wrap.className = "choices" + (choices.length > 8 ? " many" : "");
-    let picked = value || "";
+    // "Which of these have you used?" is not a question with one answer.
+    // Offering it as one meant picking OpenAI and losing Anthropic, on a
+    // question whose whole point is that several are true at once.
+    const picked = new Set(value ? [value] : []);
     for (const choice of choices) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = choice;
-      if (choice === picked) button.classList.add("picked");
+      if (picked.has(choice)) button.classList.add("picked");
       button.addEventListener("click", () => {
-        picked = choice;
-        for (const other of wrap.children) other.classList.remove("picked");
-        button.classList.add("picked");
+        if (many) {
+          if (picked.has(choice)) picked.delete(choice);
+          else picked.add(choice);
+        } else {
+          picked.clear();
+          picked.add(choice);
+          for (const other of wrap.children) other.classList.remove("picked");
+        }
+        button.classList.toggle("picked", picked.has(choice));
       });
       wrap.appendChild(button);
     }
-    return { node: wrap, read: () => picked, highlight: (label) => {
-      for (const other of wrap.children) {
-        other.classList.toggle("suggested", other.textContent === label);
-      }
-    } };
+    return {
+      node: wrap,
+      read: () => Array.from(picked).join(", "),
+      readAll: () => Array.from(picked),
+      highlight: (label) => {
+        for (const other of wrap.children) {
+          other.classList.toggle("suggested", other.textContent === label);
+        }
+      },
+    };
   }
   const input = document.createElement(kind === "textarea" ? "textarea" : "input");
   if (input.tagName === "INPUT") input.type = "text";
@@ -554,10 +568,12 @@ async function renderQuestion() {
   const control = buildControl(
     choices.length ? "choice" : question.control === "textarea" ? "textarea" : "text",
     choices,
-    ""
+    "",
+    question.control === "multiselect"
   );
   host.appendChild(control.node);
   card._read = control.read;
+  card._readAll = control.readAll;
 
   const hint = el("question-hint");
   hint.classList.add("hidden");
@@ -749,12 +765,24 @@ async function answerQuestionInner(value, button, restoreLabel) {
   try {
     if (value) {
       const picking = isChoice(question.control);
-      const result = await applyAndReport({
-        kind: question.control === "checkbox" ? "check" : picking ? "choose" : "fill",
-        fingerprint: question.fingerprint,
-        value: value,
-        option_label: picking ? value : "",
-      });
+      // "Which of these have you used?" can be true of several at once, so
+      // each pick is its own action against the same control. Ticking is
+      // idempotent, so nothing already ticked gets toggled back off.
+      const wanted =
+        question.control === "multiselect" && el("question")._readAll
+          ? el("question")._readAll()
+          : [value];
+
+      let result = null;
+      for (const one of wanted) {
+        result = await applyAndReport({
+          kind: question.control === "checkbox" ? "check" : picking ? "choose" : "fill",
+          fingerprint: question.fingerprint,
+          value: one,
+          option_label: picking ? one : "",
+        });
+        if (result && result.outcome === "failed") break;
+      }
 
       if (result && result.outcome === "failed") {
         // Do not move on from something that did not go in.

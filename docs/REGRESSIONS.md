@@ -782,3 +782,11 @@ child, so there was nothing beside it to find.
 the heading inside it. Read off the live page, along with the fact that each box
 is tied to its label by for and id rather than by wrapping, which the fixture
 now does too.
+
+**101. A question with several true answers allowed one.** "Which of these have
+you used?" was offered as a list where picking Anthropic unpicked OpenAI, on a
+question whose whole point is that several are true at once.
+*Mechanism.* A multiselect toggles: pressing an option adds it, pressing it
+again takes it away, and each pick is its own action against the same control.
+Ticking is idempotent, so nothing already ticked is toggled back off. A question
+with one answer still replaces rather than accumulates.
