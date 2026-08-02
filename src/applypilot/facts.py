@@ -486,6 +486,18 @@ HISTORY_ONLY_LABELS: frozenset[str] = frozenset(
         "university name", "college name", "institution name",
         "field of study", "major", "discipline", "area of study",
         "employer", "employer name", "degree", "gpa",
+        # "Company" and "Title" on their own are things a page can ask for
+        # other reasons, which is why they are not here. Say "current" or
+        # "most recent" and the ambiguity is gone: only one job can be either.
+        "current company", "current employer", "current company name",
+        "current title", "current job title", "current position",
+        "most recent company", "most recent employer", "most recent title",
+        "most recent job title", "most recent position",
+        "most recent company name", "most recent employer name",
+        "current company name", "current employer name",
+        "current most recent company name", "current most recent job title",
+        "current or most recent company", "current or most recent employer",
+        "current or most recent job title", "current or most recent title",
     }
 )
 """Labels that can mean nothing but a history field, so they resolve without a

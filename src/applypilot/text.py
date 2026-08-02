@@ -70,6 +70,10 @@ DISTINGUISHING_MODIFIERS = frozenset(
 NEUTRAL_QUALIFIERS = frozenset(
     {
         "legal", "full", "complete", "primary", "main", "current", "present",
+        # "Most recent" names the same job "current" does. Its opposites --
+        # previous, prior, past, former -- are distinguishing modifiers,
+        # because those really are a different job.
+        "most", "recent",
         "personal", "contact", "candidate", "applicant", "employee", "official",
         "valid", "correct", "exact", "detail", "details", "info", "information",
         "field", "value", "text", "entry", "response", "answer",
@@ -124,8 +128,15 @@ PLACEHOLDER_PATTERNS = (
 _PLACEHOLDER_RE = re.compile("|".join(f"(?:{p})" for p in PLACEHOLDER_PATTERNS), re.IGNORECASE)
 
 # Decorations a form puts around a label without meaning to rename it.
+#
+# The asterisk family is wider than the one on a keyboard. Two of the largest
+# boards mark required with U+2731 HEAVY ASTERISK, which reads as a star and
+# behaves as a letter: 39 labels across the corpus carried one into matching
+# and into what the panel showed, so "Current location ✱" never met "current
+# location".
 _DECORATION_RE = re.compile(
-    r"(\(\s*(required|optional|opt|mandatory)\s*\)|\brequired\b|\boptional\b|[*†‡•]|\bmust\s+be\s+filled\b)",
+    r"(\(\s*(required|optional|opt|mandatory)\s*\)|\brequired\b|\boptional\b"
+    r"|[*†‡•✱✲✳✻✽⁎∗＊★☆]|\bmust\s+be\s+filled\b)",
     re.IGNORECASE,
 )
 

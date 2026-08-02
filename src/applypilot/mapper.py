@@ -296,7 +296,13 @@ def _wrong_kind_of_block(spec: FactSpec, field: FieldObservation) -> str:
 
 def _history_allowed(spec: FactSpec, field: FieldObservation) -> str:
     label_norm = normalise(field.display_label)
-    unmistakable = label_norm in HISTORY_ONLY_LABELS
+    # A label written "Current/Most Recent Company Name" keeps its slash
+    # through normalising, so an exact-set test never saw it. Reading it the
+    # way every other rule does -- one form per branch of the slash -- makes
+    # both spellings the same question, which is what the page meant.
+    unmistakable = label_norm in HISTORY_ONLY_LABELS or any(
+        variant in HISTORY_ONLY_LABELS for variant in alternatives(field.display_label)
+    )
     in_block = _in_history_block(field)
     wrong_kind = _wrong_kind_of_block(spec, field)
     if wrong_kind:

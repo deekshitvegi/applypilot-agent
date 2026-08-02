@@ -964,3 +964,21 @@ sponsorship, both of which the profile could have answered outright.
 search for the question now skips anything sitting inside a choice's own label,
 so it falls through to the block heading a level further out, which is where the
 question actually is. Found by capturing 35 real forms, not by meeting it.
+
+**119. The asterisk family is wider than the one on a keyboard.** Two of the
+largest boards mark a required field with U+2731 HEAVY ASTERISK, which reads as
+a star and behaves as a letter. Thirty-nine labels across the corpus carried one
+into matching and into what the panel showed, so "Current location ✱" never met
+"current location".
+*Mechanism.* The decoration set covers the family, not one character of it.
+
+**120. "Most recent employer" was a different field from "current employer".**
+Only one job can be either, and they mean the same one. "Current" was already a
+word that decorates a field name without changing which field it is; "most" and
+"recent" were not, so a label using them matched nothing at all. Their opposites
+-- previous, prior, past, former -- stay distinguishing, because those really
+are a different job.
+*Mechanism.* "Most" and "recent" join the neutral qualifiers. Separately, a
+label written "Current/Most Recent Company Name" keeps its slash through
+normalising, so an exact-set test never saw it; the unmistakable-history test
+now reads it the way every other rule does, one form per branch of the slash.
