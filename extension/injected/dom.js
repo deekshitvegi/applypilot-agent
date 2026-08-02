@@ -497,6 +497,69 @@
   //: and a half seconds.
   const BIGGEST_ENTRY = 24;
 
+  /**
+   * A choice drawn as a row of buttons.
+   *
+   * One widely used applicant tracking system renders every Yes/No question as
+   * two bare <button> elements -- no role, no name, no value, not even an
+   * aria-checked, only class names. Nothing about them says "control", so a
+   * whole section of questions was invisible: not unanswered, never seen.
+   *
+   * What identifies one is the shape: a container whose children are all
+   * buttons, two or more of them, each carrying a short label. Navigation is
+   * excluded by name, because Back and Next sitting side by side is the same
+   * shape and is not a question.
+   */
+  const NOT_A_CHOICE = /^(back|next|previous|continue|submit|save|cancel|close|apply|skip|add|remove|delete|edit|upload|browse)\b/i;
+
+  function buttonChoices(root) {
+    const groups = [];
+    const seen = new Set();
+    for (const button of deepQuery("button", root || document)) {
+      const parent = button.parentElement;
+      if (!parent || seen.has(parent)) continue;
+      seen.add(parent);
+      // A hidden input usually sits in the row beside the buttons, holding the
+      // answer for the form to submit. It is part of the widget, not another
+      // child to be counted -- requiring every child to be a button found
+      // nothing at all on the live page.
+      const children = Array.from(parent.children).filter((child) => isVisible(child));
+      if (children.length < 2 || children.length > 12) continue;
+      if (!children.every((child) => child.tagName === "BUTTON")) continue;
+      const labels = children.map((child) => textOf(child));
+      if (!labels.every((text) => text && text.length <= 40)) continue;
+      if (labels.some((text) => NOT_A_CHOICE.test(text))) continue;
+      if (children.some((child) => (child.getAttribute("type") || "") === "submit")) continue;
+      if (!children.every(isVisible)) continue;
+      groups.push({ container: parent, buttons: children });
+    }
+    return groups;
+  }
+
+  /**
+   * Which button in the group is the chosen one.
+   *
+   * Said properly by aria where a page bothers, and otherwise by the one class
+   * the chosen button carries that its siblings do not. Reading it back this
+   * way is what makes the answer verifiable rather than merely clicked at.
+   */
+  function pickedButton(buttons) {
+    for (const button of buttons) {
+      const pressed = button.getAttribute("aria-pressed") || button.getAttribute("aria-checked");
+      if (String(pressed).toLowerCase() === "true") return button;
+    }
+    const classes = buttons.map((b) => new Set(Array.from(b.classList || [])));
+    let picked = null;
+    for (let i = 0; i < buttons.length; i += 1) {
+      const others = classes.filter((_, j) => j !== i);
+      const extra = Array.from(classes[i]).some((c) => others.every((set) => !set.has(c)));
+      if (!extra) continue;
+      if (picked) return null; // more than one stands out: nothing is chosen
+      picked = buttons[i];
+    }
+    return picked;
+  }
+
   function repeatBlock(el) {
     const named = indexedName(el);
     // The page has stated the answer; there is nothing to work out.
@@ -709,6 +772,8 @@
     optionRows,
     ownedPopup,
     referencedText,
+    buttonChoices,
+    pickedButton,
     repeatBlock,
     sectionOf,
     splitIdentifier,

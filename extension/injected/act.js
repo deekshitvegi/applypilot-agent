@@ -494,6 +494,32 @@
    *
    * A click that returns without error is not an added entry.
    */
+  /**
+   * Answer a question whose options are buttons, by pressing one.
+   *
+   * Idempotent like everything else: a group already showing the wanted answer
+   * is left alone. Pressing a button that is already chosen is how a page like
+   * this gets toggled back off.
+   */
+  async function chooseButton(found, desired) {
+    const buttons = found.group || [];
+    const already = D.pickedButton(buttons);
+    if (already && AP.verify.same(D.textOf(already), desired)) {
+      return { outcome: "verified", changed: false, previous: D.textOf(already) };
+    }
+    const wanted = buttons.find((button) => AP.verify.same(D.textOf(button), desired));
+    if (!wanted) {
+      return {
+        failed:
+          `"${desired}" is not one of the options here; this question offers ` +
+          buttons.map((b) => D.textOf(b)).join(", "),
+        previous: already ? D.textOf(already) : "",
+      };
+    }
+    realClick(wanted);
+    return { previous: already ? D.textOf(already) : "" };
+  }
+
   async function addRepeat(controlText) {
     const before = S.formElementCount();
     const button = S.pressable(controlText || S.ADD_TEXT);
@@ -647,6 +673,8 @@
       case "choose":
         if ((found.element.tagName || "").toLowerCase() === "select") {
           step = await chooseNativeOption(found, desired);
+        } else if (found.kind === "buttons") {
+          step = await chooseButton(found, desired);
         } else if (found.kind === "radio") {
           step = await chooseRadio(found, desired);
         } else {

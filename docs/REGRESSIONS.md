@@ -702,3 +702,18 @@ with legal weight should be chosen when you sit down to apply rather than left
 switched on for months. There are tests for saving it, unsaving it, leaving it
 alone while saving something else, and for the saved profile never learning
 about it at all.
+
+**92. A whole section of questions was never seen at all.** One widely used
+applicant tracking system draws every Yes/No question as two bare <button>
+elements: no role, no name, no value, not even an aria-checked, only class
+names. Nothing about them says "control", so the scanner -- which collects
+inputs, selects, textareas and things claiming a widget role -- walked straight
+past seven required questions. They were not unanswered; they were invisible.
+*Mechanism.* A container whose visible children are all buttons, two or more of
+them, each with a short label, is a choice. The hidden input the widget keeps
+beside its buttons is part of it and not another child, which is what the first
+attempt got wrong -- checked against the live page, where requiring every child
+to be a button found nothing at all. Navigation is excluded by wording, because
+Back beside Next is the same shape and is not a question. What is chosen is read
+from the page: aria where the page says so, otherwise the one class the chosen
+button carries that its siblings do not.

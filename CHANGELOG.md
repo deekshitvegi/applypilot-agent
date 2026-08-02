@@ -3,6 +3,18 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.32.0
+
+- **Questions answered by pressing a button are questions now.** One widely
+  used applicant tracking system draws every Yes/No as two bare buttons -- no
+  role, no name, no value, only class names -- so a whole section of a form was
+  invisible rather than unanswered. A row of buttons with short labels is a
+  choice; pressing one is how it is answered; and what is chosen is read back
+  from the page, by aria where the page says so and otherwise by the one class
+  the chosen button carries that its siblings do not. Back beside Next is the
+  same shape and is excluded by wording. Checked on the live page: all seven of
+  its questions found, with their real wording and options.
+
 ## 1.31.0
 
 - **The agreements switch saves, and lasts one session.** It had been added to

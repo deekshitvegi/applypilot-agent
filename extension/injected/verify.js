@@ -128,6 +128,20 @@
     if (!el) return { value: "", signal: "none" };
     const tag = (el.tagName || "").toLowerCase();
 
+    // A choice drawn as buttons. What the page says is chosen: aria where the
+    // page bothers to say, otherwise the one class the chosen button carries
+    // that its siblings do not. Either way it is read from the page, never from
+    // the fact that a button was clicked.
+    if (kind === "buttons" && group && group.length) {
+      const picked = AP.dom.pickedButton(group);
+      if (!picked) return { value: "", signal: "page_class_state" };
+      const said = picked.getAttribute("aria-pressed") || picked.getAttribute("aria-checked");
+      return {
+        value: AP.dom.textOf(picked),
+        signal: String(said).toLowerCase() === "true" ? "aria_state" : "page_class_state",
+      };
+    }
+
     if (kind === "radio" && group && group.length) {
       const picked = group.find((node) => node.checked);
       if (picked) return { value: AP.scan.optionLabel(picked), signal: "native_checked" };

@@ -389,6 +389,10 @@
     const kind = classification.kind;
     const root = S.scanRoot(kind);
     const fields = scanFields(root);
+    // Questions answered by pressing one of a row of buttons. They are not
+    // inputs, so nothing above finds them, and on one applicant tracking system
+    // that is every Yes/No question on the form.
+    if (root) fields.push(...buttonChoiceFields(root));
     const notes = classification.notes.slice();
 
     const onAPosting = kind === "listing" || kind === "application";
@@ -474,6 +478,32 @@
     return again.fingerprint === fingerprint;
   }
 
+  /**
+   * Questions whose answers are buttons rather than inputs.
+   *
+   * Built the same way a radio group is: the buttons are the options, the
+   * question comes from the block around them, and what is currently chosen is
+   * read from the page rather than remembered.
+   */
+  function buttonChoiceFields(root) {
+    const out = [];
+    for (const group of D.buttonChoices(root)) {
+      const buttons = group.buttons;
+      const options = buttons.map((b) => ({ label: D.textOf(b) }));
+      const label = groupLabel(buttons);
+      if (!label) continue;
+      const field = baseObservation(
+        buttons[0], label, D.attributeLabel(group.container), "radio", options
+      );
+      const picked = D.pickedButton(buttons);
+      field.value = picked ? D.textOf(picked) : "";
+      field.required = buttons.some((b) => isRequired(b, label));
+      field.options_source = "native";
+      out.push(field);
+    }
+    return out;
+  }
+
   function findByFingerprint(fingerprint) {
     const remembered = lastSeen.get(fingerprint);
     if (remembered) {
@@ -517,6 +547,17 @@
         return { element: group[0], kind: "radio", group: group };
       }
     }
+
+    for (const group of D.buttonChoices(document)) {
+      const options = group.buttons.map((b) => ({ label: D.textOf(b) }));
+      const candidate = baseObservation(
+        group.buttons[0], groupLabel(group.buttons),
+        D.attributeLabel(group.container), "radio", options
+      );
+      if (candidate.fingerprint === fingerprint) {
+        return { element: group.buttons[0], kind: "buttons", group: group.buttons };
+      }
+    }
     return null;
   }
 
@@ -524,6 +565,7 @@
     adapterHints,
     confirmationText,
     controlKind,
+    buttonChoiceFields,
     findByFingerprint,
     groupLabel,
     isRequired,
