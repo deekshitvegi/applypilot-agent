@@ -175,3 +175,11 @@ def test_a_hugging_face_profile_has_somewhere_to_go():
         match = best_fact(ask(label))
         assert match is not None, label
         assert match.spec.key == key, (label, match.spec.key)
+
+
+def test_a_work_visa_question_is_the_sponsorship_question():
+    """One form asks it plainly, with the word sponsorship left out."""
+    for label in ["Do you need a work visa?", "Do you require a work visa?"]:
+        match = best_fact(ask(label))
+        assert match is not None, label
+        assert match.spec.key == "requires_sponsorship", (label, match.spec.key)

@@ -198,6 +198,11 @@ FACTS: tuple[FactSpec, ...] = (
         "require visa sponsorship", "sponsorship", "immigration sponsorship",
         "require immigration sponsorship", "sponsorship for employment",
         "will you now or in the future require sponsorship",
+        # Asked plainly, as one applicant tracking system does: "Do you need a
+        # work visa?" is the same question with the word sponsorship left out.
+        "need a work visa", "do you need a work visa", "need work visa",
+        "require a work visa", "work visa", "work visa required",
+        "do you need visa", "need a visa",
         kind="choice", choices=YES_NO,
         topics=("sponsorship", "sponsor", "visa", "immigration", "h1b", "h 1b"),
         prompt="Will you now or in the future require visa sponsorship?",

@@ -98,3 +98,17 @@ def test_the_setting_does_not_reach_anything_that_is_not_an_agreement():
     profile = Profile(accept_agreements=True)
     resolution = resolve_field(box("This is my most recent education"), profile)
     assert resolution.answer is None or resolution.answer.value != "Yes", resolution
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        # Phrased at you rather than as you. One real form does exactly this.
+        "By checking this box, you consent to the collection, use, processing, and "
+        "disclosure of your personal data for recruitment marketing purposes.",
+        "You agree to the terms and conditions",
+        "By submitting this application you accept the terms",
+    ],
+)
+def test_an_agreement_phrased_at_you_is_still_one(label):
+    assert is_agreement(box(label)) is True

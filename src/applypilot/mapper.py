@@ -469,7 +469,8 @@ class Resolution:
 #: "I certify", "I have read". A question about whether you have ever worked
 #: here is not an agreement, whatever else its sentence happens to contain.
 _AGREEMENT_RE = re.compile(
-    r"\b(i\s+(have\s+read|agree|accept|consent|acknowledge|certify|confirm)"
+    r"\b((i|you)\s+(have\s+read|agree|accept|consent|acknowledge|certify|confirm)"
+    r"|by\s+(checking|ticking|clicking|submitting)"
     r"|agree\s+to\s+the\s+(terms|conditions)"
     r"|accept\s+the\s+(terms|conditions)"
     r"|terms\s+(and|&)\s+conditions"

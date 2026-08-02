@@ -26,6 +26,7 @@ const FACT_FIELDS = [
   ["linkedin", "LinkedIn URL"],
   ["github", "GitHub URL"],
   ["website", "Website or portfolio"],
+  ["huggingface", "Hugging Face profile"],
   ["work_authorization", "Legally authorised to work"],
   ["requires_sponsorship", "Will require visa sponsorship"],
   ["citizenship", "Citizenship status"],

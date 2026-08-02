@@ -3,6 +3,17 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.35.0
+
+- **Hugging Face actually appears in Settings.** It went into the catalogue last
+  version but the answers grid on the options page is a hand-written list, so it
+  showed up everywhere except where you would go to fill it in.
+- **"Do you need a work visa?" is answered.** The sponsorship fact knew every
+  phrasing containing the word sponsorship; one form asks it plainly without.
+- **"By checking this box, you consent to..." is an agreement.** Only the first
+  person was recognised, so a required consent box phrased at you rather than as
+  you was left blank and never asked about.
+
 ## 1.34.0
 
 - **A Hugging Face profile has somewhere to live.** Its own fact, alongside

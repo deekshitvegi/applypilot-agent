@@ -726,3 +726,19 @@ nothing, and seven required questions were left blank without ever being asked
 about.
 *Mechanism.* A neighbouring element whose class says required counts as the
 marker, the same as a written asterisk would, and "not-required" still does not.
+
+**94. A field added to the catalogue never reached Settings.** The answers grid
+on the options page is a list written out by hand, so a new fact appeared
+everywhere except the one place anyone would go to fill it in.
+*Mechanism.* Hugging Face is in that list. The list itself is still by hand, and
+that is worth remembering next time a fact is added.
+
+**95. "Do you need a work visa?" answered to nothing.** The sponsorship fact
+knew every phrasing that contains the word sponsorship, and one applicant
+tracking system asks it plainly without.
+*Mechanism.* The plain phrasings are aliases of the same fact.
+
+**96. An agreement phrased at you rather than as you was not one.** "By checking
+this box, you consent to..." is exactly the same act as "I consent to...", and
+only the second was recognised, so the first was left blank on a required box.
+*Mechanism.* Both persons count, as does "by checking" and "by submitting".
