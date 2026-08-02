@@ -814,3 +814,11 @@ suggestions, its suggestions are used before looking away. Only a suggestion
 that is what was asked for: a list coming back with somewhere else entirely is
 not an answer, and the applicant is better told than guessed at. An ordinary
 text box says nothing about suggestions, so nothing waits for any.
+
+**104. A picker that declares nothing about itself.** The rule added for 103
+looked for a control that says it offers suggestions -- a role, an aria
+attribute. Several say nothing at all, and the only sign of what they are is
+what they do: the text is gone the moment focus leaves.
+*Mechanism.* A box that empties itself has rejected what it was given, which is
+proof enough to try again through its list. It costs nothing anywhere else,
+because a box that kept the value never reaches that path.

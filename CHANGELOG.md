@@ -3,6 +3,16 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.43.0
+
+- **A picker that declares nothing is still recognised.** The rule added last
+  version looked for a control that says it offers suggestions. Several say
+  nothing at all, and the only sign of what they are is what they do -- the text
+  is gone the moment focus leaves. A box that empties itself has rejected what
+  it was given, which is proof enough to try again through its list, and it
+  costs nothing anywhere else because a box that kept the value never gets
+  there.
+
 ## 1.42.0
 
 - **An address line that is really a list of places gets filled.** Typing the

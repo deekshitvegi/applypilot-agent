@@ -206,6 +206,21 @@
     }
 
     dispatch(el, "blur", FocusEvent, { bubbles: true });
+
+    // Not every one of these says what it is. Some carry no role and no aria at
+    // all, and the only sign is what they do: the text is gone the moment focus
+    // leaves. A box that empties itself has rejected what it was given, which is
+    // proof enough to try again the other way -- and it costs nothing anywhere
+    // else, because a box that kept the value never gets here.
+    if (value && !el.value) {
+      if (el.focus) el.focus();
+      setNativeValue(el, value);
+      fireInput(el);
+      const picked = await pickSuggestion(el, value);
+      if (picked) return { changed: true, previous: reading.value };
+      dispatch(el, "blur", FocusEvent, { bubbles: true });
+    }
+
     return { changed: true, previous: reading.value };
   }
 

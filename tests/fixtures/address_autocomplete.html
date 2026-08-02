@@ -21,6 +21,13 @@
 
   <label class="main-label">Zip Code</label>
   <input id="zip">
+
+  <label class="main-label">Home Address</label>
+  <input id="quiet" placeholder="Enter a location" autocomplete="off">
+  <ul id="quiet-places" role="listbox" hidden></ul>
+
+  <label class="main-label">Home City</label>
+  <input id="quiet-city">
 </main>
 
 <script>
@@ -60,5 +67,31 @@
   // The part that loses the answer: free text is discarded on the way out.
   line1.addEventListener("blur", () => {
     if (!PLACES[line1.value]) line1.value = "";
+  });
+
+  // The same widget, declaring nothing about itself. No role, no aria: the
+  // only sign of what it is, is that it empties itself.
+  const quiet = document.getElementById("quiet");
+  const quietList = document.getElementById("quiet-places");
+  quiet.addEventListener("input", () => {
+    const needle = quiet.value.trim().toLowerCase();
+    quietList.innerHTML = "";
+    const hits = Object.keys(PLACES).filter((p) => p.toLowerCase().includes(needle));
+    if (!needle || !hits.length) { quietList.hidden = true; return; }
+    for (const place of hits) {
+      const row = document.createElement("li");
+      row.setAttribute("role", "option");
+      row.textContent = place;
+      row.addEventListener("click", () => {
+        quiet.value = place;
+        document.getElementById("quiet-city").value = PLACES[place].city;
+        quietList.hidden = true;
+      });
+      quietList.appendChild(row);
+    }
+    quietList.hidden = false;
+  });
+  quiet.addEventListener("blur", () => {
+    if (!PLACES[quiet.value]) quiet.value = "";
   });
 </script>
