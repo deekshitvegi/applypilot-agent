@@ -388,7 +388,11 @@ class PlanResponse(BaseModel):
 
 
 @app.post("/plan", response_model=PlanResponse)
-def plan(observation: PageObservation, after_continue: bool = False) -> PlanResponse:
+def plan(
+    observation: PageObservation,
+    after_continue: bool = False,
+    refused: str = "",
+) -> PlanResponse:
     profile = store.get_profile()
     identity = classify_host(observation.url, hints=observation.hints)
 
@@ -405,7 +409,11 @@ def plan(observation: PageObservation, after_continue: bool = False) -> PlanResp
     # The session's answer to the agreements question, never the saved one:
     # the profile on disk has no opinion about this and is not given one.
     profile = profile.model_copy(update={"accept_agreements": session_accept_agreements})
-    built = runloop.plan_page(observation, profile, store.learned_values())
+    # Controls that have already refused what we had for them. They are asked
+    # about instead of being tried a second time, because the answer is not
+    # going to change and the person can see the control.
+    turned_down = {part for part in refused.split(",") if part}
+    built = runloop.plan_page(observation, profile, store.learned_values(), turned_down)
     notes = list(observation.notes) + built.notes
 
     if runloop.is_stalled(state):

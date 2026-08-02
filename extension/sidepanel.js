@@ -1089,7 +1089,17 @@ async function fillPageInner() {
     results: state.results,
   });
   setChecklist(summary.checklist);
-  state.plan = await post("/plan", state.observation);
+  // Whatever the page turned down is asked about rather than tried again. A
+  // control that refused an answer refuses it every time, and a required field
+  // failing over and over without ever being put to you is a dead end you can
+  // see but cannot clear.
+  const turnedDown = state.results
+    .filter((r) => r && r.outcome === "failed")
+    .map((r) => r.fingerprint);
+  state.plan = await post(
+    "/plan" + (turnedDown.length ? `?refused=${encodeURIComponent(turnedDown.join(","))}` : ""),
+    state.observation
+  );
   state.questionIndex = 0;
   progress(0, 0);
   activity(summary.summary, KIND_NAMES[state.observation.kind] || "");

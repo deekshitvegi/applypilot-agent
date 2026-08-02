@@ -1113,3 +1113,15 @@ its middle taken out. "Region 25-35" is still a place.
 rather than the name of a school or the title of a degree, so no education
 record field answered it. "Willingness to Relocate" was not among the wordings
 for relocating, though "Willing to relocate" was.
+
+**132. A required field could fail forever without ever being asked about.**
+An action that failed was planned again from the same saved answer on the next
+look, failed again, and never became a question. Two required fields sat under
+"Needs you" with a red cross against them and no way to answer either -- a dead
+end visible on screen and impossible to clear from the panel.
+*Mechanism.* A control that refused an answer refuses it every time, so the
+fingerprints the page turned down are sent with the next plan and asked about
+instead of tried again. The question says what was tried -- "the control would
+not take X, please pick one" -- and carries the control's own choices, because
+"this needs you" over a control is not a question anybody can act on. Nothing
+refused, nothing changes.

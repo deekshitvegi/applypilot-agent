@@ -15,7 +15,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .mapper import Resolution, _entry_context, resolve_page, usable_options
+from .mapper import (
+    Resolution,
+    _entry_context,
+    needs_its_options_opened,
+    resolve_page,
+    usable_options,
+)
 from .models import (
     ActionResult,
     Answer,
@@ -124,10 +130,35 @@ def _action_for(field_obs: FieldObservation, answer: Answer) -> PlannedAction:
     )
 
 
+def _refused_question(
+    observed: FieldObservation, answer: Answer, profile: Profile
+) -> PendingQuestion:
+    """Put a control that would not take our answer to the person.
+
+    It says what was tried, because "this needs you" over a control you can see
+    is filled with something is not a question anybody can act on.
+    """
+    return PendingQuestion(
+        fingerprint=observed.fingerprint,
+        label=pretty_label(observed.display_label or observed.attr_label),
+        control=observed.control,
+        operation=observed.operation,
+        options=usable_options(observed),
+        required=observed.required,
+        fact_key=answer.fact_key,
+        reason=f'the control would not take "{answer.value}" -- please pick one',
+        section=_entry_context(observed),
+        frame=observed.frame,
+        saved_value=answer.value,
+        options_pending=needs_its_options_opened(observed),
+    )
+
+
 def plan_page(
     observation: PageObservation,
     profile: Profile,
     learned: dict[str, str] | None = None,
+    refused: set[str] | None = None,
 ) -> Plan:
     """Decide what to do with every field on the page.
 
@@ -138,9 +169,22 @@ def plan_page(
     result = Plan()
     resolutions: list[Resolution] = resolve_page(observation.fields, profile, learned)
 
+    refused = refused or set()
     for resolution in resolutions:
         observed = resolution.field
         if resolution.answer is not None:
+            # A control that has already refused this answer will refuse it
+            # again. Planning it a second time is how a required field could
+            # fail, be planned again, fail again, and never once be put to the
+            # person sitting there -- who can see the control and could answer
+            # it in a moment.
+            if observed.fingerprint in refused:
+                result.questions.append(
+                    _refused_question(observed, resolution.answer, profile)
+                )
+                if needs_its_options_opened(observed):
+                    result.needs_options.append(observed.fingerprint)
+                continue
             result.answers.append(resolution.answer)
             result.actions.append(_action_for(observed, resolution.answer))
             continue
