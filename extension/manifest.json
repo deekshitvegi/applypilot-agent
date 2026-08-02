@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ApplyPilot",
-  "version": "1.56.0",
+  "version": "1.57.0",
   "description": "Fills job applications from your own profile and verifies every value from the page's own state.",
   "minimum_chrome_version": "114",
   "permissions": ["scripting", "tabs", "storage", "sidePanel"],

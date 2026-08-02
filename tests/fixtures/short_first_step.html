@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Tell us about yourself</title>
+<!--
+  The opening step of a real multi-step application: four boxes and nothing
+  else. No file input, no <form>, and every control drawn by a web component
+  rather than written into the page -- which is why the light document holds
+  nothing at all.
+
+  Four is not five, so this was read as an unrecognised page and every field
+  on it skipped.
+-->
+<div id="app"></div>
+<script>
+  const step = [
+    ["First Name", "text", true],
+    ["Last Name", "text", true],
+    ["Email", "text", true],
+    ["Mobile Number", "tel", false],
+  ];
+
+  class SdfInput extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({ mode: "open" });
+      const id = "i" + Math.random().toString(36).slice(2, 8);
+      root.innerHTML =
+        '<label for="' + id + '">' + this.getAttribute("label") + "</label>" +
+        '<input id="' + id + '" type="' + this.getAttribute("kind") + '"' +
+        (this.hasAttribute("req") ? " required" : "") + ">";
+    }
+  }
+  customElements.define("sdf-input", SdfInput);
+
+  const host = document.getElementById("app");
+  host.insertAdjacentHTML("beforeend", "<h1>Tell us about yourself.</h1>");
+  for (const [label, kind, req] of step) {
+    const el = document.createElement("sdf-input");
+    el.setAttribute("label", label);
+    el.setAttribute("kind", kind);
+    if (req) el.setAttribute("req", "");
+    host.appendChild(el);
+  }
+  host.insertAdjacentHTML("beforeend", "<button type=button>Next</button>");
+</script>

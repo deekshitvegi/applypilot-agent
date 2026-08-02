@@ -359,6 +359,33 @@
     return "";
   }
 
+  /*
+   * The things a page asks for when it is collecting a person.
+   *
+   * Kept to what an application always wants and a search box never does. It
+   * counts distinct subjects, not controls, so three boxes all called "Email"
+   * are one answer to this question and not three.
+   */
+  const IDENTITY_ASKS = [
+    ["name", /\b(first|last|given|family|full|legal)\s+name\b|\bsurname\b|\bforename\b/i],
+    ["email", /\be-?mail\b/i],
+    ["phone", /\b(mobile|phone|telephone|cell)\b/i],
+    ["address", /\b(address|city|postcode|post code|zip|state|province|country)\b/i],
+    ["resume", /\b(resume|résumé|cv|curriculum vitae)\b/i],
+  ];
+
+  function asksWhoYouAre(controls) {
+    const seen = new Set();
+    for (const el of controls) {
+      const text = D.visibleLabel(el) || D.attributeLabel(el) || "";
+      if (!text) continue;
+      for (const [subject, pattern] of IDENTITY_ASKS) {
+        if (pattern.test(text)) seen.add(subject);
+      }
+    }
+    return seen.size;
+  }
+
   function classify() {
     const notes = [];
     const controls = candidateControls();
@@ -390,7 +417,19 @@
     // Judged by the controls present, not by whether there is a <form>: a
     // complete 21-field application rendered without one was seen and refused.
     const textareas = D.deepQuery("textarea", document).filter((el) => D.isVisible(el)).length;
-    const applicationShaped = labelled.length >= 5 || (hasFileInput && labelled.length >= 2);
+
+    // Counting alone cannot see a short first step. One large system opens its
+    // application with four boxes -- first name, last name, email, mobile --
+    // and four is not five, so a real application was read as an unrecognised
+    // page and every field on it skipped.
+    //
+    // What it is asking for settles it. A page that wants your name and your
+    // email and a way to telephone you is collecting a person, not running a
+    // search or a newsletter, and no page asks all three by accident.
+    const applicationShaped =
+      labelled.length >= 5 ||
+      (hasFileInput && labelled.length >= 2) ||
+      (labelled.length >= 3 && asksWhoYouAre(labelled) >= 3);
 
     // A page listing dozens of other jobs, with nowhere to attach anything and
     // nothing to write in, is a list however many controls it has. Its controls

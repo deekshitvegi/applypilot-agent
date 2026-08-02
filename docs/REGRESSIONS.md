@@ -1033,3 +1033,16 @@ unchanged and was checked on the live control: a place the picker does not know
 stays `attempted` with no signal. Only suggestion controls are marked -- an
 ordinary text box holding what it was given is the whole of the evidence there,
 and marking it took that away.
+
+**125. A short opening step was read as an unrecognised page.** One large
+system opens its application with four boxes -- first name, last name, email,
+mobile -- every one of them drawn by a web component, so the light document
+holds nothing at all. A page needed five labelled controls to count as an
+application, and four is not five, so the whole thing was skipped. This is the
+"unrecognised page" that filled nothing.
+*Mechanism.* Counting alone cannot see a short first step, so what the page is
+asking for settles it. A page wanting your name and your email and a way to
+telephone you is collecting a person, not running a search or a newsletter, and
+no page asks all three by accident. Three distinct subjects out of name, email,
+phone, address and resume, across at least three labelled controls, is an
+application. Sign-in and registration are decided before this and are unmoved.
