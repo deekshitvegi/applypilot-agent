@@ -3,6 +3,16 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.38.0
+
+- **The required tick list is finally asked about.** Last version asked the
+  block's siblings for the marker. Where the block is a fieldset -- which is how
+  the real page builds these -- the question is the block's own first child, so
+  there was nothing beside it to find and the list stayed optional. A group is
+  asked about both ways now. Checked against the live page rather than guessed
+  at, which is also where I learned each box is tied to its label by for and id
+  rather than by wrapping.
+
 ## 1.37.0
 
 - **The required tick list is asked about.** Last version grouped it correctly

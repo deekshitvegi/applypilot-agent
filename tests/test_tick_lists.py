@@ -125,3 +125,24 @@ def test_a_list_that_is_not_marked_stays_optional(open_fixture):
         f for f in observe(page).fields if "happy to be contacted" in (f.label or "")
     )
     assert got.required is False
+
+
+def test_a_fieldset_whose_heading_is_its_own_child_is_required(open_fixture):
+    """The other real shape, read off a live page.
+
+    Where the block is a fieldset the question is the block's own first child,
+    not a sibling beside it -- and only siblings were being looked at, so this
+    list read as optional and was skipped.
+    """
+    page = open_fixture("tick_lists.html")
+    got = next(f for f in observe(page).fields if "model families" in (f.label or ""))
+    assert got.control == "multiselect"
+    assert [o.label for o in got.options] == ["Llama", "Mistral"]
+    assert got.required is True
+
+
+def test_boxes_labelled_by_for_and_id_are_read_correctly(open_fixture):
+    """The live page links each box to its label that way rather than wrapping."""
+    page = open_fixture("tick_lists.html")
+    got = next(f for f in observe(page).fields if "model families" in (f.label or ""))
+    assert [o.label for o in got.options] == ["Llama", "Mistral"]

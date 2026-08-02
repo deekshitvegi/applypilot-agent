@@ -162,6 +162,30 @@
     return hasRequiredMarker(el);
   }
 
+  /**
+   * Whether a group of controls is required.
+   *
+   * Asked of the block, not of one control inside it, because the marker
+   * belongs to the question above them all. Two shapes, both real: the heading
+   * sits beside the block, or -- where the block is a fieldset -- the heading is
+   * the block's own first child. Only siblings were being looked at, so a
+   * required list of tick boxes read as optional and was quietly skipped.
+   */
+  function groupRequired(container, label) {
+    if (!container) return false;
+    if (isRequired(container, label)) return true;
+    for (const child of container.children) {
+      if (child.querySelector("input,select,textarea")) continue;
+      const marked =
+        /(^|[^a-z])required($|[^a-z])/i.test(child.className || "") &&
+        !/not-?required|non-?required/i.test(child.className || "");
+      if (marked) return true;
+      const text = D.textOf(child);
+      if (text && text.length <= 40 && REQUIRED_MARK.test(text)) return true;
+    }
+    return false;
+  }
+
   function commonAncestor(elements) {
     if (!elements.length) return null;
     let node = elements[0].parentElement;
@@ -525,7 +549,7 @@
       // up and one further than the marker search reaches -- so a required
       // list read as optional and was skipped without ever being asked about.
       field.required =
-        isRequired(group.container, label) || group.boxes.some((b) => isRequired(b, label));
+        groupRequired(group.container, label) || group.boxes.some((b) => isRequired(b, label));
       field.options_source = "native";
       fields.push(field);
       for (const box of group.boxes) consumed.push(box);
@@ -547,7 +571,7 @@
       field.value = picked ? D.textOf(picked) : "";
       // Of the group, for the same reason a tick list is asked of its list.
       field.required =
-        isRequired(group.container, label) || buttons.some((b) => isRequired(b, label));
+        groupRequired(group.container, label) || buttons.some((b) => isRequired(b, label));
       field.options_source = "native";
       out.push(field);
     }

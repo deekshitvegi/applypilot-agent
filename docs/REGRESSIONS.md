@@ -772,3 +772,13 @@ sitting in the profile.
 saved address written out with what it is. Only addresses already entered, only
 the ones the question names, and a box asking for a GitHub URL alone is still
 the GitHub field and takes the ordinary path.
+
+**100. The marker inside a fieldset was never looked at.** A required list of
+tick boxes read as optional even after the previous fix, because that fix asked
+the block's siblings. Where the block is a fieldset -- which is how one real
+applicant tracking system builds these -- the question is the block's own first
+child, so there was nothing beside it to find.
+*Mechanism.* A group is asked about both ways: the heading beside the block, and
+the heading inside it. Read off the live page, along with the fact that each box
+is tied to its label by for and id rather than by wrapping, which the fixture
+now does too.
