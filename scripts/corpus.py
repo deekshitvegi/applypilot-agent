@@ -94,10 +94,44 @@ FEEDS = {
 }
 
 
-def get_json(url: str, timeout: int = 30):
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+def get_json(url: str, timeout: int = 30, body: dict | None = None):
+    headers = {"User-Agent": USER_AGENT}
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        headers["Accept"] = "application/json"
+    request = urllib.request.Request(url, data=data, headers=headers)
     with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.load(response)
+
+
+#: Workday asks for its list rather than serving it, and answers with a path
+#: per posting instead of a URL. It is the largest of these systems and the one
+#: least like the others, so it gets its own few lines rather than being bent
+#: into the shape of a feed.
+WORKDAY_QUERY = {"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": ""}
+
+
+def harvest_workday(entry: dict, per_company: int) -> list[dict]:
+    tenant, site = entry["slug"], entry["site"]
+    host = f"https://{tenant}.{entry.get('pod', 'wd5')}.myworkdayjobs.com"
+    payload = get_json(f"{host}/wday/cxs/{tenant}/{site}/jobs", body=WORKDAY_QUERY)
+    out = []
+    for job in (payload.get("jobPostings") or [])[:per_company]:
+        path = job.get("externalPath") or ""
+        if not path:
+            continue
+        out.append(
+            {
+                "ats": "workday",
+                "company": tenant,
+                "title": str(job.get("title", ""))[:120],
+                "url": f"{host}/en-US/{site}{path}",
+            }
+        )
+    print(f"  ok workday/{tenant}: {payload.get('total', '?')} open, took {len(out)}")
+    return out
 
 
 def harvest(per_company: int, pause: float) -> list[dict]:
@@ -106,6 +140,13 @@ def harvest(per_company: int, pause: float) -> list[dict]:
     found: list[dict] = []
 
     for entry in seeds["companies"]:
+        if entry["ats"] == "workday":
+            try:
+                found.extend(harvest_workday(entry, per_company))
+            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as err:
+                print(f"  -  workday/{entry['slug']}: {err}")
+            time.sleep(pause)
+            continue
         feed = FEEDS.get(entry["ats"])
         if not feed:
             print(f"  ?  unknown ats {entry['ats']!r} for {entry['slug']}")

@@ -47,6 +47,14 @@
     { "ats": "ashby", "slug": "runway" },
     { "ats": "ashby", "slug": "modal" },
 
-    { "ats": "smartrecruiters", "slug": "Visa" }
+    { "ats": "smartrecruiters", "slug": "Visa" },
+
+    { "ats": "workday", "slug": "nvidia", "pod": "wd5", "site": "NVIDIAExternalCareerSite" },
+    { "ats": "workday", "slug": "salesforce", "pod": "wd12", "site": "External_Career_Site" },
+    { "ats": "workday", "slug": "adobe", "pod": "wd5", "site": "external_experienced" },
+    { "ats": "workday", "slug": "paypal", "pod": "wd1", "site": "jobs" },
+    { "ats": "workday", "slug": "dell", "pod": "wd1", "site": "External" },
+    { "ats": "workday", "slug": "hp", "pod": "wd5", "site": "ExternalCareerSite" },
+    { "ats": "workday", "slug": "workday", "pod": "wd5", "site": "Workday" }
   ]
 }
