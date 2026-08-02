@@ -1223,3 +1223,16 @@ pushing got a failure that CI would never see, and stopped running them.
 *Mechanism.* It looks at what is actually ours. Being unable to run the gate is
 how a red build reaches somebody's inbox instead of the terminal in front of
 the person who caused it.
+
+**142. The report said what was left blank and offered no way to answer it.**
+"Have you previously worked for, or been on assignment with Toyota?" is
+optional and nothing saved answers it, so it was correctly left alone -- but it
+is the applicant's own answer, they are looking straight at it, and the only
+thing pressing the row did was scroll to it.
+*Mechanism.* Pressing a row that is not filled asks that question, with
+whatever the control itself offers to choose from; a list nobody has read yet
+is opened first, the same as any other. A row already filled still scrolls to
+the field, which is the only thing there is to do with it. No fact key goes
+with the answer: a question about one employer belongs to that question rather
+than to the profile, so it is remembered against this wording and used again
+wherever it is asked.

@@ -1286,6 +1286,55 @@ function setChecklist(items) {
   updateCta();
 }
 
+/**
+ * Put a field that was left blank back to the applicant, on request.
+ *
+ * The report says what was left alone and why, and there was nothing to be
+ * done about any of it. "Have you previously worked for, or been on assignment
+ * with Toyota?" is optional, and nothing saved answers it, so it is correctly
+ * left blank -- but it is the applicant's own answer and they are looking
+ * straight at it. Pressing the row now asks the question, with whatever the
+ * control itself offers to choose from.
+ *
+ * No fact key goes with it: a question about one employer belongs to that
+ * question, not to the profile, so the answer is remembered against this
+ * wording and used again wherever it is asked.
+ */
+function askAbout(item) {
+  const live = fieldFor(item.fingerprint);
+  if (!live) {
+    showHint("That field is no longer on the page. Rescan and try again.", false);
+    return;
+  }
+  const known = (live.options || []).filter(
+    (option) => option && option.label && !isPlaceholderLabel(option.label)
+  );
+  const question = {
+    fingerprint: item.fingerprint,
+    label: item.label || live.label || live.attr_label || "",
+    control: live.control,
+    operation: live.operation,
+    options: live.options || [],
+    required: Boolean(item.required),
+    fact_key: "",
+    reason: "you asked to answer this one",
+    section: item.section || "",
+    frame: live.frame,
+    saved_value: "",
+    // A list nobody has read yet gets opened first, the same as any other.
+    options_pending: isChoice(live.control, live.operation) && known.length < 2,
+  };
+
+  if (!state.plan) state.plan = { actions: [], questions: [] };
+  const questions = state.plan.questions || (state.plan.questions = []);
+  const already = questions.findIndex((q) => q.fingerprint === item.fingerprint);
+  if (already >= 0) questions.splice(already, 1);
+  questions.push(question);
+  state.questionIndex = questions.length - 1;
+  showOnPage(item.fingerprint);
+  renderQuestion();
+}
+
 /** One row per field, showing the whole question rather than a truncation. */
 function fillReport(list, items) {
   list.innerHTML = "";
@@ -1313,9 +1362,15 @@ function fillReport(list, items) {
     label.appendChild(detail);
     row.appendChild(label);
 
-    row.addEventListener("click", () =>
-      showOnPage(item.fingerprint)
-    );
+    // A row that is already filled is somewhere to go and look. A row that is
+    // not is something to answer, so pressing it asks about it.
+    row.title = item.state === "verified"
+      ? "Find this field on the page"
+      : "Answer this one";
+    row.addEventListener("click", () => {
+      if (item.state === "verified") showOnPage(item.fingerprint);
+      else askAbout(item);
+    });
     list.appendChild(row);
   }
 }
