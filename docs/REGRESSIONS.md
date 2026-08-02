@@ -891,3 +891,16 @@ left blank".
 *Mechanism.* A separate "planned" state, shown as "will fill: X", counted in its
 own column of the heading. A value on its own reads as a value the page owns, so
 nothing not yet carried out is allowed to display as a bare value.
+
+**113. Asked for an account name it was never going to use.** "Login" is a
+required field, and required-and-unanswered is normally a question -- so the
+panel asked for one, on a page whose own header said creating the account was
+not its to do. No answer could ever clear it. Pressing Skip cleared it until
+the next plan, which asked again.
+*Mechanism.* A box you would choose an account name in is the first half of a
+credential, and the password was always left alone; now the name is too. Two
+signals together: the label opens with a word from the small closed set that
+names an account -- login, username, user id, screen name -- and there is a
+password somewhere on the same page. Without the password it is some other kind
+of box and is not touched. An email address beside a password is still filled:
+typing an address begins creating nothing.

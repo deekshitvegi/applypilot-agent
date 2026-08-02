@@ -521,6 +521,37 @@ _AGREEMENT_RE = re.compile(
 )
 
 
+#: The name a form gives the box you would choose an account name in. A small
+#: closed vocabulary, anchored at the start of the label so that a question
+#: merely mentioning logging in is not caught by it.
+_CREDENTIAL_RE = re.compile(
+    r"^(login|log\s*in|username|user\s*name|user\s*id|userid"
+    r"|screen\s*name|account\s*name|sign[-\s]?in\s*(id|name))\b",
+    re.IGNORECASE,
+)
+
+
+def is_credential(field: FieldObservation, page_has_password: bool) -> bool:
+    """True when this box is where you would choose an account name.
+
+    Only on a page that also holds a password: an account name and a password
+    are the two halves of one thing, and a box called "Login" on a page with no
+    password to go with it is something else.
+
+    This matters because choosing an account name is not a fact about anybody.
+    It is the first half of creating an account, and creating an account
+    accepts an employer's terms -- which is not ours to do. Asking for it
+    anyway put a required question on screen that could never be answered, and
+    everything else waited behind it.
+    """
+    if not page_has_password:
+        return False
+    if field.control in CHOICE_CONTROLS or field.control is ControlKind.CHECKBOX:
+        return False
+    label = field.display_label or field.attr_label or field.label or ""
+    return bool(_CREDENTIAL_RE.match(label.strip()))
+
+
 #: The facts that are a link to somewhere, the words a form uses to ask for
 #: each, and what to call it when several are written out together.
 _LINK_FACTS: tuple[tuple[str, tuple[str, ...], str], ...] = (
@@ -592,6 +623,7 @@ def resolve_field(
     field: FieldObservation,
     profile: Profile,
     learned: dict[str, str] | None = None,
+    page_has_password: bool = False,
 ) -> Resolution:
     """Decide what to do with one field: fill it, ask about it, or leave it."""
     learned = learned or {}
@@ -600,6 +632,11 @@ def resolve_field(
 
     if field.control is ControlKind.PASSWORD:
         return Resolution(field=field, skipped="passwords are never filled from the profile")
+    if is_credential(field, page_has_password):
+        return Resolution(
+            field=field,
+            skipped="choosing an account name is yours, along with the password",
+        )
     if field.disabled or field.readonly:
         return Resolution(field=field, skipped="the control is not editable")
 
@@ -831,11 +868,15 @@ def resolve_page(
     learned: dict[str, str] | None = None,
 ) -> list[Resolution]:
     """Resolve every visible, fillable field on a page."""
+    # Whether there is a password anywhere here is what tells an account name
+    # apart from an ordinary box that happens to be called "Login", so it has
+    # to be known before any one field is looked at.
+    page_has_password = any(f.control is ControlKind.PASSWORD for f in fields)
     out: list[Resolution] = []
     for field in fields:
         if not field.visible:
             continue
-        out.append(resolve_field(field, profile, learned))
+        out.append(resolve_field(field, profile, learned, page_has_password))
     return out
 
 
