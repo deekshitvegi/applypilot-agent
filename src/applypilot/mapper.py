@@ -531,6 +531,12 @@ _CREDENTIAL_RE = re.compile(
 )
 
 
+#: Left blank because what is saved is not on offer here, and the form does not
+#: insist on this one. Stopping over an optional box the employer is content to
+#: leave empty holds up everything behind it for nothing.
+_DOES_NOT_FIT = "nothing saved fits the options this one offers"
+
+
 def is_credential(field: FieldObservation, page_has_password: bool) -> bool:
     """True when this box is where you would choose an account name.
 
@@ -651,6 +657,8 @@ def resolve_field(
         )
         if answer:
             return Resolution(field=field, answer=answer)
+        if not field.required:
+            return Resolution(field=field, skipped=_DOES_NOT_FIT)
         return Resolution(
             field=field,
             question=_ask(
@@ -734,6 +742,13 @@ def resolve_field(
         )
         if answer:
             return Resolution(field=field, answer=answer, fact_key=spec.key)
+        # A saved answer that does not fit is worth stopping for only if the
+        # form insists on this field. "How did you hear about us?" is optional
+        # and its list held nothing resembling what was saved, so it became a
+        # question that had to be cleared before anything else could happen --
+        # over a box the employer was happy to leave empty.
+        if not field.required:
+            return Resolution(field=field, skipped=_DOES_NOT_FIT, fact_key=spec.key)
         return Resolution(
             field=field,
             question=_ask(

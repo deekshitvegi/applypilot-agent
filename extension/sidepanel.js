@@ -889,14 +889,67 @@ async function applyAll(actions) {
   return results;
 }
 
+/**
+ * The same field after the page has rebuilt itself, or null.
+ *
+ * A fingerprint is derived from what a control looks like, so a page that
+ * replaces its own markup mints new ones for the very same boxes. Matching on
+ * what the form calls the field is the only thing left that survives, and it
+ * is required to agree on the section and the kind of control too -- a page
+ * with two boxes called "Type" would otherwise hand back the wrong one.
+ */
+function sameFieldAfterRebuild(before) {
+  if (!before) return null;
+  const name = (f) => (f.display_label || f.label || "").trim().toLowerCase();
+  const wanted = name(before);
+  if (!wanted) return null;
+  const matches = ((state.observation && state.observation.fields) || []).filter(
+    (f) =>
+      name(f) === wanted &&
+      (f.section || "") === (before.section || "") &&
+      f.control === before.control &&
+      (f.group_index || 0) === (before.group_index || 0)
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
 async function applyAndReport(action) {
   await waitForTheTab();
-  const result = await browser({
+  let result = await browser({
     type: "perform",
     tabId: state.tab.id,
     frameId: frameOf(action.fingerprint),
     action: action,
   });
+
+  // A page that rebuilds itself takes every fingerprint with it.
+  //
+  // This form offers to read your resume and says plainly that it will replace
+  // what is already in the form. When it does, everything planned beforehand
+  // points at controls that no longer exist, and every attempt came back "the
+  // control is no longer on the page" -- including pressing Save on a question,
+  // which left the answer unsaveable however many times it was pressed.
+  //
+  // So look again and find the same field in the page as it is now. This is
+  // not a second guess at what to do: the value is unchanged, only where it
+  // goes. If the fresh scan cannot name exactly one field the same way, the
+  // failure stands.
+  if (result && result.outcome === "failed" && /no longer on the page/.test(result.evidence || "")) {
+    const before = fieldFor(action.fingerprint);
+    await scan();
+    const now = sameFieldAfterRebuild(before);
+    if (now && now.fingerprint !== action.fingerprint) {
+      say(`The page rebuilt itself; found "${now.label}" again and retrying.`, "warn");
+      action = Object.assign({}, action, { fingerprint: now.fingerprint });
+      result = await browser({
+        type: "perform",
+        tabId: state.tab.id,
+        frameId: frameOf(action.fingerprint),
+        action: action,
+      });
+    }
+  }
+
   state.lastFingerprint = action.fingerprint;
   state.results = state.results.filter((r) => r.fingerprint !== action.fingerprint).concat(result);
   reportOne(result);

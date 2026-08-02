@@ -904,3 +904,27 @@ names an account -- login, username, user id, screen name -- and there is a
 password somewhere on the same page. Without the password it is some other kind
 of box and is not touched. An email address beside a password is still filled:
 typing an address begins creating nothing.
+
+**114. An optional box nothing saved fits held up the whole page.** "How did
+you hear about us?" is optional, and its list of sources held nothing
+resembling the saved answer. A saved answer that does not fit became a question
+regardless of whether the form wanted the field, so it had to be cleared before
+anything else could happen -- over a box the employer was content to leave
+empty.
+*Mechanism.* Required is the whole difference. A field the form insists on is
+still worth stopping for; an optional one nothing saved fits is left blank, the
+same as any other optional field with no answer.
+
+**115. A page that rebuilt itself took every fingerprint with it.** This form
+offers to read your resume and says plainly that it will replace what is
+already in the form. When it did, everything planned beforehand pointed at
+controls that no longer existed and came back "the control is no longer on the
+page" -- including pressing Save on a question, which left the answer
+unsaveable however many times it was pressed.
+*Mechanism.* A fingerprint is derived from what a control looks like, so a page
+that replaces its markup mints new ones for the same boxes. On that failure
+alone, look again and find the same field in the page as it is now -- matching
+on what the form calls it, and required to agree on the section, the kind of
+control, and which entry of a repeating block it is. One match and the action
+is retried unchanged; anything else and the failure stands. The value is never
+reconsidered, only where it goes.
