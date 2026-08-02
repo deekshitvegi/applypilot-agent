@@ -869,3 +869,25 @@ is only the control's own placeholder is not an answer.
 placeholder there is and was in neither list.
 *Mechanism.* It is in both now, along with "Select one" -- the service and the
 injected side each keep their own copy and they have to agree.
+
+**111. A question nobody could answer stopped the whole fill.** The panel's
+main button ranked asking above filling: if any required question was still
+outstanding it became a scroll-to-the-question and the plan's ready actions
+were never carried out, under a note reading "I have filled everything else I
+can" when nothing at all had been filled. On an account-creation form the
+outstanding question was "Login" -- an account this tool refuses to create on
+purpose -- so the count never reached zero, the button never came back, and
+twenty-two fields with answers waiting were never touched on any run.
+*Mechanism.* Filling comes before asking. Actions and questions cover disjoint
+fields, so holding one back for the other buys nothing. The decision now lives
+in `extension/cta.js` as a pure function with the order of precedence pinned by
+test rather than left to be read off the source.
+
+**112. Fields with an answer waiting were counted as done.** They were reported
+as "attempted" -- a state meaning a control was acted on -- so they landed in
+the completed list showing their value, reading as though the page were holding
+it. Twenty-two of them appeared under a heading that said "Completed (0) · 33
+left blank".
+*Mechanism.* A separate "planned" state, shown as "will fill: X", counted in its
+own column of the heading. A value on its own reads as a value the page owns, so
+nothing not yet carried out is allowed to display as a bare value.

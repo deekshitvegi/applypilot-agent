@@ -545,6 +545,7 @@ button.done { color: var(--good) !important; }
 .mark { flex: none; width: 15px; font-weight: 700; text-align: center; }
 .mark.verified { color: var(--good); }
 .mark.attempted, .mark.needs_you { color: var(--warn); }
+.mark.planned { color: var(--text-soft); }
 .mark.failed { color: var(--bad); }
 .mark.skipped { color: var(--text-faint); }
 

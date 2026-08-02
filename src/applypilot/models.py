@@ -242,7 +242,12 @@ class ChecklistItem(BaseModel):
     #: labelled "GPA" with nothing to tell them apart is not a list anyone can
     #: act on.
     section: str = ""
-    state: Literal["verified", "attempted", "needs_you", "skipped", "failed"] = "needs_you"
+    #: "planned" is an answer that exists but has not been carried out yet. It
+    #: used to be reported as "attempted", which put it in the completed list
+    #: showing the value as though the page were holding it.
+    state: Literal[
+        "verified", "attempted", "planned", "needs_you", "skipped", "failed"
+    ] = "needs_you"
     value: str = ""
     detail: str = ""
     required: bool = False

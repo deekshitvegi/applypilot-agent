@@ -1149,10 +1149,11 @@ async function runToCompletionInner() {
 
 /* ------------------------------------------------------------------ report */
 
-const DONE_STATES = new Set(["verified", "attempted", "skipped"]);
+const DONE_STATES = new Set(["verified", "attempted", "planned", "skipped"]);
 const MARKS = {
   verified: "✓",
   attempted: "!",
+  planned: "·",
   needs_you: "!",
   failed: "×",
   skipped: "–",
@@ -1168,9 +1169,17 @@ function setChecklist(items) {
   fillReport(el("needs-list"), needs);
 
   el("done-card").classList.toggle("hidden", done.length === 0);
+  // "left blank" used to cover everything that was not verified, which lumped
+  // fields with an answer ready and waiting in with fields nobody was ever
+  // going to fill. Count them apart: one of those is a promise, the other is a
+  // decision.
   const verified = done.filter((i) => i.state === "verified").length;
+  const planned = done.filter((i) => i.state === "planned").length;
+  const blank = done.length - verified - planned;
   el("done-heading").textContent =
-    `Completed (${verified})` + (done.length > verified ? ` · ${done.length - verified} left blank` : "");
+    `Completed (${verified})` +
+    (planned ? ` · ${planned} ready to fill` : "") +
+    (blank ? ` · ${blank} left blank` : "");
   fillReport(el("done-list"), done);
 
   updateCta();
@@ -1193,9 +1202,13 @@ function fillReport(list, items) {
     label.textContent = item.label + (item.required ? " *" : "");
     const detail = document.createElement("span");
     detail.className = "item-value";
-    detail.textContent = [item.section, item.value || item.detail || ""]
-      .filter(Boolean)
-      .join(" · ");
+    // A value on its own reads as a value the page is holding. For something
+    // not carried out yet that is simply untrue, so say which it is.
+    const said =
+      item.state === "planned" && item.value
+        ? `will fill: ${item.value}`
+        : item.value || item.detail || "";
+    detail.textContent = [item.section, said].filter(Boolean).join(" · ");
     label.appendChild(detail);
     row.appendChild(label);
 
@@ -1214,52 +1227,16 @@ function fillReport(list, items) {
 function updateCta() {
   const cta = el("cta");
   const note = el("cta-note");
-  cta.disabled = false;
-
-  const outstanding = questions().filter((q) => q.required).length;
-  const next = ((state.observation || {}).next_controls || [])[0];
-  const submit = ((state.observation || {}).submit_controls || [])[0];
-
-  if (!state.observation || (state.observation.fields || []).length === 0) {
-    cta.textContent = "Scan this page";
-    note.textContent = "";
-    cta._action = "scan";
-    return;
-  }
-  if (outstanding) {
-    cta.textContent = `Answer ${outstanding} question${outstanding > 1 ? "s" : ""}`;
-    note.textContent = "I have filled everything else I can.";
-    cta._action = "focus";
-    return;
-  }
-  if (!state.plan || !(state.plan.actions || []).length) {
-    if (next) {
-      cta.textContent = `Continue application ▸`;
-      note.textContent = `Presses "${next.text}".`;
-      cta._action = "next";
-      return;
-    }
-    if (submit) {
-      if (state.submissionPolicy === "auto") {
-        cta.textContent = "Submit application ▸";
-        note.textContent = "You set submitting to happen automatically.";
-        cta._action = "submit";
-      } else {
-        cta.textContent = `Press "${submit.text}" yourself`;
-        note.textContent = "I do not press final submit. Change that in Settings if you want to.";
-        cta.disabled = true;
-        cta._action = "none";
-      }
-      return;
-    }
-    cta.textContent = "Rescan this page";
-    cta._action = "scan";
-    note.textContent = "";
-    return;
-  }
-  cta.textContent = "Fill this page";
-  note.textContent = `${state.plan.actions.length} field(s) I can fill from what you saved.`;
-  cta._action = "fill";
+  const choice = ApplyPilotCta.decide({
+    observation: state.observation,
+    plan: state.plan,
+    outstanding: questions().filter((q) => q.required).length,
+    submissionPolicy: state.submissionPolicy,
+  });
+  cta.textContent = choice.label;
+  cta.disabled = choice.disabled;
+  cta._action = choice.action;
+  note.textContent = choice.note;
 }
 
 async function runCta() {

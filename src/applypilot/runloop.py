@@ -252,7 +252,7 @@ def build_checklist(
                     fingerprint=observed.fingerprint,
                     label=label,
                     section=where,
-                    state="attempted",
+                    state="planned",
                     value=answers[observed.fingerprint].value,
                     detail="planned but not carried out yet",
                     required=observed.required,
