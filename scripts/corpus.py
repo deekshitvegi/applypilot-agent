@@ -84,6 +84,13 @@ FEEDS = {
         ("applyUrl", "jobUrl"),
         "title",
     ),
+    "smartrecruiters": Feed(
+        "smartrecruiters",
+        "https://api.smartrecruiters.com/v1/companies/{slug}/postings?limit=100",
+        "content",
+        ("applyUrl", "ref"),
+        "name",
+    ),
 }
 
 

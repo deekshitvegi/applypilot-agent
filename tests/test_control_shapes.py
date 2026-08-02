@@ -1,0 +1,88 @@
+"""What a control is made of, and what you would have to do to answer it.
+
+Regression 121. Three hundred and twenty controls across the corpus call
+themselves a combobox; three hundred and ten of them hold no options at all
+when the page is read. Treating those as "a list with nothing in it" is what
+put a text box on screen for a dropdown question -- asking somebody to type an
+answer that was only ever going to be picked from a list the control had not
+been opened to show yet.
+
+Every shape in the fixture is copied from a real form.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+pytestmark = pytest.mark.browser
+
+#: label -> how it has to be worked
+EXPECTED = {
+    "Country": "list_present",
+    "Are you open to relocation?": "list_on_open",
+    "Location": "type_to_search",
+    "Phone country code": "list_present",
+    "When can you start a new role?": "date_picker",
+    "Are you legally authorized to work in the United States?": "choice_group",
+    "First Name": "free_text",
+    "Why do you want to work here?": "long_text",
+    "Resume": "file",
+}
+
+
+def by_label(observation):
+    out = {}
+    for field in observation["fields"]:
+        label = (field.get("display_label") or field.get("label") or "").strip()
+        label = label.rstrip("*").strip()
+        out.setdefault(label, field)
+    return out
+
+
+@pytest.mark.parametrize("label,operation", sorted(EXPECTED.items()))
+def test_each_shape_is_recognised_for_what_it_takes_to_answer(scan, label, operation):
+    _, observation = scan("control_shapes.html")
+    found = by_label(observation)
+    assert label in found, f"no field labelled {label!r}; saw {sorted(found)}"
+    assert found[label].get("operation") == operation
+
+
+def test_the_two_comboboxes_are_told_apart(scan):
+    """The distinction the whole thing exists for.
+
+    Both are an input calling itself a combobox with no options on it. One
+    opens onto a list; the other offers nothing until you type, and says so in
+    its placeholder. They want opposite treatment.
+    """
+    found = by_label(scan("control_shapes.html")[1])
+    opens = found["Are you open to relocation?"]
+    types = found["Location"]
+    assert opens["control"] == types["control"] == "combobox"
+    assert opens["operation"] == "list_on_open"
+    assert types["operation"] == "type_to_search"
+
+
+def test_nothing_on_a_real_form_shape_comes_back_unrecognised(scan):
+    _, observation = scan("control_shapes.html")
+    unknown = [
+        f.get("display_label") or f.get("label")
+        for f in observation["fields"]
+        if f.get("operation") in (None, "unknown")
+    ]
+    assert not unknown, f"unrecognised: {unknown}"
+
+
+def test_a_drawn_list_is_still_asked_to_open_before_anyone_is_asked(scan):
+    """A control holding no options is not a control with no options."""
+    from applypilot.mapper import needs_its_options_opened
+    from applypilot.models import PageObservation
+
+    observation = PageObservation.model_validate(scan("control_shapes.html")[1])
+    fields = {
+        (f.display_label or f.label).strip().rstrip("*").strip(): f
+        for f in observation.fields
+    }
+    assert needs_its_options_opened(fields["Are you open to relocation?"]) is True
+    assert needs_its_options_opened(fields["Location"]) is True
+    # This one has said its choices are readable, so it is not poked.
+    assert needs_its_options_opened(fields["Country"]) is False

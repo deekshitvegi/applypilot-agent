@@ -53,6 +53,72 @@
     return "text";
   }
 
+  /*
+   * How a control has to be worked, as opposed to what it is made of.
+   *
+   * `control` says what the element is. It does not say what you would have to
+   * do to answer it, and those are different questions: 320 controls across
+   * the corpus call themselves a combobox, and 310 of them are holding no
+   * options at all when the page is read. Treating those as "a list with
+   * nothing in it" is what put a text box on screen for a dropdown question --
+   * asked to type an answer that was only ever going to be chosen from a list
+   * the control had not been opened to show yet.
+   *
+   * Every value here is read from something the page publishes about itself.
+   * When none of it adds up, the answer is "unknown" -- a control nobody can
+   * be sure how to work is not one to guess at.
+   */
+  const TYPE_FIRST = /start typing|type to search|search|begin typing|type at least/i;
+  const DATE_HINT = /pick a? ?date|select a? ?date|mm\s*\/\s*dd|dd\s*\/\s*mm|yyyy/i;
+
+  /** A list this control points at that already holds choices, unopened. */
+  function liveListbox(el) {
+    const id = el.getAttribute("aria-controls") || el.getAttribute("aria-owns");
+    if (!id) return false;
+    const box = D.byId ? D.byId(el, id) : document.getElementById(id);
+    if (!box) return false;
+    return box.querySelectorAll("[role=option],option,li").length > 1;
+  }
+
+  function operationOf(el, kind) {
+    const tag = (el.tagName || "").toLowerCase();
+    const role = (el.getAttribute("role") || "").toLowerCase();
+    const auto = (el.getAttribute("aria-autocomplete") || "").toLowerCase();
+    const type = (el.getAttribute("type") || el.type || "").toLowerCase();
+    const hint = (el.getAttribute("placeholder") || "").trim();
+
+    if (kind === "file") return "file";
+    if (kind === "radio" || kind === "checkbox") return "choice_group";
+    if (kind === "textarea") return "long_text";
+    if (kind === "date" || type === "date" || type === "month") return "date_picker";
+    if (kind === "password") return "free_text";
+
+    if (tag === "select") {
+      // A native list is usually all there, but some are filled in only once
+      // touched, and one holding a single placeholder row is not a list yet.
+      return el.options && el.options.length > 1 ? "list_present" : "list_on_open";
+    }
+
+    if (kind === "combobox" || kind === "multiselect" || role === "listbox") {
+      if (liveListbox(el)) return "list_present";
+      // The page saying "Start typing" is the page telling you there is
+      // nothing to show until you do. That is a different control from one
+      // that opens onto a list, even though both call themselves a combobox.
+      if (TYPE_FIRST.test(hint)) return "type_to_search";
+      if (el.getAttribute("aria-haspopup") || auto === "list" || auto === "both") {
+        return "list_on_open";
+      }
+      if (el.readOnly) return "list_on_open";
+      return "list_on_open";
+    }
+
+    if (["text", "email", "tel", "number", "url"].indexOf(kind) !== -1) {
+      if (DATE_HINT.test(hint)) return "date_picker";
+      return "free_text";
+    }
+    return "unknown";
+  }
+
   /**
    * A required marker that lives in its own element beside the control.
    *
@@ -294,6 +360,11 @@
       label: label || "",
       attr_label: attrLabel || "",
       control: kind,
+      // How it has to be worked, which is not the same question as what it is
+      // made of. Deliberately not part of the fingerprint: a list that has
+      // been opened once holds its choices afterwards, and a control must not
+      // change identity by being read.
+      operation: operationOf(el, kind),
       name: el.getAttribute("name") || "",
       section: D.sectionOf(el),
       group: block.group,

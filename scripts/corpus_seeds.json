@@ -7,7 +7,8 @@
     "",
     "Add a company by putting its careers-page slug here. The slug is the last",
     "part of its board URL -- job-boards.greenhouse.io/SLUG, jobs.lever.co/SLUG,",
-    "jobs.ashbyhq.com/SLUG. A slug that has gone away is reported and skipped."
+    "jobs.ashbyhq.com/SLUG. A slug that has gone away is reported and skipped,",
+    "so a stale entry costs a line of output and nothing else."
   ],
   "companies": [
     { "ats": "greenhouse", "slug": "anthropic" },
@@ -18,15 +19,34 @@
     { "ats": "greenhouse", "slug": "discord" },
     { "ats": "greenhouse", "slug": "reddit" },
     { "ats": "greenhouse", "slug": "cloudflare" },
+    { "ats": "greenhouse", "slug": "stripe" },
+    { "ats": "greenhouse", "slug": "scaleai" },
+    { "ats": "greenhouse", "slug": "coinbase" },
+    { "ats": "greenhouse", "slug": "instacart" },
+    { "ats": "greenhouse", "slug": "pinterest" },
+    { "ats": "greenhouse", "slug": "gitlab" },
+    { "ats": "greenhouse", "slug": "datadog" },
+    { "ats": "greenhouse", "slug": "samsara" },
+    { "ats": "greenhouse", "slug": "affirm" },
+    { "ats": "greenhouse", "slug": "chime" },
+    { "ats": "greenhouse", "slug": "twilio" },
+    { "ats": "greenhouse", "slug": "asana" },
 
     { "ats": "lever", "slug": "palantir" },
     { "ats": "lever", "slug": "spotify" },
-    { "ats": "lever", "slug": "plaid" },
-    { "ats": "lever", "slug": "attentive" },
+    { "ats": "lever", "slug": "binance" },
+    { "ats": "lever", "slug": "matchgroup" },
 
     { "ats": "ashby", "slug": "ramp" },
     { "ats": "ashby", "slug": "linear" },
     { "ats": "ashby", "slug": "vanta" },
-    { "ats": "ashby", "slug": "clay" }
+    { "ats": "ashby", "slug": "openai" },
+    { "ats": "ashby", "slug": "notion" },
+    { "ats": "ashby", "slug": "posthog" },
+    { "ats": "ashby", "slug": "replit" },
+    { "ats": "ashby", "slug": "runway" },
+    { "ats": "ashby", "slug": "modal" },
+
+    { "ats": "smartrecruiters", "slug": "Visa" }
   ]
 }

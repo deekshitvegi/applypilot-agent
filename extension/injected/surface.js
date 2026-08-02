@@ -77,9 +77,16 @@
   function isSearchControl(el) {
     if (!el) return false;
     const type = (el.getAttribute("type") || "").toLowerCase();
-    if (type === "search") return true;
     const role = (el.getAttribute("role") || "").toLowerCase();
-    if (role === "searchbox") return true;
+    // A box the form gave a name to is a question, whatever it is typed as.
+    // Pickers that filter a long list -- a phone country code is the usual one
+    // -- are built as search boxes and would otherwise be thrown away with the
+    // site's own search. The site's search box is furniture: it has a
+    // placeholder and no label, because nothing on the page is asking for it.
+    if (type === "search" || role === "searchbox") {
+      if (role === "combobox" || el.getAttribute("aria-controls")) return false;
+      return !D.visibleLabel(el);
+    }
     for (const attr of ["name", "id", "aria-label", "placeholder"]) {
       const value = (el.getAttribute(attr) || "").trim();
       if (value && SEARCH_NAMES.test(value)) return true;

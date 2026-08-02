@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>One question, eight ways of asking it</title>
+<!--
+  Every shape here is copied from a real application form, not invented.
+  What each one is made of is nearly the same; what you would have to DO to
+  answer it is not, and that is the distinction under test.
+-->
+<form>
+  <!-- 1. A native list, all of it readable now. -->
+  <label for="nat">Country</label>
+  <select id="nat" name="country" required>
+    <option value="">Select...</option>
+    <option>United States</option>
+    <option>United Kingdom</option>
+    <option>India</option>
+  </select>
+
+  <!-- 2. A list the page draws, holding nothing until it is opened. The
+       commonest shape on real forms by a wide margin. -->
+  <label for="drawn">Are you open to relocation?</label>
+  <input id="drawn" role="combobox" aria-haspopup="true" aria-expanded="false"
+         aria-autocomplete="list" type="text" required>
+
+  <!-- 3. Nothing offered until something is typed. The page says so itself. -->
+  <label for="place">Location</label>
+  <input id="place" role="combobox" aria-autocomplete="list" type="text"
+         placeholder="Start typing..." required>
+
+  <!-- 4. A list it already points at, readable without touching it. -->
+  <label for="dial">Phone country code</label>
+  <input id="dial" role="combobox" aria-controls="dial-list" type="search">
+  <ul id="dial-list" role="listbox">
+    <li role="option">United States +1</li>
+    <li role="option">United Kingdom +44</li>
+    <li role="option">India +91</li>
+  </ul>
+
+  <!-- 5. A calendar wearing a text box. -->
+  <label for="when">When can you start a new role?</label>
+  <input id="when" type="text" placeholder="Pick date...">
+
+  <!-- 6. Choices already drawn on the page. -->
+  <fieldset>
+    <legend>Are you legally authorized to work in the United States?</legend>
+    <label><input type="radio" name="auth" value="Yes"> Yes</label>
+    <label><input type="radio" name="auth" value="No"> No</label>
+  </fieldset>
+
+  <!-- 7. A line to type. -->
+  <label for="first">First Name</label>
+  <input id="first" type="text" required>
+
+  <!-- 8. A box to write in. -->
+  <label for="why">Why do you want to work here?</label>
+  <textarea id="why"></textarea>
+
+  <!-- 9. A document. -->
+  <label for="cv">Resume</label>
+  <input id="cv" type="file">
+
+  <button type="submit">Submit application</button>
+</form>

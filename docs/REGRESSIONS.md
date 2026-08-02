@@ -982,3 +982,28 @@ are a different job.
 label written "Current/Most Recent Company Name" keeps its slash through
 normalising, so an exact-set test never saw it; the unmistakable-history test
 now reads it the way every other rule does, one form per branch of the slash.
+
+**121. A dropdown was handed back as a box to type in, because it was holding
+no options.** Three hundred and twenty controls across the corpus call
+themselves a combobox and three hundred and ten of them hold nothing at all
+when the page is read -- their choices exist only once the control is opened.
+Counting the options that happen to be lying about cannot tell that apart from
+a control that genuinely has none, so the question became "type your answer",
+for an answer that was only ever going to be picked from a list.
+*Mechanism.* A control now says how it has to be worked, separately from what
+it is made of: a list readable now, a list that exists once opened, a box that
+offers nothing until something is typed, a calendar, a group of choices already
+drawn, free text, long text, a file -- or `unknown`, which is what a control
+whose signals do not add up gets instead of a guess. Every value is read from
+something the page publishes about itself. Across 89 real forms nothing came
+back unknown, and the two kinds of combobox split 310 to 10. It is deliberately
+not part of the fingerprint: a list that has been opened once holds its choices
+afterwards, and a control must not change identity by being read.
+
+**122. A picker built as a search box was thrown away with the site's search.**
+Anything typed `search` was treated as furniture. A phone country code -- a
+filter over 244 entries -- is built exactly that way, so it was never offered
+at all.
+*Mechanism.* A box the form gave a name to is a question, whatever it is typed
+as. The site's own search box has a placeholder and no label, because nothing
+on the page is asking for it.

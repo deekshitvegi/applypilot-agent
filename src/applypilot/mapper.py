@@ -46,6 +46,7 @@ from .models import (
     ControlKind,
     FieldObservation,
     PendingQuestion,
+    Operation,
     Profile,
 )
 from .text import (
@@ -905,7 +906,18 @@ def needs_its_options_opened(field: FieldObservation) -> bool:
     selects hold nothing until they are touched. Either way there is nothing to
     show, and handing back a text box for someone to type a dropdown answer into
     is not an acceptable substitute.
+
+    The control now says which it is rather than being guessed at from how many
+    options happen to be lying about. That distinction was invisible before:
+    across 89 real forms, 338 controls hold no options until opened and only 10
+    hold none until something is typed, and the two want opposite treatment.
     """
+    if field.operation in {Operation.LIST_ON_OPEN, Operation.TYPE_TO_SEARCH}:
+        return len(usable_options(field)) < 2
+    if field.operation is Operation.LIST_PRESENT:
+        # It has said its choices are readable. If they are not, believe the
+        # control over the count -- an empty list here is an empty list.
+        return False
     if field.control not in CHOICE_CONTROLS:
         return False
     return len(usable_options(field)) < 2

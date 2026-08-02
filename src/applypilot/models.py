@@ -37,6 +37,36 @@ class ControlKind(StrEnum):
     UNKNOWN = "unknown"
 
 
+class Operation(StrEnum):
+    """How a control has to be worked to answer it.
+
+    Read from what the page publishes about itself, never inferred from which
+    site it is. A control whose signals do not add up is ``UNKNOWN`` rather
+    than a guess: the cost of guessing here is asking somebody to type an
+    answer that was only ever going to be picked from a list.
+    """
+
+    #: The choices are readable right now -- a native list, or a listbox the
+    #: control already points at.
+    LIST_PRESENT = "list_present"
+    #: The choices exist only once the control is opened. Much the commonest
+    #: kind on real forms, and the one that used to become a text box.
+    LIST_ON_OPEN = "list_on_open"
+    #: Nothing is offered until something is typed. The page usually says so
+    #: itself, in the placeholder.
+    TYPE_TO_SEARCH = "type_to_search"
+    #: A calendar, however it is dressed.
+    DATE_PICKER = "date_picker"
+    #: Radios or tick boxes already drawn on the page.
+    CHOICE_GROUP = "choice_group"
+    #: A box to type a line into.
+    FREE_TEXT = "free_text"
+    #: A box to write in.
+    LONG_TEXT = "long_text"
+    FILE = "file"
+    UNKNOWN = "unknown"
+
+
 TEXTUAL_CONTROLS = {
     ControlKind.TEXT,
     ControlKind.TEXTAREA,
@@ -122,6 +152,12 @@ class FieldObservation(BaseModel):
     label: str = ""
     attr_label: str = ""
     control: ControlKind = ControlKind.UNKNOWN
+    #: How the control has to be worked, which is a different question from
+    #: what it is made of. Three hundred controls across the corpus call
+    #: themselves a combobox while holding no options at all, and telling "a
+    #: list that will exist once opened" apart from "a box you type into" is
+    #: the difference between choosing an answer and being asked to type one.
+    operation: Operation = Operation.UNKNOWN
     name: str = ""
     section: str = ""
     group: str = ""
