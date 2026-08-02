@@ -30,8 +30,36 @@ const el = (id) => document.getElementById(id);
 /** Controls that are answered by picking, never by typing. */
 const CHOICE_CONTROLS = new Set(["radio", "select", "multiselect", "combobox", "listbox"]);
 
-function isChoice(control) {
+/* How a control has to be worked, when the page said so plainly enough for
+   the scan to tell. It is a better answer than the element type: two controls
+   both calling themselves a combobox can want opposite treatment, and one of
+   them is a calendar wearing a text box. */
+const PICKED_OPERATIONS = new Set([
+  "list_present",
+  "list_on_open",
+  "type_to_search",
+  "choice_group",
+]);
+const TYPED_OPERATIONS = new Set(["free_text", "long_text"]);
+
+function isChoice(control, operation) {
+  const how = String(operation || "").toLowerCase();
+  if (PICKED_OPERATIONS.has(how)) return true;
+  if (TYPED_OPERATIONS.has(how)) return false;
   return CHOICE_CONTROLS.has(String(control || "").toLowerCase());
+}
+
+/**
+ * How the control behind a question has to be worked.
+ *
+ * A question is a message about a field; the field on the page is where the
+ * answer lives. Read it from the page when it is still there, because that is
+ * the thing that knows, and fall back to the question when it is not.
+ */
+function howOf(question) {
+  if (!question) return "";
+  const live = fieldFor(question.fingerprint);
+  return (live && live.operation) || question.operation || "";
 }
 
 const state = {
@@ -554,7 +582,7 @@ async function renderQuestion() {
   const live = fieldFor(question.fingerprint);
   let offered = (question.options || []).length
     ? question.options
-    : (isChoice(question.control) && live ? live.options || [] : []);
+    : (isChoice(question.control, howOf(question)) && live ? live.options || [] : []);
   // A tick box is answered by ticking it or not, so those are the two things
   // to offer. It has no options of its own, which sent it down the same path
   // as a free-text field -- and an agreement came back as a box to type into,
@@ -569,7 +597,7 @@ async function renderQuestion() {
   // be read -- a select that holds nothing until the page fills it, a picker
   // that only answers once opened -- the honest thing is to say so and offer to
   // show you the control, because typing into a dropdown does nothing at all.
-  if (isChoice(question.control) && !choices.length) {
+  if (isChoice(question.control, howOf(question)) && !choices.length) {
     const note = document.createElement("p");
     note.className = "sub";
     note.textContent =
@@ -783,7 +811,7 @@ async function answerQuestionInner(value, button, restoreLabel) {
   setBusy(button, true);
   try {
     if (value) {
-      const picking = isChoice(question.control);
+      const picking = isChoice(question.control, howOf(question));
       // "Which of these have you used?" can be true of several at once, so
       // each pick is its own action against the same control. Ticking is
       // idempotent, so nothing already ticked gets toggled back off.

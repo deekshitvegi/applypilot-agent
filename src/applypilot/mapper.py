@@ -872,6 +872,7 @@ def _ask(
         fingerprint=field.fingerprint,
         label=pretty_label(field.display_label or field.attr_label),
         control=field.control,
+        operation=field.operation,
         options=usable_options(field),
         required=field.required,
         fact_key=fact_key,

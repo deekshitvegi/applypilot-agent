@@ -21,6 +21,7 @@ from .models import (
     Answer,
     ChecklistItem,
     FieldObservation,
+    Operation,
     Outcome,
     PageObservation,
     PendingQuestion,
@@ -103,6 +104,11 @@ class Plan:
 def _action_for(field_obs: FieldObservation, answer: Answer) -> PlannedAction:
     if field_obs.control is CK.CHECKBOX:
         kind = "check"
+    elif field_obs.operation is Operation.TYPE_TO_SEARCH:
+        # It offers nothing until something is typed, so opening it and
+        # looking for a list finds an empty popup. Typing is how this one is
+        # worked; the suggestion it raises is then picked and read back.
+        kind = "fill"
     elif field_obs.control in {CK.SELECT, CK.RADIO, CK.COMBOBOX, CK.MULTISELECT}:
         kind = "choose"
     elif field_obs.control is CK.FILE:

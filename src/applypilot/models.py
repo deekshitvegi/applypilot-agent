@@ -175,7 +175,10 @@ class FieldObservation(BaseModel):
     #: field wants, never as a label.
     placeholder: str = ""
     input_type: str = ""
-    options_source: Literal["native", "owned_popup", "none"] = "none"
+    #: Where the choices were read from. "listbox" is a list the control points
+    #: at with aria-controls that is already in the page -- a picker's live
+    #: suggestions, or a long list a widget keeps beside itself.
+    options_source: Literal["native", "owned_popup", "listbox", "none"] = "none"
 
     @property
     def display_label(self) -> str:
@@ -256,6 +259,9 @@ class PendingQuestion(BaseModel):
     fingerprint: str
     label: str
     control: ControlKind = ControlKind.UNKNOWN
+    #: How the control has to be worked, carried along so the panel offers the
+    #: right thing even when the field has left the page since it was asked.
+    operation: Operation = Operation.UNKNOWN
     options: list[Option] = Field(default_factory=list)
     required: bool = True
     fact_key: str = ""

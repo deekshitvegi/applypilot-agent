@@ -191,6 +191,16 @@
     if (el.focus) el.focus();
     setNativeValue(el, "");
     fireInput(el);
+    // Only for a box that answers with a list. Say exactly what is being put
+    // there, so that what the page later replaces it with can be told from our
+    // own echo: a place picker handed "Denton, Texas" comes back holding
+    // "Denton, Texas, United States", and nobody wrote that but the page.
+    //
+    // An ordinary text box is left alone. Its holding what it was given is the
+    // whole of the evidence there, and marking it took that away.
+    if (D.isComboboxInput(el) || suggests(el)) {
+      AP.verify.markTypedAsFilter(el, value);
+    }
     setNativeValue(el, value);
     fireInput(el);
 
@@ -388,7 +398,9 @@
    * never afterwards be read back as evidence of a selection.
    */
   function typeFilter(box, text) {
-    AP.verify.markTypedAsFilter(box);
+    // The exact text, so that what the page later replaces it with can be told
+    // apart from our own echo of it.
+    AP.verify.markTypedAsFilter(box, String(text || ""));
     if (box.focus) box.focus();
     setNativeValue(box, "");
     fireInput(box);

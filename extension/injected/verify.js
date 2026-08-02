@@ -27,9 +27,22 @@
   if (AP.verify) return;
   const D = AP.dom;
 
-  /* Controls the executor typed into purely to narrow a list. Whatever is in
-   * them came from this agent, so it can never be evidence of anything. */
-  const typedAsFilter = new WeakSet();
+  /* Controls the executor typed into purely to narrow a list, and the exact
+   * text it put there.
+   *
+   * Whatever still reads back as that text came from this agent and can never
+   * be evidence of anything. What the page has since replaced it with is a
+   * different matter: a place picker handed "Denton, Texas" comes back holding
+   * "Denton, Texas, United States", and nobody wrote that but the page. The
+   * text is kept, rather than a bare mark, so the two can be told apart. */
+  const typedAsFilter = new WeakMap();
+
+  function echoOfOurOwnTyping(el) {
+    if (!typedAsFilter.has(el)) return false;
+    const typed = String(typedAsFilter.get(el) || "").trim().toLowerCase();
+    const now = String(el.value || "").trim().toLowerCase();
+    return !now || now === typed;
+  }
 
   const PLACEHOLDER = /^(|-+|\.+|_+|no selection|none selected|nothing selected|not selected|select\b.*|please select.*|make a selection.*|select one.*|choose\b.*|pick one|--.*--|\(.*\)|click to select.*|type to search.*|start typing.*|please enter.*|enter \d+ or more.*|no results.*|no matches.*|loading.*|searching.*|search\.\.\.|n\/?a|tbd|optional|required)$/i;
 
@@ -223,7 +236,13 @@
       }
     }
 
-    const filtering = typedAsFilter.has(el) || D.isComboboxInput(el);
+    // A box that is only a filter is not evidence -- unless the page has since
+    // put something of its own in it. Choosing a suggestion is how a picker is
+    // answered at all, and the widget writes the canonical wording back: that
+    // reading is the page's, not ours. Every such fill was being reported
+    // unverified while sitting correctly filled on screen.
+    const stillOurs = echoOfOurOwnTyping(el);
+    const filtering = stillOurs || (!typedAsFilter.has(el) && D.isComboboxInput(el));
 
     if (!filtering && (tag === "input" || tag === "textarea")) {
       return { value: el.value || "", signal: "native_value" };
@@ -359,7 +378,7 @@
   AP.verify = {
     check,
     isPlaceholder,
-    markTypedAsFilter: (el) => typedAsFilter.add(el),
+    markTypedAsFilter: (el, text) => typedAsFilter.set(el, text === undefined ? el.value : text),
     observe,
     renderedValue,
     same,

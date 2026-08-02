@@ -71,13 +71,42 @@
   const TYPE_FIRST = /start typing|type to search|search|begin typing|type at least/i;
   const DATE_HINT = /pick a? ?date|select a? ?date|mm\s*\/\s*dd|dd\s*\/\s*mm|yyyy/i;
 
+  /**
+   * The list this control points at, if it is already in the page.
+   *
+   * The id is looked up rather than selected for: a page that generates ids
+   * hands out things like ":r0:", which is a perfectly good id and not a
+   * usable selector.
+   */
+  function pointedList(el) {
+    const id = el.getAttribute("aria-controls") || el.getAttribute("aria-owns");
+    if (!id) return null;
+    try {
+      return (el.ownerDocument || document).getElementById(id);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  /** The choices in that list, read the way a person would see them. */
+  function listboxOptions(el) {
+    const box = pointedList(el);
+    if (!box) return [];
+    const rows = box.querySelectorAll("[role=option]");
+    return Array.from(rows)
+      .filter((row) => D.isVisible(row))
+      .map((row) => ({
+        label: (row.textContent || "").replace(/\s+/g, " ").trim(),
+        value: row.getAttribute("data-value") || row.getAttribute("value") || "",
+        disabled: row.getAttribute("aria-disabled") === "true",
+        selected: row.getAttribute("aria-selected") === "true",
+      }))
+      .filter((option) => option.label);
+  }
+
   /** A list this control points at that already holds choices, unopened. */
   function liveListbox(el) {
-    const id = el.getAttribute("aria-controls") || el.getAttribute("aria-owns");
-    if (!id) return false;
-    const box = D.byId ? D.byId(el, id) : document.getElementById(id);
-    if (!box) return false;
-    return box.querySelectorAll("[role=option],option,li").length > 1;
+    return listboxOptions(el).length > 1;
   }
 
   function operationOf(el, kind) {
@@ -441,6 +470,17 @@
           selected: Boolean(option.selected),
         }));
         optionsSource = "native";
+      } else {
+        // A widget that points at its own list. The choices are right there in
+        // the page and were being thrown away: a place picker that had just
+        // raised five real suggestions reported none, so the only thing left to
+        // offer was a box to type into -- for a control whose whole purpose is
+        // that you pick from what it found.
+        const pointed = listboxOptions(el);
+        if (pointed.length) {
+          options = pointed;
+          optionsSource = "listbox";
+        }
       }
 
       const field = baseObservation(el, rawLabel, attrLabel, kind, options);

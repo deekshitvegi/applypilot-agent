@@ -1007,3 +1007,29 @@ at all.
 *Mechanism.* A box the form gave a name to is a question, whatever it is typed
 as. The site's own search box has a placeholder and no label, because nothing
 on the page is asking for it.
+
+**123. A picker's own suggestions were thrown away.** Only a native `<select>`
+had its choices read. A widget pointing at a listbox with `aria-controls` --
+which is how a place picker shows what it found, and how a long list is kept
+beside a control -- reported no options at all, so the only thing left to offer
+was a box to type into, for a control whose whole purpose is that you pick from
+what it found.
+*Mechanism.* The list a control points at is read when it is already in the
+page. The id is looked up rather than selected for: a page that generates ids
+hands out things like ":r0:", which is a perfectly good id and not a usable
+selector.
+
+**124. A picker filled correctly was reported unverified.** A combobox's own
+text box is not evidence -- typing into it filters a list, and reading it back
+is how a rescan once called an option verified that the page had never accepted.
+But choosing a suggestion is how a picker is answered at all, and the widget
+writes its own wording back: handed "Denton, Texas" it comes back holding
+"Denton, Texas, United States". Every such fill sat correctly filled on screen
+and was reported as unverified.
+*Mechanism.* The exact text typed is remembered, not just the fact of typing.
+A box still reading back as that text is our own echo and proves nothing; a box
+the page has since rewritten is the page answering. The safety property is
+unchanged and was checked on the live control: a place the picker does not know
+stays `attempted` with no signal. Only suggestion controls are marked -- an
+ordinary text box holding what it was given is the whole of the evidence there,
+and marking it took that away.
