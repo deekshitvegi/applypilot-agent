@@ -214,12 +214,23 @@
     const container = commonAncestor(elements);
     if (!container) return "";
 
+    // What each choice calls itself. A radio sits inside its own label, and
+    // that label holds the word "Yes" -- which contains no control, is
+    // perfectly visible, and is short, so the search below happily took it as
+    // the question the group was asking. Every Yes/No question on one real
+    // form came back labelled "Yes", which is not something anyone can answer
+    // or even be shown.
+    const optionRegions = elements
+      .map((one) => D.closestDeep(one, "label,li") || one.parentElement)
+      .filter(Boolean);
+
     // The question is usually inside the block, above the buttons, rather than
     // before the block. Look there first: walking outward reaches the rest of
     // the page, and the rest of the page is not the question.
     const inside = Array.from(container.querySelectorAll("label,p,legend,h1,h2,h3,h4,div,span"))
       .find((node) => {
         if (elements.some((one) => node.contains(one))) return false;
+        if (optionRegions.some((region) => region.contains(node))) return false;
         if (node.querySelector("input,select,textarea")) return false;
         const text = D.textOf(node);
         return text && text.length <= 300 && D.isVisible(node);

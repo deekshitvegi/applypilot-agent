@@ -952,3 +952,15 @@ own belongs to whatever block it sits in, and inside a job it is where that job
 was rather than where you live. Claiming it took an employment record's own
 field away from it. It is kept out of `topics` for the same reason -- a label
 containing the word may be about the role's location, not yours.
+
+**118. Every Yes/No question on a form came back labelled "Yes".** A radio sits
+inside its own `<label>`, and the word "Yes" lives in a span in there with it.
+That span holds no control, is perfectly visible and is short, so the search for
+the question inside the block found the answer first and stopped. The result is
+a label nobody can answer and the panel cannot even show -- and on one form
+that was every custom question it had, including work authorisation and
+sponsorship, both of which the profile could have answered outright.
+*Mechanism.* What each choice calls itself is not what the group is asking. The
+search for the question now skips anything sitting inside a choice's own label,
+so it falls through to the block heading a level further out, which is where the
+question actually is. Found by capturing 35 real forms, not by meeting it.
