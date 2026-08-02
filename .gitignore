@@ -37,3 +37,5 @@ extension.zip
 .idea/
 .DS_Store
 Thumbs.db
+corpus/forms/
+corpus/targets.json

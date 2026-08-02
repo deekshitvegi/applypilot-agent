@@ -928,3 +928,27 @@ on what the form calls it, and required to agree on the section, the kind of
 control, and which entry of a repeating block it is. One match and the action
 is retried unchanged; anything else and the failure stands. The value is never
 reconsidered, only where it goes.
+
+**116. A fact's own word buried in a long question stole the question.** "Do
+you have a minimum of 2 years of mobile engineering experience?" was read as
+asking for a phone number, because "mobile" is how half the world says phone.
+"AI tools (such as Github Copilot...)" was read as asking for a GitHub profile,
+and "the New York City or San Francisco area" as asking which city you live in.
+One of those sat on a free-text box, where nothing catches it later: a choice
+that does not fit its options is refused, but a text box takes whatever it is
+given, so the phone number would simply have been typed onto the form.
+*Mechanism.* Facts holding a piece of contact or identity data -- names, email,
+phone, address, profile links, documents -- can no longer win a match at
+sentence level. Measured over 35 real forms rather than guessed at: that path
+wins about sixty matches and is right every time the fact describes a
+circumstance, and was wrong every time it did not. Blocking them can only turn
+a fill into a question, never the reverse.
+
+**117. "Location" was the commonest label the matcher could not read.** Twenty
+fields across the corpus -- "Location (City)", "Current location" -- on forms
+that were otherwise filled, because `city` had no wording for it.
+*Mechanism.* Qualified wordings only, never the bare word: "Location" on its
+own belongs to whatever block it sits in, and inside a job it is where that job
+was rather than where you live. Claiming it took an employment record's own
+field away from it. It is kept out of `topics` for the same reason -- a label
+containing the word may be about the role's location, not yours.

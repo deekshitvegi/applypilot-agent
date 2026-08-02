@@ -129,8 +129,21 @@ FACTS: tuple[FactSpec, ...] = (
         onboarding_group="address",
     ),
     _f(
+        # "Location" is how most boards ask for the city you are in, and it
+        # was the commonest thing the matcher could not read: twenty fields
+        # across the corpus, on forms that were otherwise filled.
+        #
+        # Only ever qualified, never the bare word. "Location" on its own
+        # belongs to whatever block it sits in -- inside a job it is where
+        # that job was, not where you live -- so claiming it here took an
+        # employment record's own field away from it.
+        #
+        # It stays out of `topics` for the same reason: a label containing the
+        # word may be about the role's location rather than yours.
         "city", "city", "town", "city or town", "city town",
         "city of residence", "locality",
+        "current location", "location city", "city location",
+        "current city", "your location", "location city town",
         topics=("city",), prompt="City", onboarding_group="address",
     ),
     _f(
@@ -166,7 +179,7 @@ FACTS: tuple[FactSpec, ...] = (
     ),
     _f(
         "website", "website", "portfolio", "personal website", "website url",
-        "portfolio url", "personal site", "web site",
+        "portfolio url", "personal site", "web site", "other website",
         topics=("website", "portfolio"), supplementary=True,
         prompt="Personal website or portfolio", onboarding_group="links",
     ),

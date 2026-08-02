@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "Companies whose open roles the corpus reads, and which ATS each one uses.",
+    "Chosen for variety of ATS and of form shape, not for anywhere anyone is",
+    "applying: the point is to meet as many different ways of asking a question",
+    "as possible in one run.",
+    "",
+    "Add a company by putting its careers-page slug here. The slug is the last",
+    "part of its board URL -- job-boards.greenhouse.io/SLUG, jobs.lever.co/SLUG,",
+    "jobs.ashbyhq.com/SLUG. A slug that has gone away is reported and skipped."
+  ],
+  "companies": [
+    { "ats": "greenhouse", "slug": "anthropic" },
+    { "ats": "greenhouse", "slug": "databricks" },
+    { "ats": "greenhouse", "slug": "figma" },
+    { "ats": "greenhouse", "slug": "airbnb" },
+    { "ats": "greenhouse", "slug": "robinhood" },
+    { "ats": "greenhouse", "slug": "discord" },
+    { "ats": "greenhouse", "slug": "reddit" },
+    { "ats": "greenhouse", "slug": "cloudflare" },
+
+    { "ats": "lever", "slug": "palantir" },
+    { "ats": "lever", "slug": "spotify" },
+    { "ats": "lever", "slug": "plaid" },
+    { "ats": "lever", "slug": "attentive" },
+
+    { "ats": "ashby", "slug": "ramp" },
+    { "ats": "ashby", "slug": "linear" },
+    { "ats": "ashby", "slug": "vanta" },
+    { "ats": "ashby", "slug": "clay" }
+  ]
+}

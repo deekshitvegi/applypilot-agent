@@ -188,6 +188,32 @@ def _digit_conflict(alias: str, label: str) -> str:
     return ""
 
 
+#: Facts holding a piece of contact or identity data, which no sentence is ever
+#: asking for by burying its name in the middle.
+#:
+#: A form wanting your phone number writes "Phone". It does not write "Do you
+#: have a minimum of 2 years of mobile engineering experience?" -- but "mobile"
+#: is how half the world says phone, so that question was read as asking for
+#: one, on a control that would have typed the number straight in. The same
+#: went for "AI tools (such as Github Copilot...)" and "the New York City
+#: area".
+#:
+#: Measured across the corpus rather than guessed at: the sentence path wins
+#: about sixty matches and is right every time the fact describes a
+#: circumstance -- sponsorship, referral source, previous employment, veteran
+#: status. Every match it won for a fact in this set was wrong. Blocking them
+#: can only turn a fill into a question, never the reverse.
+_NEVER_A_SENTENCE_TOPIC = frozenset(
+    {
+        "full_name", "first_name", "middle_name", "last_name", "preferred_name",
+        "email", "phone", "phone_country_code",
+        "street_address", "address_line_2", "city", "state", "postal_code",
+        "linkedin", "github", "website", "huggingface",
+        "resume", "cover_letter", "signature",
+    }
+)
+
+
 def _question_score(alias: str, label: str, winners: frozenset[str]) -> tuple[int, str]:
     """Score a sentence question that this fact's own subject dominates.
 
@@ -386,6 +412,8 @@ def _match_against_label(
                 if not _modifier_conflict(alias, variant):
                     score, reason = _alias_score(alias, variant)
                 if score < MIN_SCORE and sentence and not attribute_mode:
+                    if spec.key in _NEVER_A_SENTENCE_TOPIC:
+                        continue
                     if _modifier_conflict(alias, variant, sentence=True):
                         continue
                     score, reason = _question_score(alias, variant, winners)
