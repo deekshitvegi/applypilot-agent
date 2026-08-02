@@ -31,7 +31,7 @@
    * them came from this agent, so it can never be evidence of anything. */
   const typedAsFilter = new WeakSet();
 
-  const PLACEHOLDER = /^(|-+|\.+|_+|no selection|none selected|nothing selected|not selected|select\b.*|please select.*|choose\b.*|pick one|--.*--|\(.*\)|click to select.*|type to search.*|start typing.*|please enter.*|enter \d+ or more.*|no results.*|no matches.*|loading.*|searching.*|search\.\.\.|n\/?a|tbd|optional|required)$/i;
+  const PLACEHOLDER = /^(|-+|\.+|_+|no selection|none selected|nothing selected|not selected|select\b.*|please select.*|make a selection.*|select one.*|choose\b.*|pick one|--.*--|\(.*\)|click to select.*|type to search.*|start typing.*|please enter.*|enter \d+ or more.*|no results.*|no matches.*|loading.*|searching.*|search\.\.\.|n\/?a|tbd|optional|required)$/i;
 
   const STATE_CLASS = /(^|[\s_-])(is-)?(selected|checked|active|chosen|on)($|[\s_-])/i;
   const STATE_ATTRS = ["data-value", "data-selected", "data-state", "data-checked", "data-selected-value"];

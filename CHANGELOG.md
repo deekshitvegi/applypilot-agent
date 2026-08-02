@@ -3,6 +3,16 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.48.0
+
+- **No more being asked for something already on the page.** "Login: required
+  and not answered yet" while the login sat in the box reads as the tool being
+  unable to see the page at all. A required field the page is already holding a
+  value for is left alone. A tick box still counts as answered only by being
+  ticked, and a placeholder is not an answer.
+- **"— Make a Selection —" is a placeholder.** The commonest one there is, and
+  it was in neither list, so an untouched dropdown looked answered.
+
 ## 1.47.0
 
 - **"Unrecognised page" on a form that is plainly a form.** When the form sits

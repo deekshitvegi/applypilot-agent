@@ -856,3 +856,16 @@ is, had its verdict discarded, and the empty top frame's "unknown" stood. Every
 one of its thirty-three fields was then skipped.
 *Mechanism.* The frame holding the fields decides what the page is, whatever it
 decided. An empty frame still changes nothing.
+
+**109. Asked about a field the page had already answered.** "Login: required and
+not answered yet" appeared while the login sat in the box. A required field the
+page is holding a value for wants nothing from anybody, and asking anyway reads
+as the tool being unable to see the page at all.
+*Mechanism.* A required field already holding a real value is left alone. A tick
+box counts as answered by being ticked, never by sitting there, and a value that
+is only the control's own placeholder is not an answer.
+
+**110. "— Make a Selection —" counted as an answer.** It is the commonest
+placeholder there is and was in neither list.
+*Mechanism.* It is in both now, along with "Select one" -- the service and the
+injected side each keep their own copy and they have to agree.

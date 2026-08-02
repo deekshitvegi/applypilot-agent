@@ -568,6 +568,19 @@ def composed_links(field: FieldObservation, profile: Profile) -> str:
     return separator.join(parts)
 
 
+def _already_answered(field: FieldObservation) -> bool:
+    """True when the page is already holding an answer for this field.
+
+    A tick box is answered by being ticked or not, so it never counts as
+    answered by sitting there; and a value that is only the control's own
+    placeholder is not an answer either.
+    """
+    if field.control is ControlKind.CHECKBOX:
+        return bool(field.checked)
+    value = (field.value or "").strip()
+    return bool(value) and not looks_like_placeholder(value)
+
+
 def is_agreement(field: FieldObservation) -> bool:
     """True when this is a box asking you to agree to something."""
     if field.control is not ControlKind.CHECKBOX:
@@ -695,6 +708,12 @@ def resolve_field(
         )
 
     if field.required:
+        # Unless it is already answered. A required field the page is holding a
+        # value for wants nothing from anybody -- and asking anyway put "Login:
+        # required and not answered yet" on screen while the login sat in the
+        # box, which reads as the tool being unable to see the page at all.
+        if _already_answered(field):
+            return Resolution(field=field, skipped="already answered on the page")
         return Resolution(
             field=field,
             question=_ask(
