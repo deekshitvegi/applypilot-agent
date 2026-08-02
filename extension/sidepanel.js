@@ -1312,15 +1312,20 @@ function fillReport(list, items) {
  *
  * It never offers to submit unless that was set deliberately in Settings.
  */
-function updateCta() {
-  const cta = el("cta");
-  const note = el("cta-note");
-  const choice = ApplyPilotCta.decide({
+/** What the one decision needs to know. */
+function ctaView() {
+  return {
     observation: state.observation,
     plan: state.plan,
     outstanding: questions().filter((q) => q.required).length,
     submissionPolicy: state.submissionPolicy,
-  });
+  };
+}
+
+function updateCta() {
+  const cta = el("cta");
+  const note = el("cta-note");
+  const choice = ApplyPilotCta.decide(ctaView());
   cta.textContent = choice.label;
   cta.disabled = choice.disabled;
   cta._action = choice.action;
@@ -1412,7 +1417,16 @@ el("run").addEventListener("click", async () => {
     setBusy(el("run"), false, "Stop");
     state.busy = false;
     await planPage();
-    if (observation.kind === "application") {
+    // Whether there is anything to fill, not what the page is called -- and
+    // decided in the one place that decides it, rather than by a second rule
+    // that could drift from the first.
+    //
+    // This used to ask for "application" exactly, so a page that wants an
+    // account was scanned, planned, and then walked straight past. Silently,
+    // with twenty-two answers ready and showing on screen, and the panel's own
+    // header saying what it meant to do with them. That is most of the
+    // account-creation forms there are.
+    if (ApplyPilotCta.decide(ctaView()).action === "fill") {
       if (state.autoContinue) await runToCompletion();
       else await fillPage();
     }

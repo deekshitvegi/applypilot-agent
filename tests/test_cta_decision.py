@@ -145,6 +145,40 @@ def test_final_submit_is_offered_only_on_the_saved_policy(decide):
     assert choice["disabled"] is False
 
 
+def test_a_page_that_wants_an_account_is_still_filled(decide):
+    """Regression 127, and the reason this decision has only one home.
+
+    Pressing Start asked for "application" exactly, so a page classified as
+    account creation was scanned, planned, and then walked straight past --
+    silently, with twenty-two answers ready and on screen. Most of the
+    account-creation forms there are behave this way, and filling everything
+    except the credentials is precisely what the panel says it will do with
+    them.
+    """
+    choice = decide(
+        {
+            "observation": page_with(fields=35, kind="registration"),
+            "plan": plan_with(actions=22),
+            "outstanding": 0,
+            "submissionPolicy": "confirm",
+        }
+    )
+    assert choice["action"] == "fill"
+
+
+@pytest.mark.parametrize("kind", ["application", "registration", "listing", "unknown"])
+def test_what_the_page_is_called_never_decides_it(decide, kind):
+    """Only whether there is anything to do."""
+    with_work = decide(
+        {"observation": page_with(fields=9, kind=kind), "plan": plan_with(4), "outstanding": 0}
+    )
+    without = decide(
+        {"observation": page_with(fields=9, kind=kind), "plan": plan_with(0), "outstanding": 0}
+    )
+    assert with_work["action"] == "fill", kind
+    assert without["action"] != "fill", kind
+
+
 def test_a_question_still_outranks_pressing_continue(decide):
     """Filling beats asking; asking still beats moving the page on."""
     choice = decide(

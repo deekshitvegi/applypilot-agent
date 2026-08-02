@@ -1066,3 +1066,15 @@ threw.
 *And it says so.* "The page did not answer in time" on its own reads like a
 hiccup. It is every field on the page not being filled, so it is now reported
 as that.
+
+**127. Pressing Start on a page that wants an account did nothing at all.**
+The run filled only when the page was classified exactly "application". A form
+that asks you to create an account classifies as "registration" -- which is
+most of the account-creation forms there are -- so it was scanned, planned, and
+then walked straight past. Silently: no error, no activity, twenty-two answers
+ready and showing on screen, and the panel's own header saying it would fill
+everything except the password.
+*Mechanism.* Whether there is anything to fill, not what the page is called.
+The plan already knows: it holds nothing to do on a job list or a posting, and
+something to do wherever there is. Decided by the same function the button
+uses, so there is no second rule to drift from the first.
