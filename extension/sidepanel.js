@@ -904,7 +904,14 @@ async function applyAll(actions) {
       Math.max(BROWSER_TIMEOUT, actions.length * 2500)
     );
   } catch (err) {
-    say(String(err.message), "bad");
+    // Loud, and named for what it cost. "the page did not answer in time" on
+    // its own reads like a hiccup; it is every field on the page not being
+    // filled, and the panel went on showing them as ready to fill afterwards.
+    say(
+      `None of the ${actions.length} field(s) were filled: ${err.message}`,
+      "bad"
+    );
+    activity("Nothing was filled", err.message);
     return [];
   }
   for (const result of results) {

@@ -1046,3 +1046,23 @@ telephone you is collecting a person, not running a search or a newsletter, and
 no page asks all three by accident. Three distinct subjects out of name, email,
 phone, address and resume, across at least three labelled controls, is an
 application. Sign-in and registration are decided before this and are unmoved.
+
+**126. One frame failing lost the whole page's work, silently.** A page's
+actions are grouped by the frame their controls live in and sent one trip per
+frame. Any one of those trips throwing rejected the whole handler, so every
+result from every other frame was discarded too. The panel caught the error,
+reported it as a single line, and went on showing all twenty-two fields as
+"ready to fill" -- which is exactly what a page that had never been filled
+looks like. An application that rebuilds itself does this, because its frame id
+does not survive the rebuild.
+*Mechanism.* Each frame is attempted on its own. A frame that has gone away is
+retried by asking every frame instead: a fingerprint only resolves where its
+control actually is, so nothing can land in the wrong place, and answers of
+"the control is no longer on the page" from the other frames are dropped rather
+than reported. Whatever landed is returned even when something else failed; the
+error is only raised when nothing landed at all. A frame id that is not a number
+is treated as the top frame rather than sent to `executeScript` as NaN, which
+threw.
+*And it says so.* "The page did not answer in time" on its own reads like a
+hiccup. It is every field on the page not being filled, so it is now reported
+as that.

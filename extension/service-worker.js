@@ -7,6 +7,11 @@
  * possible to say, honestly, where every read and every click came from.
  */
 
+//: What act.js says when a fingerprint resolves to nothing. Asking every frame
+//: means most of them will say this about most controls, and those are not
+//: results anybody wants reported.
+const NO_CONTROL = "the control is no longer on the page";
+
 const INJECTED = [
   "injected/dom.js",
   "injected/surface.js",
@@ -214,14 +219,48 @@ const HANDLERS = {
   async performMany(message) {
     const byFrame = new Map();
     for (const action of message.actions || []) {
-      const frame = action.frame === undefined || action.frame === "" ? 0 : Number(action.frame);
+      const raw = action.frame === undefined || action.frame === "" ? 0 : Number(action.frame);
+      // A frame this cannot be a number for is not a frame to aim at. Sending
+      // NaN to executeScript is a thrown error, and a thrown error here used to
+      // take the whole page's work with it.
+      const frame = Number.isFinite(raw) ? raw : 0;
       if (!byFrame.has(frame)) byFrame.set(frame, []);
       byFrame.get(frame).push(action);
     }
+
     const results = [];
+    const failures = [];
     for (const [frame, actions] of byFrame) {
-      const done = await callInFrame(message.tabId, frame, "act.performMany", [actions]);
-      if (Array.isArray(done)) results.push(...done);
+      try {
+        const done = await callInFrame(message.tabId, frame, "act.performMany", [actions]);
+        if (Array.isArray(done)) results.push(...done);
+        continue;
+      } catch (err) {
+        failures.push(`frame ${frame}: ${(err && err.message) || err}`);
+      }
+
+      // The frame went away between planning and acting -- an application that
+      // rebuilds itself does this, and its id does not survive. The controls
+      // are still somewhere, so ask every frame: a fingerprint only resolves
+      // where its control actually is, so nothing can land in the wrong place.
+      try {
+        const perFrame = await callInFrames(message.tabId, "act.performMany", [actions]);
+        for (const entry of perFrame) {
+          if (Array.isArray(entry.value)) {
+            results.push(...entry.value.filter((r) => r && r.evidence !== NO_CONTROL));
+          }
+        }
+      } catch (err) {
+        failures.push(`retry: ${(err && err.message) || err}`);
+      }
+    }
+
+    // One frame failing is not the page failing. Whatever did land is reported
+    // either way, because a run that says nothing at all is indistinguishable
+    // from one that was never started -- which is exactly how twenty-two fields
+    // with answers ready came to sit under "ready to fill" after a fill.
+    if (failures.length && !results.length) {
+      throw new Error(failures.join("; "));
     }
     return results;
   },
