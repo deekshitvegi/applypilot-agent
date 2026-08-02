@@ -76,3 +76,24 @@ def test_a_sentence_is_not_finished_by_anything():
 
 def test_a_heading_that_repeats_the_label_adds_nothing():
     assert best_fact(field("Certifications", "Certifications (1)")) is None
+
+
+@pytest.mark.parametrize(
+    ("section", "label", "key"),
+    [
+        # A heading read off a page carries its furniture with it: the count of
+        # entries, a required marker, the number of the block.
+        ("Phones (1)* required. 2", "Number", "phone"),
+        ("Addresses (1) 2", "City", "city"),
+        ("Addresses (1) 2", "Zip/Postal Code", "postal_code"),
+        ("Addresses (1) 2", "Address", "street_address"),
+    ],
+)
+def test_the_heading_is_read_through_its_furniture(section, label, key):
+    match = best_fact(field(label, section))
+    assert match is not None, f"{section} / {label}"
+    assert match.spec.key == key
+
+
+def test_furniture_does_not_turn_a_heading_into_a_meaning():
+    assert best_fact(field("Type", "Phones (1)* required. 2")) is None

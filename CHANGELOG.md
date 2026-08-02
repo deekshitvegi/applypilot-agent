@@ -3,6 +3,15 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.45.0
+
+- **The block heading is read through its own furniture.** Last version let a
+  heading finish a label, but a heading read off a real page is not "Phones" --
+  it is "Phones (1)* required. 2", with the count, the marker and the block
+  number stuck to it. Stripping only a trailing count left the whole string
+  unusable, so the phone number still went unfilled. The heading is taken up to
+  the first bracket, marker or digit now.
+
 ## 1.44.0
 
 - **A block heading finishes a label that cannot stand alone.** A repeating

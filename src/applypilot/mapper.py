@@ -345,7 +345,12 @@ def _section_qualified(section: str, label: str) -> list[str]:
     appears and without a trailing s, because a block of phones holds a phone
     number rather than a phones number.
     """
-    head = re.sub(r"\s*\(\s*\d+\s*\)\s*$", "", (section or "")).strip()
+    # A heading read off a page carries its furniture with it: the count of
+    # entries, a required marker, the number of the block. "Phones (1)*
+    # required. 2" is the heading "Phones" with all of that stuck to it, and
+    # stripping only a count from the end left the whole string unusable.
+    head = re.split(r"[(*\d]", section or "", maxsplit=1)[0]
+    head = head.strip(" \t-–—:,.").strip()
     if not head or not label or len(tokens(label)) > _NEEDS_FINISHING:
         return []
     if normalise(head) == normalise(label):

@@ -832,3 +832,10 @@ together are a phone number. The count is dropped and the heading is tried both
 as it appears and without a trailing s, because a block of phones holds a phone
 number. Only reached when the label alone matched nothing, and only for a label
 short enough to be missing half of itself -- a sentence says what it is about.
+
+**106. The heading was never clean enough to use.** The rule added for 105 took
+a heading and stripped a count from the end of it. A heading read off a real
+page is "Phones (1)* required. 2" -- the count, the required marker and the
+block number all stuck to it -- so nothing was stripped and the phone number
+still went unfilled.
+*Mechanism.* The heading is taken up to the first bracket, marker or digit.
