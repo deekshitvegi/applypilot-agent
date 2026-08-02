@@ -1,10 +1,29 @@
-$ErrorActionPreference = "Stop"
+# Start the local service.
+#
+#   .\scripts\start.ps1            run it in this window
+#   .\scripts\start.ps1 -Reload    restart it whenever a Python file changes
+#
+# The service listens on 127.0.0.1 only. Stop it with Ctrl+C.
+#
+# Restart this after any Python change. A running service keeps serving the code
+# it started with, and the panel will tell you when its version and the
+# extension's have drifted apart.
 
-$root = Resolve-Path (Join-Path $PSScriptRoot "..")
+param(
+    [switch]$Reload,
+    [int]$Port = 8765
+)
+
+$ErrorActionPreference = "Stop"
+$root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-if (-not (Test-Path -LiteralPath ".venv\Scripts\python.exe")) {
-    throw "ApplyPilot is not set up. Run .\scripts\setup.ps1 first."
+$venvPython = Join-Path $root ".venv\Scripts\python.exe"
+if (-not (Test-Path $venvPython)) {
+    throw "No .venv here yet. Run .\scripts\setup.ps1 first."
 }
 
-& ".venv\Scripts\python.exe" -m uvicorn applypilot.main:app --host 127.0.0.1 --port 8765
+$args = @("-m", "applypilot", "--port", $Port)
+if ($Reload) { $args += "--reload" }
+
+& $venvPython @args

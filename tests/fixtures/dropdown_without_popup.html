@@ -1,0 +1,47 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Apply</title>
+<!--
+  A control that looks like a dropdown and owns no list.
+
+  The page around it is full of option-shaped elements: a salary chip, a pair of
+  unrelated Yes/No buttons, and the EEO race list. Scraping the document turned
+  those twenty-seven elements into one question's "options".
+
+  The right answer is no options at all.
+-->
+<main>
+  <h1>Apply for Platform Engineer</h1>
+  <div><label for="fn">First Name *</label><input id="fn" name="first" required></div>
+  <div><label for="ln">Last Name *</label><input id="ln" name="last" required></div>
+  <div><label for="em">Email *</label><input id="em" name="email" type="email" required></div>
+  <div><label for="ph">Phone *</label><input id="ph" name="phone" type="tel" required></div>
+  <div><label for="cv">Resume *</label><input id="cv" name="resume" type="file" required></div>
+
+  <div class="field">
+    <span id="dept-label">Department</span>
+    <div id="dept" role="combobox" tabindex="0" aria-labelledby="dept-label" aria-expanded="false">
+      Select a department
+    </div>
+  </div>
+
+  <div class="salary-chip"><span role="option">$150,000 - $180,000</span></div>
+
+  <div class="unrelated-toggle">
+    <button role="option" type="button">Yes</button>
+    <button role="option" type="button">No</button>
+  </div>
+
+  <div class="eeo">
+    <h3>Voluntary self-identification</h3>
+    <ul>
+      <li role="option">Hispanic or Latino</li>
+      <li role="option">White (Not Hispanic or Latino)</li>
+      <li role="option">Black or African American</li>
+      <li role="option">Asian (Not Hispanic or Latino)</li>
+      <li role="option">Two or More Races</li>
+      <li role="option">I don't wish to answer</li>
+    </ul>
+  </div>
+  <button type="button">Submit Application</button>
+</main>

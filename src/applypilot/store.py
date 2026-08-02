@@ -1,477 +1,253 @@
+"""Local storage. Everything personal is encrypted with a key held outside it.
+
+SQLite holds opaque blobs; the key lives in a separate file. Ids and timestamps
+stay in the clear so the panel can list applications without decrypting them
+all, and nothing identifying is ever a plain column.
+"""
+
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
+import threading
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-from .models import (
-    ApplicationRecord,
-    CandidateProfile,
-    CoverLetterDocument,
-    GeneratedCoverLetter,
-    ProviderConfigRequest,
-    ResumeDocument,
-    ReusableAnswer,
-    TailoredArtifact,
-)
-from .security import LocalCipher
+from .config import Settings
+from .models import ApplicationRecord, LearnedAnswer, Profile, RunState
+from .security import Cipher, fingerprint, load_or_create_key
+from .text import normalise
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS kv (
+    key TEXT PRIMARY KEY,
+    blob BLOB NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS learned (
+    normalised TEXT PRIMARY KEY,
+    blob BLOB NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS applications (
+    id TEXT PRIMARY KEY,
+    blob BLOB NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    path TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+"""
 
 
-class ProfileStore:
-    def __init__(self, database_path: Path) -> None:
-        self.database_path = database_path
-        self.cipher = LocalCipher(database_path)
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
 
-    def initialize(self) -> None:
-        self.database_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS candidate_profile (
-                    id INTEGER PRIMARY KEY CHECK (id = 1),
-                    payload TEXT NOT NULL,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS tailored_artifacts (
-                    id TEXT PRIMARY KEY,
-                    application_id TEXT NOT NULL,
-                    payload TEXT NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS applications (
-                    id TEXT PRIMARY KEY,
-                    status TEXT NOT NULL,
-                    payload TEXT NOT NULL,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS reusable_answers (
-                    id TEXT PRIMARY KEY,
-                    payload TEXT NOT NULL,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS resumes (
-                    id TEXT PRIMARY KEY,
-                    filename TEXT NOT NULL,
-                    sha256 TEXT NOT NULL UNIQUE,
-                    payload TEXT NOT NULL,
-                    active INTEGER NOT NULL DEFAULT 1,
-                    uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS resume_files (
-                    sha256 TEXT PRIMARY KEY,
-                    payload BLOB NOT NULL,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS cover_letters (
-                    id TEXT PRIMARY KEY,
-                    filename TEXT NOT NULL,
-                    sha256 TEXT NOT NULL UNIQUE,
-                    payload TEXT NOT NULL,
-                    active INTEGER NOT NULL DEFAULT 1,
-                    uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS cover_letter_files (
-                    sha256 TEXT PRIMARY KEY,
-                    payload BLOB NOT NULL,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS generated_cover_letters (
-                    id TEXT PRIMARY KEY,
-                    payload TEXT NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS provider_config (
-                    id INTEGER PRIMARY KEY CHECK (id = 1),
-                    payload TEXT NOT NULL,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS reasoning_provider_config (
-                    id INTEGER PRIMARY KEY CHECK (id = 1),
-                    payload TEXT NOT NULL,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
 
-    def get_provider_config(self) -> ProviderConfigRequest | None:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM provider_config WHERE id = 1"
-            ).fetchone()
+class Store:
+    def __init__(self, settings: Settings) -> None:
+        self.settings = settings
+        settings.ensure_dirs()
+        self._key = load_or_create_key(settings.key_path)
+        self._cipher = Cipher(self._key)
+        self._lock = threading.RLock()
+        self._connection = sqlite3.connect(settings.db_path, check_same_thread=False)
+        self._connection.row_factory = sqlite3.Row
+        with self._cursor() as cur:
+            cur.executescript(SCHEMA)
+
+    # -- plumbing ---------------------------------------------------------
+
+    @contextmanager
+    def _cursor(self) -> Iterator[sqlite3.Cursor]:
+        with self._lock:
+            cur = self._connection.cursor()
+            try:
+                yield cur
+                self._connection.commit()
+            finally:
+                cur.close()
+
+    @property
+    def key_fingerprint(self) -> str:
+        return fingerprint(self._key)
+
+    def close(self) -> None:
+        with self._lock:
+            self._connection.close()
+
+    # -- generic encrypted values -----------------------------------------
+
+    def get_value(self, key: str, default: Any = None) -> Any:
+        with self._cursor() as cur:
+            row = cur.execute("SELECT blob FROM kv WHERE key = ?", (key,)).fetchone()
         if row is None:
-            return None
-        return ProviderConfigRequest.model_validate_json(self.cipher.decrypt(row[0]))
+            return default
+        return self._cipher.decrypt_json(row["blob"])
 
-    def save_provider_config(self, config: ProviderConfigRequest) -> None:
-        self.initialize()
-        payload = self.cipher.encrypt(config.model_dump_json())
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO provider_config (id, payload, updated_at)
-                VALUES (1, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(id) DO UPDATE SET
-                    payload = excluded.payload,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (payload,),
+    def set_value(self, key: str, value: Any) -> None:
+        blob = self._cipher.encrypt_json(value)
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO kv (key, blob, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET blob = excluded.blob, "
+                "updated_at = excluded.updated_at",
+                (key, blob, _now_iso()),
             )
 
-    def delete_provider_config(self) -> bool:
-        self.initialize()
-        with self._connect() as connection:
-            cursor = connection.execute("DELETE FROM provider_config WHERE id = 1")
-        return cursor.rowcount > 0
+    def delete_value(self, key: str) -> None:
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM kv WHERE key = ?", (key,))
 
-    def get_reasoning_provider_config(self) -> ProviderConfigRequest | None:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM reasoning_provider_config WHERE id = 1"
-            ).fetchone()
-        if row is None:
-            return None
-        return ProviderConfigRequest.model_validate_json(self.cipher.decrypt(row[0]))
+    # -- profile ----------------------------------------------------------
 
-    def save_reasoning_provider_config(self, config: ProviderConfigRequest) -> None:
-        self.initialize()
-        payload = self.cipher.encrypt(config.model_dump_json())
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO reasoning_provider_config (id, payload, updated_at)
-                VALUES (1, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(id) DO UPDATE SET
-                    payload = excluded.payload,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (payload,),
-            )
+    def get_profile(self) -> Profile:
+        raw = self.get_value("profile")
+        if not raw:
+            return Profile()
+        return Profile.model_validate(raw)
 
-    def delete_reasoning_provider_config(self) -> bool:
-        self.initialize()
-        with self._connect() as connection:
-            cursor = connection.execute(
-                "DELETE FROM reasoning_provider_config WHERE id = 1"
-            )
-        return cursor.rowcount > 0
-
-    def load(self) -> CandidateProfile:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM candidate_profile WHERE id = 1"
-            ).fetchone()
-        if row is None:
-            return CandidateProfile()
-        return CandidateProfile.model_validate(json.loads(self.cipher.decrypt(row[0])))
-
-    def save(self, profile: CandidateProfile) -> CandidateProfile:
-        self.initialize()
-        payload = self.cipher.encrypt(profile.model_dump_json())
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO candidate_profile (id, payload, updated_at)
-                VALUES (1, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(id) DO UPDATE SET
-                    payload = excluded.payload,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (payload,),
-            )
+    def save_profile(self, profile: Profile) -> Profile:
+        profile.updated_at = datetime.now(UTC)
+        self.set_value("profile", json.loads(profile.model_dump_json()))
         return profile
 
-    def list_answers(self) -> list[ReusableAnswer]:
-        self.initialize()
-        with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT payload FROM reusable_answers ORDER BY updated_at DESC"
-            ).fetchall()
-        return [
-            ReusableAnswer.model_validate_json(self.cipher.decrypt(row[0]))
-            for row in rows
-        ]
+    # -- learned answers --------------------------------------------------
 
-    def save_answer(self, answer: ReusableAnswer) -> ReusableAnswer:
-        self.initialize()
-        question_key = re.sub(r"[^a-z0-9]+", " ", answer.question.lower()).strip()
-        duplicate_ids = [
-            existing.id
-            for existing in self.list_answers()
-            if existing.id != answer.id
-            and re.sub(r"[^a-z0-9]+", " ", existing.question.lower()).strip()
-            == question_key
-        ]
-        payload = self.cipher.encrypt(answer.model_dump_json())
-        with self._connect() as connection:
-            if duplicate_ids:
-                connection.executemany(
-                    "DELETE FROM reusable_answers WHERE id = ?",
-                    [(answer_id,) for answer_id in duplicate_ids],
-                )
-            connection.execute(
-                """
-                INSERT INTO reusable_answers (id, payload, updated_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(id) DO UPDATE SET
-                    payload = excluded.payload,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (answer.id, payload),
+    def get_learned(self) -> dict[str, LearnedAnswer]:
+        with self._cursor() as cur:
+            rows = cur.execute("SELECT normalised, blob FROM learned").fetchall()
+        out: dict[str, LearnedAnswer] = {}
+        for row in rows:
+            out[row["normalised"]] = LearnedAnswer.model_validate(
+                self._cipher.decrypt_json(row["blob"])
+            )
+        return out
+
+    def learned_values(self) -> dict[str, str]:
+        """The shape the mapper consumes: normalised question -> value."""
+        return {key: answer.value for key, answer in self.get_learned().items()}
+
+    def save_learned(self, answer: LearnedAnswer) -> LearnedAnswer:
+        key = answer.normalised or normalise(answer.question)
+        answer.normalised = key
+        existing = self.get_learned().get(key)
+        if existing:
+            answer.times_seen = existing.times_seen + 1
+        answer.updated_at = datetime.now(UTC)
+        blob = self._cipher.encrypt_json(json.loads(answer.model_dump_json()))
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO learned (normalised, blob, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(normalised) DO UPDATE SET blob = excluded.blob, "
+                "updated_at = excluded.updated_at",
+                (key, blob, _now_iso()),
             )
         return answer
 
-    def delete_answer(self, answer_id: str) -> bool:
-        self.initialize()
-        with self._connect() as connection:
-            cursor = connection.execute(
-                "DELETE FROM reusable_answers WHERE id = ?", (answer_id,)
-            )
-        return cursor.rowcount > 0
+    def forget_learned(self, question: str) -> None:
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM learned WHERE normalised = ?", (normalise(question),))
 
-    def save_resume(self, resume: ResumeDocument) -> ResumeDocument:
-        self.initialize()
-        payload = self.cipher.encrypt(resume.model_dump_json())
-        with self._connect() as connection:
-            connection.execute("UPDATE resumes SET active = 0")
-            connection.execute(
-                """
-                INSERT INTO resumes (id, filename, sha256, payload, active, uploaded_at)
-                VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-                ON CONFLICT(sha256) DO UPDATE SET
-                    id = excluded.id,
-                    filename = excluded.filename,
-                    payload = excluded.payload,
-                    active = 1,
-                    uploaded_at = CURRENT_TIMESTAMP
-                """,
-                (resume.id, "encrypted", resume.sha256, payload),
-            )
-        return resume
+    def forget_all_learned(self) -> int:
+        with self._cursor() as cur:
+            count = cur.execute("SELECT COUNT(*) AS n FROM learned").fetchone()["n"]
+            cur.execute("DELETE FROM learned")
+        return int(count)
 
-    def save_resume_file(self, sha256: str, content: bytes) -> None:
-        self.initialize()
-        payload = self.cipher.encrypt_bytes(content)
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO resume_files (sha256, payload, updated_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(sha256) DO UPDATE SET
-                    payload = excluded.payload,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (sha256, payload),
-            )
-
-    def get_resume_file(self, sha256: str) -> bytes | None:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM resume_files WHERE sha256 = ?", (sha256,)
-            ).fetchone()
-        return self.cipher.decrypt_bytes(row[0]) if row else None
-
-    def get_active_resume(self) -> ResumeDocument | None:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM resumes WHERE active = 1 ORDER BY uploaded_at DESC LIMIT 1"
-            ).fetchone()
-        if row is None:
-            return None
-        return ResumeDocument.model_validate_json(self.cipher.decrypt(row[0]))
-
-    def list_resumes(self) -> list[ResumeDocument]:
-        self.initialize()
-        with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT payload FROM resumes ORDER BY uploaded_at DESC"
-            ).fetchall()
-        return [ResumeDocument.model_validate_json(self.cipher.decrypt(row[0])) for row in rows]
-
-    def save_cover_letter(self, document: CoverLetterDocument) -> CoverLetterDocument:
-        self.initialize()
-        payload = self.cipher.encrypt(document.model_dump_json())
-        with self._connect() as connection:
-            connection.execute("UPDATE cover_letters SET active = 0")
-            connection.execute(
-                """
-                INSERT INTO cover_letters (id, filename, sha256, payload, active, uploaded_at)
-                VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-                ON CONFLICT(sha256) DO UPDATE SET
-                    id = excluded.id,
-                    filename = excluded.filename,
-                    payload = excluded.payload,
-                    active = 1,
-                    uploaded_at = CURRENT_TIMESTAMP
-                """,
-                (document.id, "encrypted", document.sha256, payload),
-            )
-        return document
-
-    def save_cover_letter_file(self, sha256: str, content: bytes) -> None:
-        self.initialize()
-        payload = self.cipher.encrypt_bytes(content)
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO cover_letter_files (sha256, payload, updated_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(sha256) DO UPDATE SET
-                    payload = excluded.payload,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (sha256, payload),
-            )
-
-    def get_active_cover_letter(self) -> CoverLetterDocument | None:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM cover_letters WHERE active = 1 "
-                "ORDER BY uploaded_at DESC LIMIT 1"
-            ).fetchone()
-        if row is None:
-            return None
-        return CoverLetterDocument.model_validate_json(self.cipher.decrypt(row[0]))
-
-    def get_cover_letter_file(self, sha256: str) -> bytes | None:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM cover_letter_files WHERE sha256 = ?", (sha256,)
-            ).fetchone()
-        return self.cipher.decrypt_bytes(row[0]) if row else None
-
-    def save_generated_cover_letter(
-        self, document: GeneratedCoverLetter
-    ) -> GeneratedCoverLetter:
-        self.initialize()
-        payload = self.cipher.encrypt(document.model_dump_json())
-        with self._connect() as connection:
-            connection.execute(
-                "INSERT INTO generated_cover_letters (id, payload) VALUES (?, ?)",
-                (document.id, payload),
-            )
-        return document
-
-    def get_generated_cover_letter(self, document_id: str) -> GeneratedCoverLetter | None:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM generated_cover_letters WHERE id = ?", (document_id,)
-            ).fetchone()
-        if row is None:
-            return None
-        return GeneratedCoverLetter.model_validate_json(self.cipher.decrypt(row[0]))
-
-    def save_application(self, application: ApplicationRecord) -> ApplicationRecord:
-        self.initialize()
-        payload = self.cipher.encrypt(application.model_dump_json())
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO applications (id, status, payload, updated_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(id) DO UPDATE SET
-                    status = excluded.status,
-                    payload = excluded.payload,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (application.id, application.status, payload),
-            )
-        return application
-
-    def get_application(self, application_id: str) -> ApplicationRecord | None:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM applications WHERE id = ?", (application_id,)
-            ).fetchone()
-        if row is None:
-            return None
-        return ApplicationRecord.model_validate_json(self.cipher.decrypt(row[0]))
+    # -- applications -----------------------------------------------------
 
     def list_applications(self) -> list[ApplicationRecord]:
-        self.initialize()
-        with self._connect() as connection:
-            rows = connection.execute(
-                "SELECT payload FROM applications ORDER BY updated_at DESC"
+        with self._cursor() as cur:
+            rows = cur.execute(
+                "SELECT blob FROM applications ORDER BY created_at DESC"
             ).fetchall()
         return [
-            ApplicationRecord.model_validate_json(self.cipher.decrypt(row[0]))
+            ApplicationRecord.model_validate(self._cipher.decrypt_json(row["blob"]))
             for row in rows
         ]
 
-    def save_tailored_artifact(self, artifact: TailoredArtifact) -> TailoredArtifact:
-        self.initialize()
-        payload = self.cipher.encrypt(artifact.model_dump_json())
-        with self._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO tailored_artifacts (id, application_id, payload, created_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(id) DO UPDATE SET
-                    application_id = excluded.application_id,
-                    payload = excluded.payload
-                """,
-                (artifact.id, artifact.application_id, payload),
+    def upsert_application(self, record: ApplicationRecord) -> ApplicationRecord:
+        record.id = record.id or uuid.uuid4().hex
+        record.updated_at = datetime.now(UTC)
+        blob = self._cipher.encrypt_json(json.loads(record.model_dump_json()))
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO applications (id, blob, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
+                "blob = excluded.blob, updated_at = excluded.updated_at",
+                (record.id, blob, record.created_at.isoformat(), _now_iso()),
             )
-        return artifact
+        return record
 
-    def get_tailored_artifact(self, artifact_id: str) -> TailoredArtifact | None:
-        self.initialize()
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT payload FROM tailored_artifacts WHERE id = ?", (artifact_id,)
+    def find_application_by_url(self, url: str) -> ApplicationRecord | None:
+        for record in self.list_applications():
+            if record.url == url:
+                return record
+        return None
+
+    def delete_application(self, application_id: str) -> None:
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM applications WHERE id = ?", (application_id,))
+
+    # -- documents --------------------------------------------------------
+
+    def add_document(self, kind: str, filename: str, data: bytes) -> dict[str, str]:
+        document_id = uuid.uuid4().hex
+        suffix = Path(filename).suffix
+        path = self.settings.documents_dir / f"{document_id}{suffix}"
+        path.write_bytes(self._cipher.encrypt_text(data.decode("latin-1")))
+        with self._cursor() as cur:
+            cur.execute(
+                "INSERT INTO documents (id, kind, filename, path, created_at) VALUES (?,?,?,?,?)",
+                (document_id, kind, filename, str(path), _now_iso()),
+            )
+        return {"id": document_id, "kind": kind, "filename": filename}
+
+    def list_documents(self) -> list[dict[str, str]]:
+        with self._cursor() as cur:
+            rows = cur.execute(
+                "SELECT id, kind, filename, created_at FROM documents ORDER BY created_at DESC"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def read_document(self, document_id: str) -> tuple[str, bytes] | None:
+        with self._cursor() as cur:
+            row = cur.execute(
+                "SELECT filename, path FROM documents WHERE id = ?", (document_id,)
             ).fetchone()
         if row is None:
             return None
-        return TailoredArtifact.model_validate_json(self.cipher.decrypt(row[0]))
+        encrypted = Path(row["path"]).read_bytes()
+        return row["filename"], self._cipher.decrypt_text(encrypted).encode("latin-1")
 
-    def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self.database_path)
+    def delete_document(self, document_id: str) -> None:
+        with self._cursor() as cur:
+            row = cur.execute(
+                "SELECT path FROM documents WHERE id = ?", (document_id,)
+            ).fetchone()
+            if row:
+                Path(row["path"]).unlink(missing_ok=True)
+            cur.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+
+    # -- run state --------------------------------------------------------
+
+    def get_run(self) -> RunState:
+        raw = self.get_value("run_state")
+        if not raw:
+            return RunState()
+        return RunState.model_validate(raw)
+
+    def save_run(self, state: RunState) -> RunState:
+        state.updated_at = datetime.now(UTC)
+        self.set_value("run_state", json.loads(state.model_dump_json()))
+        return state

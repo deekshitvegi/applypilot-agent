@@ -1,30 +1,266 @@
+"""Typed observations, actions and results.
+
+These are the contract between the injected functions in the extension and the
+reasoning in the service. Keeping them typed is what lets the state machine stay
+small: a page is a list of :class:`FieldObservation`, a decision is a list of
+:class:`PlannedAction`, and an outcome is one of four honest verdicts.
+"""
+
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from typing import Literal
-from uuid import uuid4
+from datetime import UTC, date, datetime
+from enum import StrEnum
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class EducationEntry(BaseModel):
-    """One school, as an employer's education section asks for it."""
+def _now() -> datetime:
+    return datetime.now(UTC)
 
-    model_config = ConfigDict(extra="forbid")
 
+class ControlKind(StrEnum):
+    TEXT = "text"
+    TEXTAREA = "textarea"
+    EMAIL = "email"
+    TEL = "tel"
+    NUMBER = "number"
+    URL = "url"
+    DATE = "date"
+    SELECT = "select"
+    RADIO = "radio"
+    CHECKBOX = "checkbox"
+    COMBOBOX = "combobox"
+    MULTISELECT = "multiselect"
+    FILE = "file"
+    PASSWORD = "password"
+    UNKNOWN = "unknown"
+
+
+TEXTUAL_CONTROLS = {
+    ControlKind.TEXT,
+    ControlKind.TEXTAREA,
+    ControlKind.EMAIL,
+    ControlKind.TEL,
+    ControlKind.NUMBER,
+    ControlKind.URL,
+    ControlKind.DATE,
+}
+
+CHOICE_CONTROLS = {
+    ControlKind.SELECT,
+    ControlKind.RADIO,
+    ControlKind.COMBOBOX,
+    ControlKind.MULTISELECT,
+}
+
+
+class PageKind(StrEnum):
+    """What sort of page the agent is looking at.
+
+    These behave completely differently and conflating them is what produced
+    phantom fields on search pages and 'every application is a login page'.
+    """
+
+    APPLICATION = "application"
+    LISTING = "listing"
+    BOARD = "board"
+    SEARCH = "search"
+    SIGN_IN = "sign_in"
+    REGISTRATION = "registration"
+    CONFIRMATION = "confirmation"
+    UNKNOWN = "unknown"
+
+
+class HostRole(StrEnum):
+    """Decided from the URL alone, never by a model."""
+
+    EMPLOYER = "employer"
+    BOARD = "board"
+    AGGREGATOR = "aggregator"
+    THIRD_PARTY = "third_party"
+
+
+class Outcome(StrEnum):
+    """The four verdicts, kept distinct on purpose."""
+
+    ATTEMPTED = "attempted"
+    ACCEPTED = "accepted"
+    VERIFIED = "verified"
+    FAILED = "failed"
+
+
+class AnswerSource(StrEnum):
+    PROFILE = "profile"
+    HISTORY = "history"
+    LEARNED = "learned"
+    USER = "user"
+    MODEL = "model"
+    DOCUMENT = "document"
+
+
+class Option(BaseModel):
+    label: str = ""
+    value: str = ""
+    disabled: bool = False
+    selected: bool = False
+
+
+class FieldObservation(BaseModel):
+    """One control as the page presents it.
+
+    ``label`` is what the applicant can read. ``attr_label`` is derived from the
+    control's name, id or placeholder and is deliberately weak: a page that
+    names its State field ``countryRegion`` must not be able to talk the mapper
+    into filling it with a country.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    fingerprint: str
+    frame: str = ""
+    label: str = ""
+    attr_label: str = ""
+    control: ControlKind = ControlKind.UNKNOWN
+    name: str = ""
+    section: str = ""
+    group: str = ""
+    group_index: int = 0
+    options: list[Option] = Field(default_factory=list)
+    required: bool = False
+    visible: bool = True
+    disabled: bool = False
+    readonly: bool = False
+    value: str = ""
+    checked: bool | None = None
+    max_length: int | None = None
+    accepts: str = ""
+    #: What the control shows when empty. Used to work out the shape a date
+    #: field wants, never as a label.
+    placeholder: str = ""
+    input_type: str = ""
+    options_source: Literal["native", "owned_popup", "none"] = "none"
+
+    @property
+    def display_label(self) -> str:
+        """The label the mapper is allowed to reason about."""
+        return self.label.strip()
+
+    @property
+    def has_visible_label(self) -> bool:
+        return bool(self.label.strip())
+
+
+class PageControl(BaseModel):
+    """A button or link the page offers, identified by what it reads."""
+
+    text: str = ""
+    fingerprint: str = ""
+    href: str = ""
+
+
+class PageObservation(BaseModel):
+    url: str = ""
+    title: str = ""
+    kind: PageKind = PageKind.UNKNOWN
+    adapter: str = "generic"
+    host_role: HostRole = HostRole.THIRD_PARTY
+    fields: list[FieldObservation] = Field(default_factory=list)
+    submit_controls: list[PageControl] = Field(default_factory=list)
+    apply_controls: list[PageControl] = Field(default_factory=list)
+    next_controls: list[PageControl] = Field(default_factory=list)
+    add_controls: list[PageControl] = Field(default_factory=list)
+    captcha: Literal["none", "badge_only", "challenge"] = "none"
+    hints: list[str] = Field(default_factory=list)
+    signature: str = ""
+    observed_at: datetime = Field(default_factory=_now)
+    notes: list[str] = Field(default_factory=list)
+
+
+class Answer(BaseModel):
+    """A value the agent intends to put on the page, and where it came from."""
+
+    fingerprint: str
+    label: str
+    value: str
+    source: AnswerSource
+    fact_key: str = ""
+    confidence: float = 1.0
+    reason: str = ""
+
+
+class PlannedAction(BaseModel):
+    kind: Literal["fill", "choose", "check", "upload", "click", "add_repeat"]
+    fingerprint: str
+    value: str = ""
+    option_label: str = ""
+    document_id: str = ""
+    reason: str = ""
+
+
+class ActionResult(BaseModel):
+    """What actually happened, judged from a fresh read of page-owned state."""
+
+    fingerprint: str
+    label: str = ""
+    requested: str = ""
+    outcome: Outcome = Outcome.ATTEMPTED
+    observed: str = ""
+    signal: str = ""
+    evidence: str = ""
+
+    @property
+    def is_success(self) -> bool:
+        return self.outcome is Outcome.VERIFIED
+
+
+class PendingQuestion(BaseModel):
+    """Something only the applicant can answer."""
+
+    fingerprint: str
+    label: str
+    control: ControlKind = ControlKind.UNKNOWN
+    options: list[Option] = Field(default_factory=list)
+    required: bool = True
+    fact_key: str = ""
+    reason: str = ""
+    section: str = ""
+    frame: str = ""
+    #: What the profile holds for this question's fact, so the panel can rank
+    #: the control's own options against it once they have been opened.
+    saved_value: str = ""
+    #: True when the control's options have not been read yet. They live behind
+    #: a popup only that control owns, so they have to be opened before there is
+    #: anything to show -- asking someone to type a dropdown answer is not it.
+    options_pending: bool = False
+
+
+class ChecklistItem(BaseModel):
+    fingerprint: str
+    label: str
+    #: Which entry of a repeating block, when there is one. Three rows all
+    #: labelled "GPA" with nothing to tell them apart is not a list anyone can
+    #: act on.
+    section: str = ""
+    state: Literal["verified", "attempted", "needs_you", "skipped", "failed"] = "needs_you"
+    value: str = ""
+    detail: str = ""
+    required: bool = False
+
+
+class EducationRecord(BaseModel):
+    id: str = ""
     school: str = ""
     degree: str = ""
     field_of_study: str = ""
     start_date: str = ""
     end_date: str = ""
     gpa: str = ""
+    location: str = ""
 
 
-class ExperienceEntry(BaseModel):
-    """One role, as an employer's work-history section asks for it."""
-
-    model_config = ConfigDict(extra="forbid")
-
+class ExperienceRecord(BaseModel):
+    id: str = ""
     company: str = ""
     title: str = ""
     location: str = ""
@@ -34,511 +270,87 @@ class ExperienceEntry(BaseModel):
     description: str = ""
 
 
-class ProfileFacts(BaseModel):
-    """Structured history extracted from a résumé, for review before saving."""
-
-    education: list[EducationEntry] = Field(default_factory=list, max_length=20)
-    experience: list[ExperienceEntry] = Field(default_factory=list, max_length=30)
-
-
-class CandidateProfile(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    # Repeating history, so education and work sections can be filled entry by
-    # entry rather than left blank. Populated from the résumé and editable.
-    education: list[EducationEntry] = Field(default_factory=list, max_length=20)
-    experience: list[ExperienceEntry] = Field(default_factory=list, max_length=30)
-    legal_name: str = ""
-    preferred_name: str = ""
-    pronouns: str = ""
-    email: str = ""
-    phone: str = ""
-    address_line_1: str = ""
-    address_line_2: str = ""
-    city: str = ""
-    region: str = ""
-    postal_code: str = ""
-    country: str = ""
-    linkedin_url: str = ""
-    portfolio_url: str = ""
-    github_url: str = ""
-    current_title: str = ""
-    years_of_experience: str = ""
-    work_authorization: str = ""
-    requires_sponsorship: bool | None = None
-    willing_to_relocate: bool | None = None
-    willing_to_travel: bool | None = None
-    age_18_or_older: bool | None = None
-    background_check_consent: bool | None = None
-    notice_period: str = ""
-    desired_salary: str = ""
-    remote_preference: Literal["", "remote", "hybrid", "onsite", "flexible"] = ""
-    gender_identity: str = ""
-    race_ethnicity: str = ""
-    veteran_status: str = ""
-    disability_status: str = ""
-    custom_answers: dict[str, str] = Field(default_factory=dict)
-
-
-class OnboardingQuestion(BaseModel):
-    key: str
-    prompt: str
-    input_type: Literal["text", "boolean", "choice"] = "text"
-    choices: list[str] = Field(default_factory=list)
-
-
-class OnboardingState(BaseModel):
-    complete: bool
-    missing_count: int
-    next_question: OnboardingQuestion | None = None
-
-
-class JobApplicationOptions(BaseModel):
-    source_url: str
-    company_application_url: str = ""
-    company_url_verified: bool = False
-    external_apply_available: bool = False
-    easy_apply_available: bool = False
-    prefer_easy_apply: bool = False
-
-
-class ApplicationRouteDecision(BaseModel):
-    route: Literal[
-        "company_site", "company_button", "easy_apply", "manual_review", "unavailable"
-    ]
-    target_url: str = ""
-    reason: str
-
-
-def new_id() -> str:
-    return str(uuid4())
-
-
-def utc_now() -> datetime:
-    return datetime.now(UTC)
-
-
-class ReusableAnswer(BaseModel):
-    id: str = Field(default_factory=new_id)
-    question: str
-    answer: str
-    field_type: Literal["text", "boolean", "choice", "number"] = "text"
-    sensitive: bool = False
-    updated_at: datetime = Field(default_factory=utc_now)
-
-
-class ResumeDocument(BaseModel):
-    id: str = Field(default_factory=new_id)
-    filename: str
-    media_type: str
-    sha256: str
-    extracted_text: str
-    uploaded_at: datetime = Field(default_factory=utc_now)
-    active: bool = True
-
-
-class CoverLetterDocument(BaseModel):
-    id: str = Field(default_factory=new_id)
-    filename: str
-    media_type: str
-    sha256: str
-    extracted_text: str
-    uploaded_at: datetime = Field(default_factory=utc_now)
-    active: bool = True
-
-
-class CoverLetterDraft(BaseModel):
-    body: str = Field(min_length=40, max_length=8000)
-
-
-class GeneratedCoverLetter(BaseModel):
-    id: str = Field(default_factory=new_id)
-    job_title: str = ""
-    company: str = ""
-    body: str
-    created_at: datetime = Field(default_factory=utc_now)
-
-
-class EvidenceItem(BaseModel):
-    id: str = Field(default_factory=new_id)
-    category: Literal["summary", "skill", "experience", "education", "project", "other"]
-    text: str
-    source_quote: str
-
-
-class ResumeEvidence(BaseModel):
-    summary: str = ""
-    items: list[EvidenceItem] = Field(default_factory=list)
-
-
-class JobContext(BaseModel):
-    source_url: str = ""
-    title: str = ""
-    company: str = ""
-    location: str = ""
-    description: str
-    company_application_url: str = ""
-    company_url_verified: bool = False
-    external_apply_available: bool = False
-    easy_apply_available: bool = False
-    adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = "generic"
-
-
-class TailoredBullet(BaseModel):
-    text: str
-    evidence_ids: list[str] = Field(default_factory=list)
-
-
-class TailoredExperience(BaseModel):
-    heading: str
-    bullets: list[TailoredBullet] = Field(default_factory=list)
-
-
-class TailoredResume(BaseModel):
-    headline: str
-    summary: str
+class Profile(BaseModel):
+    facts: dict[str, str] = Field(default_factory=dict)
+    education: list[EducationRecord] = Field(default_factory=list)
+    experience: list[ExperienceRecord] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
-    experiences: list[TailoredExperience] = Field(default_factory=list)
-    matched_keywords: list[str] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
+    answer_demographics: bool = False
+    submission_policy: Literal["never", "confirm", "auto"] = "confirm"
+    prefer_easy_apply: bool = False
+    #: Work through a multi-step application without being asked to press
+    #: Continue each time. Off by default; pressing final Submit is governed
+    #: separately by submission_policy and is never implied by this.
+    auto_advance: bool = False
+    #: Tick the agreements an application requires -- terms, arbitration,
+    #: privacy consent -- rather than stopping to ask each time.
+    #:
+    #: Never read from here and never written here. The service holds the answer
+    #: in memory for as long as it is running and hands it in on each plan, so
+    #: something with legal weight is chosen again rather than left switched on
+    #: for months because of one afternoon's clicking. The field exists only so
+    #: the mapper has somewhere to read it from.
+    accept_agreements: bool = False
+    #: Attach the resume on file whenever a form asks for one. Attaching a
+    #: document you uploaded yourself, to a form you are filling, is the whole
+    #: point; it is a toggle because it is still an action on a page.
+    auto_attach_resume: bool = True
+    updated_at: datetime = Field(default_factory=_now)
+
+    def fact(self, key: str) -> str:
+        return (self.facts.get(key) or "").strip()
 
 
-class JobFitAnalysis(BaseModel):
-    score: int = Field(ge=0, le=100)
-    verdict: Literal["strong", "possible", "stretch"]
-    summary: str
-    strengths: list[str] = Field(default_factory=list)
-    gaps: list[str] = Field(default_factory=list)
-    matched_keywords: list[str] = Field(default_factory=list)
-    recommendation: str
+class LearnedAnswer(BaseModel):
+    """A value the applicant typed themselves, keyed by the exact question."""
 
-
-class TailorRequest(BaseModel):
-    job: JobContext
-
-
-class TailoredArtifactRequest(BaseModel):
-    job: JobContext
-    application_id: str = ""
-
-
-class TailoredArtifact(BaseModel):
-    id: str = Field(default_factory=new_id)
-    application_id: str = ""
-    tailored: TailoredResume
-    created_at: datetime = Field(default_factory=utc_now)
-
-
-class JobPreparation(BaseModel):
-    analysis: JobFitAnalysis
-    artifact: TailoredArtifact
-
-
-class ChatRequest(BaseModel):
-    message: str
-    job: JobContext | None = None
-    images: list[ChatImage] = Field(default_factory=list, max_length=3)
-
-
-class ChatImage(BaseModel):
-    filename: str = Field(max_length=180)
-    media_type: Literal["image/png", "image/jpeg", "image/webp", "image/gif"]
-    data_base64: str = Field(max_length=8_000_000)
-
-    @field_validator("data_base64")
-    @classmethod
-    def validate_base64_size(cls, value: str) -> str:
-        import base64
-        import binascii
-
-        try:
-            decoded = base64.b64decode(value, validate=True)
-        except (binascii.Error, ValueError) as exc:
-            raise ValueError("Image data must be valid base64") from exc
-        if len(decoded) > 4 * 1024 * 1024:
-            raise ValueError("Each image must be 4 MB or smaller")
-        return value
-
-
-class ChatResponse(BaseModel):
-    answer: str
-    suggested_actions: list[str] = Field(default_factory=list)
-
-
-class ApplicationQuestionDraftRequest(BaseModel):
-    question: str = Field(min_length=3, max_length=1000)
-    job: JobContext | None = None
-
-
-class ApplicationAnswerRefineRequest(BaseModel):
-    question: str = Field(min_length=3, max_length=2000)
-    user_answer: str = Field(min_length=1, max_length=4000)
-    job: JobContext | None = None
-
-
-class ApplicationAnswerDraft(BaseModel):
-    answer: str
-
-
-class ProviderStatus(BaseModel):
-    provider: str
-    model: str
-    configured: bool
-    source: Literal["encrypted_local", "environment", "none"] = "none"
-    reasoning_provider: str = ""
-    reasoning_model: str = ""
-
-
-class ProviderConfigRequest(BaseModel):
-    provider: Literal["ollama", "gemini", "openai", "anthropic"]
-    api_key: str = Field(default="", max_length=500)
-    model: str = Field(min_length=2, max_length=120)
-
-    @field_validator("api_key", "model", mode="before")
-    @classmethod
-    def strip_config_value(cls, value: str) -> str:
-        return str(value).strip()
-
-    @model_validator(mode="after")
-    def require_remote_provider_key(self) -> ProviderConfigRequest:
-        if self.provider != "ollama" and len(self.api_key) < 8:
-            raise ValueError("An API key is required for this provider")
-        return self
-
-
-class PageControl(BaseModel):
-    id: str
-    label: str
-    kind: Literal["button", "link", "control"] = "control"
-    disabled: bool = False
-
-
-class PageActionRequest(BaseModel):
-    goal: str
-    page_title: str = ""
-    page_text: str = Field(default="", max_length=12000)
-    controls: list[PageControl] = Field(default_factory=list, max_length=80)
-
-
-class PageActionDecision(BaseModel):
-    action_id: str = ""
-    intent: Literal["click", "wait", "user_required"] = "user_required"
-    explanation: str
-
-
-class FormOption(BaseModel):
+    question: str
+    normalised: str
     value: str
-    label: str
-
-
-class FormField(BaseModel):
-    id: str
-    label: str
-    group_label: str = ""
-    option_label: str = ""
-    name: str = ""
-    field_type: Literal[
-        "text",
-        "email",
-        "tel",
-        "url",
-        "number",
-        "textarea",
-        "select",
-        "checkbox",
-        "radio",
-        "file",
-        "password",
-        "other",
-    ] = "text"
-    required: bool = False
-    value: str = ""
-    value_label: str = ""
-    value_evidence: str = ""
-    state_readable: bool = True
-    fingerprint: str = ""
-    options: list[FormOption] = Field(default_factory=list)
-
-
-class FormFillAction(BaseModel):
-    field_id: str
-    value: str
-    source: str
-    confidence: float = Field(ge=0, le=1)
-
-
-class UnknownField(BaseModel):
-    field_id: str
-    label: str
-    required: bool
-    reason: str
-
-
-class FormPlanRequest(BaseModel):
-    page_url: str
-    source_url: str = ""
-    fields: list[FormField]
-    adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = "generic"
-
-
-class FormFillPlan(BaseModel):
-    page_url: str
-    adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = "generic"
-    actions: list[FormFillAction] = Field(default_factory=list)
-    unknown_fields: list[UnknownField] = Field(default_factory=list)
-    blocked_fields: list[UnknownField] = Field(default_factory=list)
-    confirmation_required: bool = True
-    submit_allowed: bool = False
-
-
-class FormAgentAction(BaseModel):
-    field_id: str
-    value: str
-    grounding: Literal[
-        "user_message",
-        "profile",
-        "saved_answer",
-        "resume",
-        "source_context",
-        "visible_option",
-        "derived_answer",
-    ]
-    confidence: float = Field(ge=0, le=1)
-    reason: str = Field(default="", max_length=300)
-    remember: bool = True
-
-
-class FormAgentRequest(BaseModel):
-    user_message: str = Field(min_length=1, max_length=6000)
-    origin: Literal["chat", "automation"] = "chat"
-    page_url: str = ""
-    source_url: str = ""
-    fields: list[FormField] = Field(default_factory=list, max_length=200)
-    adapter: Literal["linkedin", "greenhouse", "lever", "workday", "generic"] = (
-        "generic"
-    )
-    job: JobContext | None = None
-    pending_question: str = Field(default="", max_length=1000)
-    previous_errors: list[str] = Field(default_factory=list, max_length=30)
-
-
-class FormAgentDecision(BaseModel):
-    handled: bool = False
-    actions: list[FormAgentAction] = Field(default_factory=list, max_length=100)
-    question: str = Field(default="", max_length=1000)
-    explanation: str = Field(default="", max_length=1200)
-
-
-ApplicationStatus = Literal[
-    "discovered",
-    "analyzed",
-    "materials_ready",
-    "filling",
-    "review_required",
-    "blocked",
-    "submitted",
-    "abandoned",
-]
-
-
-class ApplicationEvent(BaseModel):
-    id: str = Field(default_factory=new_id)
-    event_type: str
-    message: str
-    metadata: dict[str, str] = Field(default_factory=dict)
-    created_at: datetime = Field(default_factory=utc_now)
+    control: ControlKind = ControlKind.UNKNOWN
+    host: str = ""
+    times_seen: int = 1
+    updated_at: datetime = Field(default_factory=_now)
 
 
 class ApplicationRecord(BaseModel):
-    id: str = Field(default_factory=new_id)
-    job: JobContext
-    status: ApplicationStatus = "discovered"
-    route: ApplicationRouteDecision | None = None
-    blocked_reason: str = ""
-    events: list[ApplicationEvent] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
-
-
-class ApplicationCreate(BaseModel):
-    job: JobContext
-    route: ApplicationRouteDecision | None = None
-
-
-class ApplicationTransition(BaseModel):
-    status: ApplicationStatus
-    message: str
-    metadata: dict[str, str] = Field(default_factory=dict)
-
-
-class SessionCredentialRequest(BaseModel):
-    """Sign-in details for one site, kept in memory for this session only."""
-
-    host: str = Field(default="", max_length=253)
-    username: str = Field(default="", max_length=320)
-    password: str = Field(default="", max_length=512)
-
-
-class SessionCredentialSummary(BaseModel):
-    """A saved host. Never carries the password."""
-
-    host: str = ""
-    username: str = ""
-
-
-class SessionCredentialMatch(BaseModel):
-    found: bool = False
-    host: str = ""
-    username: str = ""
-    password: str = ""
-
-
-class CompanyRouteRequest(BaseModel):
-    company: str = Field(default="", max_length=200)
-    title: str = Field(default="", max_length=300)
-
-
-class CompanyRouteResult(BaseModel):
-    """A verified employer application URL, or found=False."""
-
-    found: bool = False
+    id: str = ""
+    company: str = ""
+    role: str = ""
     url: str = ""
-    board_url: str = ""
-    matched_title: str = ""
-    confidence: float = 0.0
+    route: str = ""
+    status: Literal[
+        "discovered", "filling", "needs_you", "ready_to_submit", "submitted", "abandoned", "failed"
+    ] = "discovered"
+    applied_on: date | None = None
+    notes: str = ""
+    created_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = Field(default_factory=_now)
 
 
-PageKind = Literal[
-    "application_form",
-    "job_listing",
-    "login_required",
-    "account_signup_required",
-    "third_party_redirect",
-    "confirmation",
-    "blocked",
-    "unrelated",
-]
+class RunState(BaseModel):
+    """The state machine's memory.
 
+    ``no_progress_signatures`` persists here rather than in a local variable so
+    a stall guard survives a stop and resume instead of resetting and looping.
+    """
 
-class PageUnderstandingRequest(BaseModel):
-    goal: str = ""
-    page_url: str = Field(default="", max_length=2000)
-    page_title: str = Field(default="", max_length=400)
-    page_text: str = Field(default="", max_length=12000)
-    expected_company: str = Field(default="", max_length=200)
-    expected_role: str = Field(default="", max_length=300)
-
-
-class PageUnderstanding(BaseModel):
-    """What the agent believes it is looking at, and why."""
-
-    # Set deterministically from the URL, never by the model: a recognised ATS
-    # is the employer's own application host and a job board is the expected
-    # starting point. Only "unknown" hosts can be third parties to stop on.
-    host_kind: Literal["ats", "job_board", "unknown"] = "unknown"
-    page_kind: PageKind = "unrelated"
-    summary: str = Field(default="", max_length=400)
-    belongs_to_expected_employer: bool = True
-    can_proceed_automatically: bool = False
-    blocking_reason: str = Field(default="", max_length=400)
-    suggested_next_step: str = Field(default="", max_length=300)
+    run_id: str = ""
+    phase: Literal[
+        "idle", "routing", "scanning", "planning", "filling", "waiting_for_you",
+        "advancing", "ready_to_submit", "done", "blocked"
+    ] = "idle"
+    url: str = ""
+    company: str = ""
+    role: str = ""
+    step: int = 0
+    attempts_on_step: int = 0
+    seen_signatures: list[str] = Field(default_factory=list)
+    no_progress_count: int = 0
+    last_signature: str = ""
+    message: str = ""
+    updated_at: datetime = Field(default_factory=_now)
+    results: list[ActionResult] = Field(default_factory=list)
+    pending: list[PendingQuestion] = Field(default_factory=list)
+    checklist: list[ChecklistItem] = Field(default_factory=list)
+    extra: dict[str, Any] = Field(default_factory=dict)

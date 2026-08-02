@@ -1,12 +1,8 @@
-#!/usr/bin/env sh
-set -eu
-
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$ROOT"
-
-if [ ! -x .venv/bin/python ]; then
-  printf '%s\n' "ApplyPilot is not set up. Run ./scripts/setup.sh first." >&2
-  exit 1
-fi
-
-exec .venv/bin/python -m uvicorn applypilot.main:app --host 127.0.0.1 --port 8765
+#!/usr/bin/env bash
+# Start the local service. Listens on 127.0.0.1 only.
+#
+# Restart this after any Python change: a running service keeps serving the code
+# it started with.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec ./.venv/bin/python -m applypilot "$@"

@@ -1,0 +1,60 @@
+{
+  "_comment": [
+    "Real pages the live check drives. Job postings rot quickly, so these are",
+    "boards and entry points rather than individual requisitions. Replace a URL",
+    "as soon as it stops resolving -- an unreachable target is reported as a",
+    "warning, and only a page that is read wrongly counts as a failure.",
+    "",
+    "expect_kind is what surface detection must say. never_kind lists what it",
+    "must never say, which is where the real regressions show up: the change",
+    "that made every application look like a login page passed every fixture."
+  ],
+  "targets": [
+    {
+      "name": "ADP two-step sign-in",
+      "url": "https://workforcenow.adp.com/public/index.htm",
+      "expect_kind": ["sign_in"],
+      "never_kind": ["application", "registration"],
+      "why": "asks for a User ID first, inside a shadow root, with no password field"
+    },
+    {
+      "name": "Greenhouse board",
+      "url": "https://job-boards.greenhouse.io/gitlab",
+      "expect_kind": ["board", "search", "listing", "unknown"],
+      "never_kind": ["sign_in", "application"],
+      "expect_adapter": "greenhouse",
+      "why": "a list of postings has no questions on it"
+    },
+    {
+      "name": "Lever board",
+      "url": "https://jobs.lever.co/lever",
+      "expect_kind": ["board", "search", "listing", "unknown"],
+      "never_kind": ["sign_in", "application"],
+      "expect_adapter": "lever",
+      "why": "a list of postings has no questions on it"
+    },
+    {
+      "name": "Ashby board",
+      "url": "https://jobs.ashbyhq.com/ramp",
+      "expect_kind": ["board", "search", "listing", "unknown"],
+      "never_kind": ["sign_in", "application"],
+      "expect_adapter": "ashby",
+      "why": "Ashby renders without a <form>, which used to hide its pages entirely"
+    },
+    {
+      "name": "SmartRecruiters board",
+      "url": "https://careers.smartrecruiters.com/",
+      "expect_kind": ["board", "search", "listing", "unknown"],
+      "never_kind": ["sign_in", "application"],
+      "why": "a careers index is not an application"
+    },
+    {
+      "name": "Indeed search",
+      "url": "https://www.indeed.com/jobs?q=machine+learning+engineer",
+      "expect_kind": ["search", "board", "unknown"],
+      "never_kind": ["application", "sign_in"],
+      "expect_fields": 0,
+      "why": "search filters are not application questions"
+    }
+  ]
+}

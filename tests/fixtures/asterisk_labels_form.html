@@ -1,0 +1,122 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Personal info</title>
+<!--
+  Built from a real application that filled nothing at all.
+
+  Its required marker is a separate element sitting between the field name and
+  the control, so the nearest thing before each input is a lone asterisk. Every
+  field came back labelled "*", nothing matched, and the panel said "none of
+  these fields match what you have saved" on a form asking for a first name, an
+  email and an address.
+
+  Its Country and State dropdowns are dependent: State holds nothing but
+  "Choose" until a country is picked.
+-->
+<main>
+  <div class="field">
+    <span class="txt">First name</span><span class="mandatory">*</span>
+    <input type="text" placeholder="First name" name="firstName">
+  </div>
+
+  <div class="field">
+    <span class="txt">Last name</span><span class="mandatory">*</span>
+    <input type="text" placeholder="Last name" name="lastName">
+  </div>
+
+  <div class="field">
+    <span class="txt">Email address</span><span class="mandatory">*</span>
+    <input type="email" placeholder="Email address" name="email">
+  </div>
+
+  <div class="field">
+    <span class="txt">Phone number</span><span class="mandatory">*</span>
+    <input type="tel" placeholder="Phone number" name="phone">
+  </div>
+
+  <div class="field">
+    <span class="txt">Country</span><span class="mandatory">*</span>
+    <select name="country">
+      <option value="">Choose</option>
+      <option>Australia</option>
+      <option>Canada</option>
+      <option>India</option>
+      <option>United States</option>
+      <option>United States Minor Outlying Islands</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <span class="txt">State</span><span class="mandatory">*</span>
+    <select name="state"><option value="">Choose</option></select>
+  </div>
+
+  <div class="field">
+    <span class="txt">City</span><span class="mandatory">*</span>
+    <input type="text" placeholder="City" name="city">
+  </div>
+
+  <div class="field">
+    <span class="txt">Address 1</span><span class="mandatory">*</span>
+    <input type="text" placeholder="Address 1" name="address1">
+  </div>
+
+  <div class="field">
+    <span class="txt">Address 2</span>
+    <input type="text" placeholder="Address 2" name="address2">
+  </div>
+
+  <div class="field">
+    <span class="txt">Zipcode</span><span class="mandatory">*</span>
+    <input type="text" placeholder="Zipcode" name="zipcode">
+  </div>
+
+  <div class="field">
+    <span class="txt">CV</span><span class="mandatory">*</span>
+    <input type="file" name="cv" accept=".doc,.pdf">
+  </div>
+
+  <button type="button" id="next">Next</button>
+</main>
+
+<script>
+  // State depends on Country, the way these forms usually do.
+  const STATES = {
+    "United States": ["Alabama", "California", "New York", "Texas", "Utah"],
+    "India": ["Telangana", "Karnataka", "Maharashtra"],
+    "Canada": ["Ontario", "Quebec"],
+  };
+  const country = document.querySelector("select[name=country]");
+  const state = document.querySelector("select[name=state]");
+  country.addEventListener("change", () => {
+    state.innerHTML = '<option value="">Choose</option>';
+    for (const name of STATES[country.value] || []) {
+      const option = document.createElement("option");
+      option.textContent = name;
+      option.value = name;
+      state.appendChild(option);
+    }
+    // The page picks the first entry for you. Whatever was chosen before is
+    // gone, which is how a saved Texas turned into an Alabama.
+    const first = state.querySelector("option[value]:not([value=''])");
+    if (first) state.value = first.value;
+  });
+
+  // "Next" only moves on once everything required is filled in.
+  document.getElementById("next").addEventListener("click", () => {
+    const missing = Array.from(
+      document.querySelectorAll("input[name], select[name]")
+    ).filter((el) => {
+      const required = el.parentElement.querySelector(".mandatory");
+      return required && el.type !== "file" && !el.value;
+    });
+    if (missing.length) {
+      document.title = "Personal info -- " + missing.length + " still empty";
+      return;
+    }
+    document.title = "Education and work";
+    document.querySelector("main").innerHTML =
+      '<div class="field"><span class="txt">School</span><span class="mandatory">*</span>' +
+      '<input type="text" placeholder="School" name="school"></div>';
+  });
+</script>

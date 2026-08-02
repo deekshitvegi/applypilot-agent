@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sign In</title>
+<!--
+  A two-step sign-in whose form lives in a shadow root and asks for a User ID
+  first, with no password field anywhere. Invisible to a plain querySelectorAll,
+  it was mistaken for an application form.
+-->
+<main>
+  <h1>Welcome</h1>
+  <div id="host"></div>
+</main>
+<script>
+  const root = document.getElementById("host").attachShadow({ mode: "open" });
+  root.innerHTML = `
+    <style>.box{padding:1rem}</style>
+    <div class="box">
+      <label for="uid">User ID</label>
+      <input id="uid" name="USER" autocomplete="username" type="text">
+      <button id="next" type="button">Next</button>
+      <a href="#forgot">Forgot your user ID?</a>
+    </div>`;
+</script>

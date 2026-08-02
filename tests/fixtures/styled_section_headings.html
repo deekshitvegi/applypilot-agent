@@ -1,0 +1,63 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Education and work</title>
+<!--
+  This form styles its section headings as coloured divs rather than using
+  heading tags. Reading only <h1>-<h5> found no section at all, so every
+  education and employment field was blocked from resolving -- on a page whose
+  answers were all sitting in the profile.
+
+  A block only counts as a heading once the walk is above a container holding
+  several fields. Below that, the short text before a control is that control's
+  own label, not a section name.
+-->
+<main>
+  <div class="section-title" style="color:#e8562a">Education</div>
+  <div class="block">
+    <div class="field">
+      <span class="txt">School / education institution</span><span class="mandatory">*</span>
+      <input name="school" placeholder="School / education institution">
+    </div>
+    <div class="field">
+      <span class="txt">Graduation Year</span>
+      <input name="gradYear" placeholder="Graduation Year">
+    </div>
+    <div class="field">
+      <span class="txt">Area of study</span><span class="mandatory">*</span>
+      <input name="area" placeholder="Area of study">
+    </div>
+    <div class="field">
+      <span class="txt">Degree</span>
+      <select name="degree">
+        <option value="">Choose</option>
+        <option>Bachelor's degree</option>
+        <option>Master's degree</option>
+        <option>Doctorate</option>
+      </select>
+    </div>
+    <div class="field">
+      <span class="txt">GPA</span><span class="mandatory">*</span>
+      <input name="gpa" placeholder="GPA">
+    </div>
+  </div>
+
+  <div class="section-title" style="color:#e8562a">Work experience</div>
+  <div class="block">
+    <div class="field">
+      <span class="txt">Company</span><span class="mandatory">*</span>
+      <input name="company" placeholder="Company">
+    </div>
+    <div class="field">
+      <span class="txt">Job title</span><span class="mandatory">*</span>
+      <input name="jobTitle" placeholder="Job title">
+    </div>
+    <div class="field">
+      <span class="txt">Start year</span><span class="mandatory">*</span>
+      <input name="startYear" placeholder="Start year">
+    </div>
+    <div class="field">
+      <span class="txt">End year</span>
+      <input name="endYear" placeholder="End year">
+    </div>
+  </div>
+</main>

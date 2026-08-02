@@ -1,36 +1,41 @@
 [build-system]
-requires = ["setuptools>=75"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "applypilot-agent"
-version = "0.19.8"
-description = "Local-first job application copilot"
+name = "applypilot"
+version = "1.33.0"
+description = "Local-first job application agent: a Chrome side panel plus a service on 127.0.0.1 that fills applications and verifies every value from page-owned state."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Deekshitth Vegi" }]
+keywords = ["job-application", "automation", "chrome-extension", "ats"]
+
 dependencies = [
-  "cryptography>=45,<47",
-  "fastapi>=0.115,<1",
-  "google-genai>=1.0,<2",
-  "httpx>=0.28,<1",
-  "pypdf>=5,<7",
-  "python-docx>=1.1,<2",
-  "python-dotenv>=1.0,<2",
-  "python-multipart>=0.0.20,<1",
-  "reportlab>=4.2,<5",
-  "uvicorn[standard]>=0.34,<1",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.8",
+    "cryptography>=42.0",
+    "python-docx>=1.1",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "playwright>=1.49,<2",
-  "pytest>=8.3,<9",
-  "ruff>=0.11,<1",
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "playwright>=1.45",
+    "ruff>=0.16,<1",
 ]
 
 [project.scripts]
-applypilot = "applypilot.main:run"
-applypilot-doctor = "applypilot.doctor:main"
+applypilot = "applypilot.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/deekshitvegi/applypilot-agent"
+Source = "https://github.com/deekshitvegi/applypilot-agent"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -39,15 +44,26 @@ where = ["src"]
 applypilot = ["web/*"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
 testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "browser: drives real injected extension functions in headless Chromium (needs playwright install chromium)",
+    "live: hits real employer sites over the network",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+src = ["src", "tests"]
 
 [tool.ruff.lint]
-# B008 flags calls in argument defaults. FastAPI's File()/Form()/Depends()
-# markers are declared exactly that way by design, so the rule does not apply
-# to route signatures here.
-ignore = ["B008"]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = [
+    # FastAPI's dependency-injection idiom is a function call in a default argument.
+    "B008",
+    # Ternaries are not always clearer than a short if/else block.
+    "SIM108",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]

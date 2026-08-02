@@ -1,0 +1,69 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Preliminary questions</title>
+<!--
+  Built from the structure of a live applicant tracking system.
+
+  Every Yes/No question here is two bare <button> elements. No role, no name,
+  no value, not even an aria-checked -- only class names. Nothing about them
+  says "control", so a whole section of questions was invisible to the scanner:
+  not unanswered, never seen.
+
+  The chosen one is marked the only way the page marks it, by carrying a class
+  its sibling does not.
+
+  The row of navigation buttons at the foot is the same shape and is not a
+  question, which is the case the wording guard exists for.
+-->
+<style>
+  .option { padding: 8px 24px; border: 1px solid #ccc; background: #fff; }
+  .option.picked { border-color: #33f; }
+  /* The marker is drawn, not written. */
+  .heading._required::after { content: "*"; color: #d00; }
+</style>
+
+<main>
+  <div class="fieldEntry">
+    <label class="heading">Do you need a work visa?</label>
+    <div class="yesno">
+      <button type="button" class="option">Yes</button>
+      <button type="button" class="option">No</button>
+      <!-- The row also holds a hidden input for the form to submit. -->
+      <input type="checkbox" style="display:none" tabindex="-1" name="d135a269">
+    </div>
+  </div>
+
+  <div class="fieldEntry">
+    <label class="heading _required">Do you have at least 3 years of professional experience?</label>
+    <div class="yesno">
+      <button type="button" class="option">Yes</button>
+      <button type="button" class="option">No</button>
+    </div>
+  </div>
+
+  <div class="fieldEntry">
+    <label class="heading">How would you prefer to work?</label>
+    <div class="yesno">
+      <button type="button" class="option">Remote</button>
+      <button type="button" class="option">Hybrid</button>
+      <button type="button" class="option">On site</button>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button type="button">Back</button>
+    <button type="button">Next</button>
+  </div>
+</main>
+
+<script>
+  // The page marks its answer with a class, the way the real one does.
+  for (const group of document.querySelectorAll(".yesno")) {
+    for (const button of group.children) {
+      button.addEventListener("click", () => {
+        for (const other of group.children) other.classList.remove("picked");
+        button.classList.add("picked");
+      });
+    }
+  }
+</script>

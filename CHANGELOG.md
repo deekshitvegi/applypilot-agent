@@ -1,972 +1,549 @@
 # Changelog
 
-## 0.19.8 - 2026-07-30
-
-- **Stopped asking about optional fields that do not matter.** Including every
-  optional blank in 0.17.3 over-corrected: a 13-question form became a
-  30-question interrogation covering Middle Name, Home Phone, Phone Extension,
-  County and "If source is not listed, enter here". Supplementary optional
-  fields are now left blank, and an optional conditional follow-up is no longer
-  raised at all. Anything the employer marks required is still always asked,
-  however minor it looks.
-
-## 0.19.7 - 2026-07-30
-
-- **Stopped learning meaningless values from the page.** The answer-learning
-  added in 0.18.1 stored whatever a control held, so an employer's internal
-  option ids ("Country -> 28468", "Are you legally authorized... -> 30104"),
-  dropdown placeholders ("- Select -"), page furniture ("Current Date", the
-  language selector) and one mis-scanned pairing ("Email Address: ->
-  Notification:") all became reusable answers - and were then written back into
-  later applications, which is why a country dropdown was being set to a
-  number. Only a control's human-readable label is learned now; numeric values
-  are rejected for dropdowns but still allowed for phone and postal codes,
-  which are legitimately numeric.
-
-## 0.19.6 - 2026-07-30
-
-- **Fixed a question being asked over and over after it was answered.** Making
-  "If yes, ..." fields conditional in 0.19.1 skipped every mapping for them,
-  including the user's own saved answer, so answering one could never satisfy
-  it: "Saved OPT for If yes, please indicate Visa status" was followed
-  immediately by the same question again. A conditional follow-up is still
-  never inferred, but an answer given for that exact question is now used.
-- **Answers reach the page as they are given.** The questionnaire only wrote
-  anything once every question had been answered, so each field stayed empty in
-  the meantime and a rescan asked for it again.
-- **The sign-in form no longer asks for a site.** It is taken from the tab you
-  are on, so the credential is still bound to one exact host - a lookalike or
-  another employer gets nothing - without anything to type.
-
-## 0.19.5 - 2026-07-30
-
-- **A search filter is no longer mistaken for a work-history field.** On a
-  SuccessFactors careers search page, "Position Location" was filled with the
-  candidate's current job title because "position" prefixed the job-title
-  pattern. A history label *is* the field name - "Company", "Job Title",
-  "School", optionally with a block number - so only an exact label, or one
-  followed by an index, now matches.
-
-## 0.19.4 - 2026-07-30
-
-- **A registration page is now filled, not just refused.** Recognising that an
-  employer wanted an account created, the runner stopped dead and left the user
-  to type their own name, phone and address into it. Those pages collect the
-  same details as an application, so everything except the credentials is now
-  filled and the résumé attached, leaving only a password to choose and the
-  button to press. Password fields remain blocked by the planner and are never
-  touched, and the account is still never created automatically.
-- **"Country/Region Code" is no longer filled with the state.** The label
-  matched the state mapping on the word "region", so a phone country code
-  selector received "Texas".
-
-## 0.19.3 - 2026-07-30
-
-- **The credential filler no longer claims a sign-in it did not perform.** It
-  reported success whenever a password field was non-empty, so a password the
-  user had typed themselves produced "signing in with the details you gave me
-  for this session". It now reports only what it actually wrote, verified by
-  reading the value back, and refuses to overwrite a password field that
-  already holds something different.
-- **Credentials are never entered into an account-creation form.** The runner
-  already treats registration as a handoff; the function that holds the
-  password now enforces the same rule itself, so a "Choose Password" /
-  "Retype Password" pair is refused regardless of how it was reached.
-
-## 0.19.2 - 2026-07-30
-
-- **An account-registration page is now recognised and handed over.** A Bausch
-  + Lomb application opens a "Choose Password / Retype Password" form to create
-  a new account. Seeing a password field, the runner treated it as a sign-in
-  and stalled on "Login fields were not filled after waiting for the browser
-  password manager" - waiting for a manager to fill an account that does not
-  exist yet. Two password fields, or one alongside a confirming email or an
-  "already registered? sign in" link, now stop the run with a plain
-  explanation and what to do next. Verified against the live page: detected,
-  and no credential field touched. Creating the account stays the user's
-  decision, since registering accepts the employer's terms on their behalf.
-
-## 0.19.1 - 2026-07-30
-
-Found by running the pipeline against a live Bausch + Lomb application.
-
-- **Work history no longer answers legal questions.** The repeating-history
-  mapper claimed any label containing "company", "position" or "degree", so a
-  sponsorship question was answered "HCLTech", a non-compete question with a
-  past employer, a confidentiality question with a university, and "Do you have
-  a Bachelor's degree?" with "M.S." History now matches only short field
-  labels, never sentence questions.
-- **A dropdown's placeholder row is never selected.** "No Selection" was chosen
-  for a required sponsorship question, submitting a non-answer that reads as
-  deliberate.
-- **Conditional follow-ups are left for the user.** "If yes, what department
-  and what country?" was filled with the saved country although it only applies
-  when a previous answer was yes.
-- **"Address Line 1" no longer answers "Address Line 2."** The labels are 93%
-  similar, so the street address was copied into both.
-
-On that application the plan went from 21 fills, several of them wrong answers
-to legal questions, to 13 that are all correct.
-
-## 0.19.0 - 2026-07-30
-
-- **"Add another" is now pressed for each saved education and work entry.**
-  Forms render one empty block and expect the button per further entry, so a
-  saved history of two schools and five roles could only ever fill the first of
-  each. The runner now adds the blocks the history needs and fills them, and
-  each click is confirmed by the form actually growing rather than assumed.
-  Verified on a live Ashby application: "+ Add Education" took the form from 21
-  fields to 24. A bare "Add another" belonging to an unrelated section is never
-  clicked.
-- **Multi-page applications wait for the next step to render.** After pressing
-  Save and Continue the runner scanned immediately, re-read the step it had
-  just completed, and reported filling the same answers again before stalling.
-  It now waits until the page presents questions it has not already handled.
-
-## 0.18.2 - 2026-07-30
-
-- **Outstanding questions are clickable.** Each entry under "Needs you" now
-  jumps to that field on the page and highlights it, so a long multi-step form
-  does not have to be scrolled through to find what is missing. Verified on a
-  live Ashby form: selecting School scrolled the page 1391px and outlined the
-  control. Answering it there is then learned like any other answer typed by
-  hand.
-
-## 0.18.1 - 2026-07-30
-
-- **Answers you type on the page yourself are now learned.** A rescan sees the
-  finished page but not who filled it, so anything answered that ApplyPilot did
-  not write is saved as a reusable answer and fills itself on the next
-  application. Values ApplyPilot wrote are tracked by fingerprint so it never
-  learns its own writing back, and demographic questions are excluded because
-  those stay the user's to give each time.
-- **The form panel now lists questions instead of counting them.** "Needs you"
-  and "Answered" are shown per question, so it is obvious which ones are
-  outstanding rather than only how many.
-
-## 0.18.0 - 2026-07-30
-
-- **Education and work history are now part of the profile, and repeating
-  application sections are filled from them.** This was the gap behind every
-  "why didn't it fill my education" report: the profile held no history at all,
-  so an employer's "1 of 2 Education" and "1 of 5 Experience" blocks could
-  never be completed by any path. `CandidateProfile` now carries ordered
-  education and experience entries, `POST /api/profile/from-resume` extracts
-  them from the saved résumé verbatim, and the planner fills the nth block from
-  the nth saved entry. A form with more blocks than saved history asks rather
-  than reusing the wrong entry.
-- Extraction copies what the résumé states and leaves a field empty rather than
-  inferring a date, employer, degree, or title that is not written.
-
-## 0.17.3 - 2026-07-30
-
-- **Every blank question is now worked through, one at a time.** Optional blank
-  fields were excluded from the guided questionnaire by default, so questions
-  like School, Degree, Field of Study and Location were neither filled nor
-  asked - they were silently skipped and the page was left incomplete. The
-  agent now covers every blank question by default, still one at a time, and
-  the setting to restrict it to required questions remains available.
-- **A flaky model reply no longer costs a question.** Measured against the
-  configured provider, the identical planning request returned grounded
-  actions on four of six attempts and an empty list with an explanation
-  claiming it had filled them on the other two. The pass now retries once
-  before handing a question back to the user, which lifts the chance of
-  answering from roughly two thirds to about nine in ten.
-
-## 0.17.2 - 2026-07-30
-
-- **A dropdown no longer claims the whole page as its options.** When a custom
-  dropdown exposed no identifiable popup, option enumeration fell back to
-  querying the entire document, so on a live Ashby form the Location and School
-  dropdowns each reported 27 "options" assembled from a salary chip, Yes/No
-  buttons, relocation checkboxes and the EEO race list. The panel then offered
-  all of them together as a single question. Options are now read only from a
-  popup the control actually owns; a dropdown whose choices cannot be seen
-  reports none rather than inventing them, and the remaining questions keep
-  their own separate, correct choices.
-
-## 0.17.1 - 2026-07-30
-
-- **The résumé now answers optional questions.** On a live Ashby form, School,
-  Degree, Field of Study, Location and Website were left blank and never even
-  asked about. Every one was optional, and the model pass was both gated on and
-  scoped to *required* unknowns, so on a form whose only gaps were optional the
-  résumé was never consulted at all - precisely what users upload it for. The
-  model is now offered every unanswered question. Verified against the live
-  Gemini key: Degree and Field of Study come back grounded in the résumé, while
-  a portfolio URL the résumé does not contain is still left empty rather than
-  invented.
-- **Demographic questions are never inferred.** Gender, race, veteran and
-  disability questions are excluded from the model pass and answered only from
-  a preference the user saved themselves.
-- Progress between model passes is measured over every question being worked
-  on, so an optional-only form no longer looks like zero progress and stop
-  after one pass.
-
-## 0.17.0 - 2026-07-30
-
-- **Session sign-in details.** Settings now accepts a site, username and
-  password that the agent uses to sign in for the rest of the session. They are
-  held in memory by the local companion only: never written to the database,
-  never logged, never echoed in narration, and gone when the agent restarts.
-  They are released only on an exact host match - a lookalike such as
-  `myworkdayjobs.com.evil.test` gets nothing - and only on a page already
-  confirmed to be that site's sign-in form. Signing **in** only; creating an
-  account is still never automated, because it accepts an employer's terms on
-  the user's behalf.
-- The browser password manager remains the default path and is unchanged.
-
-## 0.16.4 - 2026-07-30
-
-- **A country name is no longer written into a state dropdown.** Workday names
-  its State field `countryRegion`, so a saved "Country" answer claimed it by
-  bare substring match and the run reported 'State: No dropdown option matched
-  "United States of America"' while the required field stayed empty. Saved
-  answers now match only at word boundaries - a whole-word prefix or suffix -
-  so "State" still completes "State / Territory" but "Country" can claim
-  neither `countryRegion` nor "...work in the country in which this role is
-  based?". Matching also considers the label the user sees, not only the
-  name-augmented form, so a field whose name contradicts its label cannot drag
-  in the wrong answer.
-
-## 0.16.3 - 2026-07-30
-
-- **Answering a question in chat now fills the field and is remembered.**
-  "state texas", "set my state to Texas" and "phone device type mobile"
-  produced conversational prose while the required dropdown stayed empty and
-  blocked the application. Naming a visible field and its value is now a
-  scoped action, so the value is selected from the employer's own options,
-  verified on the page, and saved as a reusable answer for next time. A value
-  the page does not offer is still never invented.
-- **A saved answer whose wording differs slightly now matches.** The page
-  labelled a field "State" while the saved answer was "State / Territory", and
-  0.15.4's length guard rejected the pair. Matching now allows a short answer
-  to complete a short label while still refusing to let one claim a full
-  employer question.
-- **Stopped reporting a correct selection as a failure.** The page had accepted
-  "United States of America" for a saved "United States" and the run reported
-  "I could not complete: Country".
-
-## 0.16.2 - 2026-07-30
-
-Found by surveying ten kinds of job site rather than fixing one report at a time.
-
-- **The page classifier would have stopped every run at its starting point.**
-  Asked to judge a LinkedIn listing, the model reasonably answered "this is not
-  the employer", and the runner treated that as a third-party redirect and
-  halted. SmartRecruiters, Indeed and Dice were rejected the same way. Host
-  identity is now decided deterministically from the URL - a recognised ATS is
-  the employer's application host, a job board is the expected starting point -
-  and only an unrecognised host can be a third party worth stopping on. The
-  model still explains what it sees; it no longer decides whether to stop.
-- **A stuck page no longer loops forever.** "AI page planner selected apply" /
-  "the observed page has not changed" repeated indefinitely because the guard
-  reset whenever the run resumed. Pages that already defeated the planner are
-  remembered for the run, and after two attempts the agent stops and asks the
-  user to open the form manually.
-- **Job-board search pages are no longer scanned as forms.** Dice reported 22
-  phantom fields and an application surface from its filter controls. Board
-  scoping now covers Dice, Glassdoor, ZipRecruiter, Monster and SimplyHired
-  alongside Indeed, and surface detection refuses board pages outright.
-
-## 0.16.1 - 2026-07-30
-
-- **Fixed the wrong country being selected.** On a live Workday form "United
-  States" chose "United States Minor Outlying Islands (+1)", because option
-  matching returned the first option that merely contained the value. Matching
-  options are now ranked by closeness, so the intended country wins. A wrong
-  country reaching an employer is exactly the kind of unverified answer that
-  must never happen.
-- **"No fillable fields were found" on a page full of fields.** When a site
-  moves its form outside the container the adapter scopes to, the scan now
-  falls back to the whole document instead of reporting an empty page.
-
-## 0.16.0 - 2026-07-30
-
-- **The agent now works out what page it is on before acting.** Following an
-  employer Apply link landed on jackandjill.ai - a recruiting platform, not the
-  employer - and the action planner kept clicking there until it hit a guard
-  and reported the unhelpful "The AI planner cannot click final or destructive
-  controls". A new classification step runs first and returns a typed page kind
-  (application form, job listing, login required, account signup required,
-  third-party redirect, confirmation, blocked, unrelated) plus a plain-language
-  summary of what it sees.
-- **The run stops with an explanation instead of blundering on.** A page that
-  demands a new account, needs a sign-in, is already submitted, or is blocked
-  becomes a clear handoff. A page that does not belong to the expected employer
-  stops with "That Apply link led to ... not the employer's own application. I
-  stopped rather than submit your details to someone else."
-- Page text is passed to the model as untrusted data, and the classifier can
-  only choose from a fixed set of kinds - it never picks a control.
-
-## 0.15.6 - 2026-07-30
-
-- **Fixed a regression from 0.15.5: application forms treated as sign-in
-  pages.** Employer application URLs such as ADP's `.../postLogin.html`
-  contain "login", and application forms ask for an email address, so the
-  new two-step-login detection matched them. The runner then looped
-  "Submitted a password-manager-filled login step" against "Login fields were
-  not filled" on a form it should simply have filled. A page asking for name,
-  phone, address, résumé or demographics is now recognised as an application
-  whatever its URL says; only a real password field overrides that. Two-step
-  sign-in detection is unaffected - both directions are verified against the
-  live ADP sign-in page and a live Greenhouse application form.
-
-## 0.15.5 - 2026-07-30
-
-- **Sign-in pages built as web components are recognised again.** An ADP
-  application link redirects to a sign-in page whose entire form lives in a
-  shadow root, so the login check - which queried only the light DOM - found
-  nothing and the runner treated a credential form as an application form.
-  Login detection now traverses shadow roots, as the field scanner already did.
-- **Two-step sign-ins are detected.** ADP asks for a User ID first and only
-  requests the password on the next screen, so keying detection off a password
-  field missed it entirely. A visible username/user-ID field on a page whose
-  path or title says sign-in is now enough. Credentials are still never typed
-  or stored: the browser password manager owns them.
-
-## 0.15.4 - 2026-07-30
-
-- **A saved answer no longer hijacks an unrelated employer question.** On
-  Anthropic's Greenhouse form, a saved "Country -> United States" was filling
-  the visa-sponsorship question, because the phrase "the country in which this
-  role is based" contains "country" and the matcher's containment shortcut
-  scored any such overlap 0.95. Answering a sponsorship question with a
-  country name is both wrong and unsafe. The shortcut now applies only when
-  the two questions are of comparable length, so a short saved question cannot
-  claim a long one; genuinely similar questions still match.
-
-## 0.15.3 - 2026-07-30
-
-- **The Gemini schemaless retry now actually fires.** 0.15.0 added a fallback
-  for structured-output schemas Gemini refuses, but it only triggered when the
-  error text named the schema. Google in practice returns a bare "Request
-  contains an invalid argument", so the retry never ran and every AI planning
-  pass still failed. Any `INVALID_ARGUMENT` on a schema-bearing request now
-  earns one schemaless retry; the reply is still validated against the same
-  Pydantic model. Key, quota and permission errors use other codes and still
-  fail fast.
-
-## 0.15.2 - 2026-07-30
-
-- **Fields cleared by a form that rebuilds itself are now filled again.** On a
-  multi-step employer form, choosing Country rebuilt the address block and
-  discarded Address Line 1-3 and City moments after they were filled. The
-  rescan reported them empty - which was truthful - but the run gave up
-  instead of simply filling them again. The agent now re-plans and re-fills
-  until the page stops changing, stopping if the same pending set repeats so a
-  page that genuinely rejects a value cannot cause a loop.
-- **Selects and text inputs are now idempotent.** Re-selecting a value that is
-  already chosen still fires `change`, so a form that rebuilds on country
-  change would discard the retry's own work on every pass. A control already
-  holding the requested value is left untouched and reported verified, which
-  is what makes the retry converge.
-
-## 0.15.1 - 2026-07-30
-
-- **Stopped pausing on the invisible reCAPTCHA badge.** A run halted with
-  "Paused: CAPTCHA, MFA, or a verification code requires you" on an ordinary
-  employer application form. The detector matched any visible captcha iframe,
-  and the reCAPTCHA v3 badge — present on a large share of career sites, and
-  requiring no interaction whatsoever — is a visible 256x60 iframe. Every such
-  application was blocked before it began.
-- A pause now requires a challenge the user can actually solve: a visible
-  one-time-code field, the reCAPTCHA/hCaptcha image challenge (`bframe`), or a
-  checkbox widget of interactive size. Invisible badges and `size=invisible`
-  anchors are ignored. CAPTCHA, MFA and verification codes are still never
-  bypassed or solved — they remain user handoffs.
-
-## 0.15.0 - 2026-07-30
-
-- **Easy Apply listings now route to the employer's own application page.**
-  Previously a LinkedIn job offering only Easy Apply had no company URL to
-  discover, so the agent fell back to the aggregator's form. ApplyPilot now
-  derives candidate ATS boards from the company name, verifies each one really
-  belongs to that employer, finds the matching posting, and applies there.
-  Verified live: an Easy-Apply-only listing for Anthropic "Research Engineer"
-  now routes to the real Greenhouse posting instead of Easy Apply.
-- Discovery is general, never per-employer: slugs come from the company name
-  with legal suffixes and YC batch tags stripped, candidates only target
-  recognised ATS hosts, a board whose page does not name the company is
-  rejected so a slug collision cannot send an application to the wrong
-  employer, and an unverified guess is never returned. Non-HTTPS, loopback and
-  private-network targets are refused before any fetch.
-- Easy Apply remains the fallback when no company page can be verified, and
-  Settings - Where to apply still lets you prefer Easy Apply outright.
-
-## 0.14.3 - 2026-07-30
-
-- **The panel now shows the local agent's version and warns when it does not
-  match.** A companion left running on older code silently ignores every
-  backend fix, with no visible signal — which made a fixed answer-matching bug
-  look unfixed. The header now reads "Local agent connected · v0.14.3", turns
-  amber on a mismatch, and the agent says in chat that it needs restarting.
-
-## 0.14.2 - 2026-07-30
-
-- **Fixed the AI field planner dying on Gemini.** `FormAgentDecision` nests
-  `FormAgentAction`, which Pydantic serialises as `$defs`/`$ref`; Gemini
-  rejects that structured-output schema with `INVALID_ARGUMENT`, so every
-  planning pass failed and every question fell back to the user. Gemini calls
-  now retry once without the schema, asking for plain JSON of the same shape.
-  Model output stays untrusted: the reply is still validated against the same
-  Pydantic model before anything uses it. Key, quota and permission failures
-  are unaffected and still fail fast.
-- Stopped reporting unrelated Gemini failures as "Gemini rejected the
-  connection test"; a failed planning call no longer claims a connection test
-  ran.
-
-## 0.14.1 - 2026-07-30
-
-- **Fixed the same question being asked forever.** Saving an answer for a
-  short question — "Name", "City", "Phone" — never mapped back to the field,
-  so the panel re-announced it after every save. Two causes: saved answers were
-  compared against a combined "label name" string rather than the label the
-  panel actually displayed, and the fuzzy matcher discarded every question
-  shorter than six characters before comparing. Exact matching now tries each
-  label form the panel could have shown.
-- **A missing tailored résumé no longer pauses the whole application.** When
-  résumé preference is "tailored" but no AI model is connected, ApplyPilot now
-  attaches the original uploaded résumé and explains why, instead of stopping
-  the run with "A tailored résumé is unavailable".
-- The agent now says plainly when it has no AI model connected and therefore
-  cannot read the résumé to answer remaining questions itself, instead of
-  silently returning them as manual questions.
-
-## 0.14.0 - 2026-07-30
-
-Verified against live LinkedIn, Indeed, Greenhouse and Lever pages by running
-the extension's real injected functions inside those pages.
-
-- **Fixed a false "verified" on custom dropdowns.** The executor types into a
-  combobox's own input to filter its option list. The verification rescan then
-  read that self-written text back and reported success — including for
-  options the employer's page never accepted — overwriting the failure the
-  executor had already recorded. Reproduced on a live Greenhouse (react-select)
-  question. Selected state for a custom dropdown now comes only from signals
-  the page owns: `aria-activedescendant`, `aria-selected`, the widget's own
-  rendered value element, a hidden backing input, or a value the page wrote
-  after ApplyPilot cleared its filter text. A dropdown whose only signal is
-  loose text in its own input is reported unreadable and can never be verified.
-- Filter text is now restored when no option matches, so a later scan cannot
-  mistake an abandoned keystroke for an answer.
-- **Custom dropdowns now open the way a real user opens them** (a full pointer
-  sequence rather than a bare `click()`), and filter input no longer dispatches
-  `blur`, which had been closing the very menu the executor was about to read.
-- **The scanner can now enumerate a custom dropdown's real choices**, opening
-  it, reading the employer's own options, and closing it again. Required
-  dropdowns previously advertised zero options, leaving the planner blind.
-- **Job boards are no longer mistaken for application forms.** Indeed search
-  pages reported an application surface and produced 21 phantom fields (save
-  toggles and job cards read as radio groups). Search, filter and site-chrome
-  controls are now excluded, and Indeed scanning is scoped to a real apply
-  surface.
-- **Job descriptions no longer capture bundled JavaScript.** An Indeed search
-  page returned 1.2 MB of script source as the description; script, style and
-  template text is now stripped everywhere.
-- **Company name is now extracted reliably**, falling back through structured
-  data, `og:site_name`, logo alt text and the document title. It had been empty
-  on every site tested, which left the application history without employers.
-- **Grouped checkbox questions keep their real question.** A Lever pronoun
-  question was split into eleven fields labelled `He/himShe/herThey/them
-  Xe/xem`; it is now one question with eleven options.
-- Added adapters for Indeed, Ashby, SmartRecruiters, iCIMS, Jobvite, Dice,
-  Glassdoor, ZipRecruiter, Monster and SimplyHired, plus recognised ATS hosts
-  for Workable, BambooHR, Breezy, Teamtailor, Recruitee, SuccessFactors, Taleo,
-  Oracle Cloud, Paylocity and Dayforce.
-- The agent now narrates fill outcomes in the conversation, naming the answers
-  it confirmed and the ones the page would not confirm, instead of leaving that
-  detail in a silent status panel.
-
-## 0.13.0 - 2026-07-04
-
-- Redesigned the side panel around one agent surface: the job you are on, a
-  live one-line status, Start/Stop, and a full-height conversation where the
-  agent narrates each step as a timeline. Removed the duplicated cards.
-- Rewrote every setting in plain language and grouped them into "Your AI
-  model", "How I apply", and "Your data", each control with a one-line
-  explanation; on/off choices are now toggle switches.
-- Added an application-route choice: apply on the company's own website
-  (default) or use LinkedIn Easy Apply when it exists.
-- Fixed pasted question text being read as a command: "add github ci" followed
-  by a question containing "select all …" selected every option in the group.
-  Option matching now strips the referenced question text first.
-- Added exclusive-set corrections: "not all, just GitHub CI and Docker"
-  selects exactly the named options and clears the rest of that group instead
-  of falling through to a model prose reply.
-- Chat results now name each option ("GitHub CI — selected") instead of
-  repeating the group question with a raw true value.
-- The agent's live narration is first-person and specific ("I found the
-  employer's Apply button on this page — clicking it now…").
-- One chat message can now carry several intents ("fill my phone number …
-  check the background policy … I'm able to relocate anywhere … I only know
-  docker and github ci … click submit"): each part becomes its own scoped,
-  verified action. "I only know X and Y" and "remove the rest" replace a
-  group's selection exclusively, evaluated per clause so casual words like
-  "just" in ordinary sentences never clear selections.
-- "Fill my phone number/email/LinkedIn/GitHub" fills the matching visible
-  field from the saved profile, or tells you the profile value is missing.
-- Submit requests in chat get an explicit answer describing the approval
-  flow instead of being silently ignored; the final Submit is never pressed
-  from a chat message.
-- Added a plain-English, step-by-step setup guide to the README for
-  non-developers.
-
-## 0.12.0 - 2026-07-04
-
-- Replaced attempted-action verification with an authoritative post-action
-  rescan: the executor records the page-owned pre-state, performs one scoped
-  action, waits for the page to settle, rescans the live DOM, and reports
-  `verified` only when the requested visible option is actually selected.
-- Removed the self-written `data-applypilot-selected` marker entirely. Selected
-  state now comes only from signals the page owns: native `checked`, ARIA
-  checked/pressed/selected, page `data-state`/`data-selected`, page CSS state
-  classes, and hidden backing inputs behind segmented Yes/No buttons.
-- Controls that expose no page-owned state are now reported honestly as
-  "attempted but not confirmed" instead of "verified", are never persisted as
-  reusable answers, and are never auto-clicked a second time.
-- Added stable field fingerprints (normalized question, control type, option
-  labels, and name) so actions survive React-style re-renders that replace
-  elements and rotate numeric IDs; stale-ID actions re-resolve by fingerprint.
-- Made every fill idempotent: an option that a fresh scan already shows as
-  selected is never clicked again, so replans, repeated answers, and file
-  uploads can no longer toggle a segmented control off.
-- Merged the form scanner and executor into one injected `runFormPass` so the
-  scan that verifies is exactly the scan that plans, and fills return the
-  fresh post-action field state.
-- Routed relocation, sponsorship, authorization, and multi-select instructions
-  through a deterministic scoped-intent parser that binds each statement to
-  specific visible questions; "open to relocating anywhere" selects every
-  offered location and clears "unable to relocate".
-- Guaranteed that an explicit instruction about the visible form always ends
-  in a scoped browser action, a choice card, or a focused clarification —
-  never generic chat prose; bare replies that match several questions now ask
-  which question is meant instead of guessing.
-- The user's own canonical statements (sponsorship, authorization, relocation)
-  update the encrypted profile even when a page control cannot be confirmed.
-- Added browser-level regression tests (Playwright + the real injected
-  extension code) covering segmented Yes/No buttons with hidden backing state,
-  silent controls, toggle-off buttons, React-style re-renders, multi-select
-  checkbox groups, shadow-root options, and file uploads that reset answers.
-
-## 0.11.4 - 2026-07-04
-
-- Scoped short chat replies such as Yes, No, and Experienced to exactly one
-  pending or explicitly referenced application question.
-- Reworked choice-card relevance so short option names can no longer match
-  unrelated questions by substring (for example, `No` inside `now` or `Go`
-  inside ordinary prose).
-- Focused model clarification cards on one question instead of displaying up
-  to four loosely related groups at once.
-- Added selected-state tracking for custom segmented Yes/No buttons that do
-  not expose native radio or ARIA state.
-- Made repeated radio/button fills idempotent, preventing a verified answer
-  from being clicked again and toggled off during replan or file upload.
-- Added conversational support for "open to relocating anywhere in the US".
-
-## 0.11.3 - 2026-07-03
-
-- Ranked application-entry controls before truncating large page snapshots, so
-  a visible Apply button cannot be displaced by dozens of unrelated links.
-- Expanded Apply detection to custom anchors, accessible buttons, shadow DOM,
-  nested frames, and labels that include extra accessibility text.
-- Page-action frame selection now strongly prefers the frame containing the
-  application entry instead of the frame with the largest navigation menu.
-- Stop now preserves the captured job while clearing stale navigation state;
-  Start re-inspects the live page and can resume from an employer listing or
-  partially completed application without returning to LinkedIn.
-- Gemini assist validation now uses a minimal model-access request rather than
-  a complex form-action schema, preventing valid keys from failing setup due
-  to an unrelated structured-output grammar.
-- Gemini connection failures now report Google's safe error category and
-  detail for disabled APIs, project permissions, key restrictions, regional
-  free-tier availability, model access, and rate limits without exposing keys.
-
-## 0.11.2 - 2026-07-03
-
-- Added in-chat choice cards that mirror visible ATS radio, select, and
-  checkbox questions, including multi-select and Select all controls.
-- Choice-card answers are executed, verified against the live page, and stored
-  as reusable answers for equivalent future questions.
-- Added an evidence-first application loop: deterministic profile fields fill
-  immediately, the model receives only unresolved controls, and up to three
-  observe/action/verification passes run before asking the user.
-- Added truthful job-specific drafting for unresolved narrative questions from
-  the saved profile, résumé, and captured job description.
-- Live fields now appear before compact profile, résumé, answer-memory, and job
-  context so small local models retain both the browser tools and evidence.
-- Explicit page commands now run through the verified action executor before
-  general chat, preventing a prose response from swallowing a requested click.
-- Added general multi-select reasoning for broad preferences such as
-  "anywhere" or "all of these".
-- Gemini assist now runs a real structured-action probe before a key is saved;
-  rejected keys or inaccessible models can no longer appear Connected.
-- Checkbox plans may safely return the explicitly named option label as well as
-  `true`, improving compatibility with small local models.
-- Optional Gemini assist now handles résumé tailoring, unfamiliar page/form
-  decisions, job-specific application answers, and generated cover letters;
-  local Ollama remains the automatic fallback.
-
-## 0.11.1 - 2026-07-03
-
-- Added semantic grounding validation so model confidence can never override a
-  conflicting canonical profile value such as email, title, authorization, or
-  sponsorship.
-- Added expected field-label/type fingerprints to every fill action, preventing
-  stale numeric field IDs from writing an answer into a different question
-  after an ATS re-renders the form.
-- Reapplied canonical profile actions after résumé/cover-letter uploads, which
-  can cause Ashby and other reactive forms to reset selected controls.
-- Removed contaminated canonical page answers on startup and made the editable
-  candidate profile the single source of truth for those fields.
-- Added conversational field focus so `change it to ...` and `it was ...`
-  execute against the last explicitly referenced question.
-- Added selective Ollama + Gemini routing: local Ollama handles unlimited chat
-  and fallback work, while Gemini is reserved for résumé tailoring and
-  unfamiliar page/form decisions. Gemini failures fall back to Ollama.
-
-## 0.11.0 - 2026-07-03
-
-- Added a genuine model-driven form agent: Gemini, Ollama, OpenAI, or Anthropic
-  receives the current structured fields, user instruction, profile, saved
-  answers, résumé evidence, and active job, then returns typed field actions.
-- Added a guarded observe → reason → act → verify → repair loop. Model actions
-  are validated against live field IDs and visible options, executed by the
-  extension, verified on-page, and repaired once using the latest page state.
-- Persisted only verified model actions; hallucinated, unavailable, sensitive,
-  authentication, file, and low-confidence actions are rejected before use.
-- Added conversational clarification memory so a model can ask one focused
-  question and correctly interpret the user's next reply as the answer.
-- Wired the structured planner into the autonomous Start applying runner after
-  the fast deterministic pass, so unfamiliar remaining controls are reasoned
-  over instead of being handed directly to the old questionnaire.
-- Kept deterministic profile autofill as the fast, free fallback when no model
-  is configured, a provider is rate-limited, or structured planning fails.
-- Verified the structured action schema against local `qwen3:4b` in addition to
-  automated provider and API tests.
-
-## 0.10.2 - 2026-07-03
-
-- Added an Ashby-safe control model based on the live TENEX application: visible
-  Yes/No buttons are treated as one field and their hidden backing checkbox is
-  no longer scanned or filled separately.
-- Fixed Ashby radio groups whose every input uses the generic value `on`; the
-  visible option label now drives LinkedIn, Linux, consent, and similar choices.
-- Added fuzzy visible-option matching for employer typos such as `Expereinced`.
-- Made exact page corrections override stale profile defaults and prevented a
-  saved `Current Employee` answer from overriding a captured LinkedIn source.
-- Added natural commands for changing referral source, confirming background
-  policy review, applying `it is ...` answers, `answer these`, and `do it`.
-- Page-action reports now distinguish saved requests from selections actually
-  verified by the extension rather than claiming every planned update worked.
-
-## 0.10.1 - 2026-07-03
-
-- Fixed ordinary segmented ATS buttons whose visible Yes/No text was not
-  exposed through an HTML value or ARIA attribute.
-- Routed concise visible-option replies such as `Experienced` directly to the
-  matching application question instead of generic AI chat.
-- Recognized `fill out the whole thing` as a form action and allowed `add that
-  to the application` to reapply the last verified page answer.
-- Made Enter send chat messages and Shift+Enter insert a new line.
-- Expanded autocomplete option discovery for city/state controls that render
-  visible suggestions without standard listbox roles.
-
-## 0.10.0 - 2026-07-02
-
-- Turned explicit chat corrections into immediate page actions: one message can
-  select multiple technologies, clouds, referral sources, relocation choices,
-  work authorization, and sponsorship answers, then remember and refill them.
-- Added support for ATS Yes/No segmented controls implemented as ordinary
-  buttons without native radio roles or ARIA state.
-- Added an in-extension preview for the generated job-specific cover letter and
-  a clear activity message showing where to open it after attachment.
-
-## 0.9.4 - 2026-07-02
-
-- Added plain-text Ollama cover-letter generation when the local server rejects
-  a structured JSON grammar.
-- Made cover-letter generation non-blocking so a model/document failure is
-  reported in activity chat while form filling continues.
-- Added custom ARIA checkbox support and fixed filtering that accidentally
-  excluded button-based radio/checkbox widgets from form scans.
-- Generalized question grouping across native inputs, ARIA choices, and pressed
-  buttons so technology, authorization, sponsorship, and source controls can be
-  mapped and clicked consistently.
-
-## 0.9.3 - 2026-07-02
-
-- Detected employer iframe replacement between scanning and filling, then
-  rescanned and retried once against the new frame instead of failing.
-- Added guarded scan/fill UI handlers so a disappearing application frame is
-  reported in chat rather than becoming an uncaught extension promise error.
-
-## 0.9.2 - 2026-07-02
-
-- Ignored generic reusable labels such as “Select,” preventing an old “No” from
-  being applied to unrelated proficiency controls such as Linux experience.
-- Deduplicated reusable answers by normalized question whenever an answer is
-  saved or corrected.
-- Routed “fill the next,” “fill the rest,” and “ask me the remaining questions”
-  into the active form workflow instead of advisory AI chat.
-- Made automatic and manual fill flows ask every unknown required question in
-  chat one at a time; AI now refines user-provided answers rather than silently
-  inventing responses.
-
-## 0.9.1 - 2026-07-02
-
-- Made the configured AI provider refine free-text application answers before
-  they are saved; deterministic formatting is now fallback-only.
-- Included nearby employer instructions in textarea questions so the model sees
-  requested categories, units, and formatting rather than only a short heading.
-
-## 0.9.0 - 2026-07-02
-
-- Added custom ARIA radio and pressed-button support for segmented Yes/No,
-  referral-source, sponsorship, and similar ATS controls.
-- Improved résumé-evidence checkbox matching when an ATS exposes the full
-  question on every option instead of a clean group label.
-- Added grounded answer refinement so shorthand such as “0 months for all” is
-  converted into the employer-requested category format without inventing facts.
-- Added automatic ATS-readable DOCX reconstruction from saved résumé text when
-  an older upload lacks original file bytes, eliminating forced re-upload.
-- Added truthful AI-generated, job-specific cover-letter DOCX files with an
-  explicit always-generate preference alongside saved/never/ask choices.
-- Made “fill the rest” rescan and fill the active form instead of becoming an
-  advisory chat response.
-
-## 0.8.3 - 2026-07-02
-
-- Distinguished questions and help requests from answers while an application
-  question is pending, so unrelated chat is no longer saved accidentally.
-- Added explicit `/answer`, `answer:`, and `my answer is` forms for ambiguous
-  replies without requiring an AI request.
-- Added conversational correction through “change my last answer to …”, which
-  updates encrypted reusable memory and refills the current page.
-- Made every saved-answer confirmation show both the question and exact stored
-  value so mistakes are visible immediately.
-
-## 0.8.2 - 2026-07-02
-
-- Made a normal chat reply answer the currently pending application question,
-  save it as a reusable encrypted answer, fill the page, and continue the run.
-- Added an original-file availability check for résumés uploaded before raw-file
-  storage existed, with a direct one-time re-upload instruction in the correct
-  settings tab.
-- Preserved detailed local file-download errors instead of replacing them with
-  a generic attachment failure.
-
-## 0.8.1 - 2026-07-02
-
-- Fixed styled Yes/No radio groups that do not share a conventional HTML name,
-  including work authorization and sponsorship questions.
-- Made the captured LinkedIn/Indeed/Dice source override stale generic referral
-  answers so source-of-application questions select the correct job board.
-- Attached the configured original or tailored résumé immediately after form
-  discovery instead of waiting until every missing question was answered.
-- Added encrypted local cover-letter upload with never, ask-each-time, and
-  always-attach preferences; résumé and cover-letter fields are identified
-  separately by their visible labels.
-- Expanded explicit cloud résumé aliases while continuing to leave unsupported
-  skills unselected.
-
-## 0.8.0 - 2026-07-02
-
-- Reworked the side panel around one primary application conversation: current
-  job controls, live activity, chat, and inline missing-question prompts.
-- Moved provider configuration and automation preferences into a dedicated
-  Settings drawer instead of showing them in the normal workflow.
-- Added a separate Profile & résumé settings tab and hid manual job/form tools
-  inside a collapsed troubleshooting section.
-- Made new application questions appear in chat, echo the user's answer, explain
-  that it was saved, and continue to the next question automatically.
-- Replaced the ambiguous overflow menu with a conventional Settings control.
-
-## 0.7.4 - 2026-07-02
-
-- Added grouped radio and checkbox understanding, including styled controls
-  whose native input is visually hidden.
-- Added deterministic work-authorization, sponsorship, background-policy, and
-  captured-source mapping without an AI request.
-- Added evidence-only résumé matching for programming-language, tool, and cloud
-  checkbox groups; unsupported choices remain unselected.
-- Deduplicated unanswered multi-select groups so relocation and proficiency are
-  asked once and remembered instead of appearing as unrelated fields.
-- Made conversational commands such as “fill that part” rescan and update the
-  live application rather than falling through to ordinary AI chat.
-- Expanded the synthetic ATS with styled radio and checkbox regression fields.
-
-## 0.7.3 - 2026-07-02
-
-- Added nested-frame and open-shadow-root discovery for employer Apply controls
-  and application fields.
-- Added button-like input support for job sites that do not use normal links or
-  buttons.
-- Made AI-planned controls resilient to page re-renders by safely re-identifying
-  the selected visible label before clicking.
-- Changed the balanced Ollama default to `qwen3:4b`, disabled slow thinking for
-  structured actions, limited context, and reduced model memory residency from
-  30 minutes to 45 seconds.
-
-## 0.7.2 - 2026-07-02
-
-- Added explicit application-stage state so the runner stops searching for an
-  Apply button after an employer form has opened.
-- Fixed generic portal scanning to inspect the main application region instead
-  of accidentally selecting an unrelated form container.
-- Prevented repeated Apply-button errors between multi-step form pages, blocked
-  premature **Next** actions while required fields are empty, and stopped safe
-  navigation when the page does not change.
-
-## 0.7.1 - 2026-07-02
-
-- Added explicit consent wording for hands-off normal login using credentials
-  already filled by the browser password manager.
-- Waited for delayed password-manager autofill and supported multi-step
-  username/Next/password login flows before resuming the application.
-- Kept CAPTCHA, MFA, verification codes, empty credentials, and ambiguous
-  authentication controls as mandatory user/security handoffs.
-
-## 0.7.0 - 2026-07-01
-
-- Added an AI page-planning fallback that observes visible controls and page
-  context when deterministic application steps are ambiguous.
-- Kept final Submit, destructive actions, credentials, CAPTCHA, and MFA outside
-  the AI planner's allowed actions.
-- Resolved duplicate and nested Apply controls on Ashby and similar job pages.
-- Added truthful local chat status answers such as “are you applying?” instead
-  of sending those questions to a generic model response.
-- Added encrypted original-résumé file storage and per-application preferences
-  for original, tailored, or ask-each-time attachment.
-- Kept authentication in the guarded browser-assisted login path: existing
-  password-manager values may be submitted when enabled, while CAPTCHA, MFA,
-  verification codes, empty credentials, and ambiguous login controls pause.
-
-## 0.6.0 - 2026-07-01
-
-- Enforced a strict queue invariant: the runner advances only after explicit
-  on-page submission confirmation; low-fit and uncertain applications pause.
-- Added LinkedIn “application sent” confirmation phrases and removed unsafe
-  URL-only submission inference.
-- Added a local CSV application-history export with timestamps, status, job,
-  company, route, URL, and latest audit event.
-- Added live runner activity to chat and deterministic chat commands such as
-  `remember expected salary is 120000` that save and reuse field answers.
-- Collapsed the legacy profile, résumé, capture, and form buttons under
-  **Manual controls**, leaving the primary runner, Settings, and chat focused.
-- Improved LinkedIn job-title and company extraction for application history.
-
-## 0.5.4 - 2026-07-01
-
-- Fixed LinkedIn `/safety/go` links by preserving LinkedIn's in-page click
-  context instead of opening the internal safety endpoint as a new tab.
-- Waited for a genuine non-LinkedIn employer destination before treating the
-  safety handoff as complete.
-
-## 0.5.3 - 2026-07-01
-
-- Fixed LinkedIn's safety reminder when its **Continue applying** control is
-  rendered outside a standard dialog container.
-- Opened the continuation destination directly through the extension when the
-  reminder exposes a link, avoiding delayed-click popup blocking.
-- Kept a safe click-handler fallback for reminder controls without a link.
-
-## 0.5.2 - 2026-07-01
-
-- Added deterministic handling for LinkedIn's job-search safety reminder so
-  **Continue applying** completes the employer-site handoff.
-- Generalized primary Apply-button detection for LinkedIn, Indeed, Dice,
-  employer job pages, and other portals that use buttons or same-page routing.
-- Added a multi-step application loop that rescans every page, fills known
-  answers, asks for unknowns, and advances through Next and Review while
-  preserving the configured final-submit approval boundary.
-- Added delayed-render retries for JavaScript job pages and employer forms.
-- Opened the employer page and its application form before slower local-AI
-  résumé preparation, and kept Ollama models warm for 30 minutes.
-
-## 0.5.1 - 2026-07-01
-
-- Fixed LinkedIn external Apply buttons implemented with JavaScript so the
-  runner opens the employer application before scanning or filling fields.
-- Prevented ordinary LinkedIn job pages and unrelated dialogs from being
-  mistaken for application forms or exposing a final-submit action.
-- Cleared stale form state whenever a new job is captured or no application
-  form is detected.
-
-## 0.5.0 - 2026-06-30
-
-- Added a fully local Ollama provider with no API key or cloud quota, using
-  Qwen3 8B by default and schema-validated structured responses.
-- Added a guided questionnaire that discovers every unanswered visible field,
-  captures custom dropdown and radio options, remembers each answer, fills the
-  page, and resumes the active runner automatically.
-- Preserved the source job description and application state across LinkedIn,
-  employer career pages, Apply-button redirects, and side-panel reloads.
-- Added optional browser-assisted login that can continue after the browser
-  password manager fills credentials without exposing passwords to the model.
-- Improved the one-action company-site runner, human-readable field labels,
-  custom-control filling, CAPTCHA/MFA pauses, and deterministic fallback when
-  AI preparation is unavailable.
-- Made field analysis non-invasive and form-scoped so custom dropdowns remain
-  closed, header controls are ignored, required questions are shown first, and
-  optional blanks are reviewed only when requested.
-- Simplified the side panel around one **Start applying** action, moved provider
-  and automation preferences into collapsed Settings, added a focused offline
-  recovery screen, and fixed narrow-panel horizontal overflow.
-- Added a Windows background launcher plus enable/disable startup scripts so
-  users do not need to understand or manually start a separate backend.
-- Added friendly Gemini quota messages and one automatic retry when Google
-  provides a reset delay of at most 60 seconds.
-- Fixed profile matching so location values cannot be mistaken for work
-  authorization answers, and included optional unanswered fields in analysis.
-
-## 0.4.1 - 2026-06-30
-
-- Replaced leaked internal field identifiers with human-readable labels and
-  highlighted any question whose label a job site hides from the scanner.
-- Improved native and custom dropdown matching plus remembered checkbox-group
-  answers for office-location and similar multi-select questions.
-- Made deterministic page filling available from chat without an AI key and
-  rendered AI responses as clean, safe text and lists rather than raw Markdown.
-- Clarified when an encrypted provider key is active, added reviewed AI drafts
-  for narrative application questions, and expanded website/start-date mapping.
-
-## 0.4.0 - 2026-06-30
-
-- Fixed job capture and form scanning across navigation by adding explicit,
-  user-granted persistent job-site access.
-- Added a complete editable profile with encrypted, optional gender, race or
-  ethnicity, veteran, and disability self-identification fields.
-- Added deterministic cross-page autofill for common profile fields without an
-  AI call, including safer semantic mapping for yes/no/decline choices.
-- Added evidence-grounded job-fit scoring, gap analysis, a minimum automatic
-  fit threshold, and one-pass job preparation that produces a tailored résumé.
-- Added independent ask/always-allow policies for final submission and tailored
-  résumé attachment.
-- Added a LinkedIn-to-company application runner with a visible warning,
-  queue continuation, stop control, and a 10-job safety cap.
-
-## 0.3.0 - 2026-06-30
-
-- Added encrypted in-panel setup for Gemini, OpenAI, and Anthropic credentials.
-- Added provider-independent structured resume evidence, tailoring, and chat.
-- Added multimodal chat with up to three validated image attachments.
-- Replaced the original stacked dark interface with a compact, conventional
-  workflow and a substantially larger chat workspace.
-
-## 0.2.0 - 2026-06-30
-
-- Added encrypted candidate profiles, reusable answers, resumes, applications,
-  and tailored artifacts.
-- Added Gemini chat, evidence extraction, and grounded resume tailoring.
-- Added DOCX/PDF/TXT resume ingestion and ATS-friendly DOCX/PDF output.
-- Added Chrome side-panel onboarding, active-job capture, route planning, chat,
-  form analysis, filling, remembered unknown answers, document attachment, and
-  explicit final-submit approval.
-- Added company-site-first routing and LinkedIn, Greenhouse, Lever, Workday,
-  generic HTML, and JobPosting JSON-LD adapters.
-- Added an encrypted application state machine and audit history.
-- Added a public stateless Render demo and synthetic ATS test page.
-- Added setup, start, extension packaging, CI, and MIT licensing.
-- Added Windows/macOS/Linux setup and start scripts plus secret-safe local
-  installation diagnostics.
+Versions in `pyproject.toml`, `extension/manifest.json` and
+`src/applypilot/__init__.py` move together, and a test asserts it.
+
+## 1.33.0
+
+- **A required marker drawn by CSS still counts.** The red asterisk on one
+  applicant tracking system is not in the text at all -- the label reads "Have
+  you used Node.js professionally?" and carries a class saying it is required.
+  The marker search looked at text, found none, and every screening question on
+  the form read as optional: left blank, never asked about. A neighbouring
+  element whose class says required now counts as the marker.
+
+## 1.32.0
+
+- **Questions answered by pressing a button are questions now.** One widely
+  used applicant tracking system draws every Yes/No as two bare buttons -- no
+  role, no name, no value, only class names -- so a whole section of a form was
+  invisible rather than unanswered. A row of buttons with short labels is a
+  choice; pressing one is how it is answered; and what is chosen is read back
+  from the page, by aria where the page says so and otherwise by the one class
+  the chosen button carries that its siblings do not. Back beside Next is the
+  same shape and is excluded by wording. Checked on the live page: all seven of
+  its questions found, with their real wording and options.
+
+## 1.31.0
+
+- **The agreements switch saves, and lasts one session.** It had been added to
+  the profile and to the options page but not to the settings endpoint, so it
+  was dropped in transit both ways and unticked itself on save. It now goes
+  through like every other preference &mdash; and deliberately lives in memory
+  rather than on disk, so it switches itself off when the service restarts. A
+  decision with legal weight is one you make when you sit down to apply, not one
+  left running for months because of an afternoon's clicking. Nothing about it
+  is written down.
+
+## 1.30.0
+
+- **A tick box is answered by ticking it.** It carries no options of its own, so
+  it was going down the same path as a free-text field -- and an agreement came
+  back as somewhere to type, which is not how anyone accepts an arbitration
+  clause. Yes and No, as two things to press.
+- **"Tick the agreements an application requires" is in Settings.** Off until
+  you turn it on. On, agreements are accepted and the wording of each goes into
+  the activity log, so there is a record of what was agreed to rather than a
+  silent tick. Off, each one is handed back for you to read. The setting reaches
+  agreements and nothing else -- a saved Yes from elsewhere in your profile has
+  never been able to answer one of these and still cannot.
+
+## 1.29.0
+
+- **An agreement is asked, not skipped.** "I have read and agree to the terms of
+  the Mutual Arbitration Agreement" matched no saved fact -- correctly, since
+  what is being agreed to differs every time -- so it fell through to "optional"
+  and was left unticked, and the step was refused with nothing explaining why.
+  It now comes back as a question every time. It is never answered from a saved
+  value, however much its wording resembles a Yes/No already on file.
+- **Settings is three tabs instead of one long scroll.** About you, Settings,
+  Your data. Which tab you were on survives a reload. Everything is tighter
+  too: smaller type, less padding, less air between sections.
+
+## 1.28.0
+
+- **The "Other info" step asks its questions.** Two radio groups there thought
+  the question they were asking was "I have an account Login I'm applying for
+  the first time" -- the sign-in choice from the top of the page, hidden, four
+  levels away. Looking for a group's question walked outward until it found any
+  text at all, and that text carries no asterisk, so both were read as optional,
+  left blank, continued past and refused. The question is now looked for inside
+  the block where it lives, before anything walks outward; and text nobody can
+  see is never a label. Checked on the live page: both now carry their real
+  question and are correctly required.
+
+## 1.27.0
+
+- **A step that refuses to move on is read again, not given up on.** Several
+  required questions say so nowhere a machine can see until Continue is pressed
+  and refused -- that is the moment the form prints "Please select an option"
+  against each of them. The rule for reading those was already there; it never
+  got to run, because the panel pressed Continue, saw the page had not moved,
+  announced it had stopped and returned without looking again. It looks now,
+  while the complaints are on screen, and hands back what the form is asking
+  for instead of saying nothing.
+
+## 1.26.0
+
+- **A question with options is asked with those options.** The veteran question
+  was being handed back as a box to type into, and typing the exact wording of a
+  radio button selects nothing at all -- which is why it kept failing however
+  carefully it was typed. Whether a question is answered by choosing or by
+  typing now follows from what the control is, not from whether its options
+  happened to survive the trip; and if they did not, they are read from the
+  control on the page.
+- **Buttons are made of the surface rather than painted on it.** A solid block
+  of colour is the one thing soft UI cannot absorb. A button is the same
+  material, raised, with the accent carried by its lettering: depth says it can
+  be pressed, colour says it is the one to press. Start keeps its fill, and only
+  Start.
+
+## 1.25.0
+
+- **Light or dark, your choice.** Settings has a Theme control: follow the
+  browser, or pin it. It applies to the panel as well, and changing it in one
+  reaches the other without reopening either. With nothing chosen it follows the
+  browser exactly as before. Kept in the browser's own storage rather than your
+  profile -- it is a display preference, not something about you.
+
+## 1.24.0
+
+Measured on the live application rather than a fixture, which is the only reason
+any of this was found.
+
+- **Reading a page: 7530ms to 78ms.** Every part of a scan measured around a
+  millisecond, yet a whole scan took seven and a half seconds. The tolerant
+  block matching added in 1.15.0 was climbing to the top of the page and
+  comparing every section against every other one. A control whose name states
+  its entry number needs no walk at all now; where a walk is still needed it
+  stops at any block holding more than a couple of dozen controls, and what a
+  block asks is remembered for the length of one document walk.
+- **A four-field fill on that page: 12839ms to 134ms.** Finding one control went
+  from 416ms to 4ms, reading it back from 414ms to 1ms.
+- **The veteran question is asked.** Its label there is "(VEVRAA) Veteran's
+  Self-Identification Form" over three hundred characters of statute -- neither
+  of which names a field -- while the control was called "veteran" all along. A
+  label that answers to nothing gives way to the name.
+
+## 1.23.0
+
+- **The veteran question, read off the live page.** Its label there is not
+  "Please identify your Veteran status" at all -- it is three hundred characters
+  of VEVRAA statute, which names no field and matched nothing, while the
+  control's own name said "veteran" plainly. A label that is prose rather than a
+  name now gives way to the name, on the same narrow terms as a field with no
+  label at all. The bar sits well above a sentence, so a long question that does
+  name its subject is still read as a question.
+
+## 1.22.0
+
+- **The same question asked a different way gets the same answer.** A saved "25"
+  now answers a form offering "18-24 / 25-35 / 36-50", and a saved GPA of 3.34
+  answers "3.0-3.5". Ranges, "50+", "under 18" and "5 to 10 years" are all
+  understood. The arithmetic is done deterministically rather than guessed at,
+  only a label that is entirely a band counts -- "Building 25-35" is still a
+  place -- and two bands that both contain the number is a tie, which is still a
+  question rather than a coin flip.
+- **The veteran question gets asked.** "Please identify your Veteran status" did
+  not look like the veteran status field, because the request in front of it was
+  being read as part of the name. A leading request is stripped and the label
+  tried again, but only when the label as written matched nothing.
+- **"Please select an option" works now.** The rule added in 1.17.0 never fired
+  on the real page: it looked for a complaint by class name, and that form uses
+  a plain red span. It reads the wording instead -- narrowly, because
+  "*Please Check the box below:" is a label, not a complaint -- and stops
+  looking at the first ancestor belonging to a different question.
+
+## 1.21.0
+
+- **Filling a page is 40x faster.** Measured on a form of thirty fields:
+  **5122ms before, 120ms after**. None of it was where it looked.
+  - A flat 120ms wait before every read-back, paid by every field, on pages that
+    had already finished reacting. The page is read as soon as it has caught up
+    now; only a genuinely slow one waits, and it still gets as long as it needs.
+  - Finding a control meant searching the whole document, twice per field. Where
+    a fingerprint was last found is remembered -- and re-derived from the live
+    page before it is trusted, so a stale entry costs a slower lookup and never
+    the wrong control.
+  - Two messages per field, one of them only asking whether the tab was visible.
+    A page's actions make one trip now, grouped by frame.
+- Nothing about what "verified" means changed. Actions still run one at a time
+  in the planned order, and every result is still the page's own state read back
+  afterwards. `scripts/bench_fill.py` re-runs the measurement.
+
+## 1.20.0
+
+- **Soft UI.** Both the panel and Settings sit on a single colour with no
+  borders anywhere. Depth comes from one light source at the top left, and it
+  carries meaning rather than decoration: raised means press me, sunken means
+  fill me in. The question being asked is the thing standing highest off the
+  surface; an answer you have picked stays pressed in.
+- Text keeps full contrast throughout, and every state that depth signals is
+  also carried by colour and weight -- soft UI is a way of shaping surfaces, and
+  it must not become the reason something cannot be read.
+
+## 1.19.0
+
+- **The race question stops coming back.** A form that asks "Are you Hispanic or
+  Latino?" and "Race category" separately was answering both from one saved
+  value: picking a race wrote "Asian" where a Yes/No belonged, then answering
+  the Yes/No wrote "No" over the race -- so each answer made the other question
+  wrong again, however many times either was answered. Two questions, two facts.
+  A combined "Race / Ethnicity" question still works as one.
+
+## 1.18.0
+
+- **The panel and Settings look like something a person designed.** Space
+  instead of boxes inside boxes, body text at a readable size, one accent colour
+  used only where something is the main action or a warning, and the question
+  being asked is the only thing on screen with a border. The activity list reads
+  as a transcript rather than a wall of coloured blocks. Both follow the
+  browser's own light or dark setting.
+- **A question that appears because of your answer gets asked.** Answering one
+  EEO question adds another below it; the list had been captured before the
+  answer went in, so the new one was never in it and the step was continued past
+  with a required field blank. An answer that goes onto the page is now followed
+  by a fresh look at it.
+
+## 1.17.0
+
+- **A step is not finished while the form is still asking for things.** Some
+  required questions say so nowhere a machine can see: no attribute, and the
+  asterisk sits in a paragraph above the buttons rather than on a label of their
+  own. They were read as optional, left blank, continued past and rejected --
+  with nothing in the panel to answer. A form saying "Please select an option"
+  about a control now counts as the strongest evidence there is that it is
+  required, and those questions come back to you.
+- An agreement is still never ticked on your behalf. It is asked.
+- **"The page did not answer in time (highlight)" is gone.** Scrolling to a
+  field shared the deadline for real work; it is a courtesy now, with a short
+  deadline and no complaint when it does not land.
+
+## 1.16.0
+
+- **The next step gets worked on.** Two things stopped it. The panel sampled the
+  new page once, immediately after pressing Continue, decided it had not changed
+  and stopped driving -- and the step then arrived to a panel with nothing
+  behind it. And the stall guard counted every look at a page, while filling one
+  plans it several times over by design, so every page declared itself stuck on
+  the third look. Continuing now waits for the page to actually become a
+  different page, and only an attempt to move on counts towards the guard.
+- **The panel no longer slows the page down while idle.** It scanned every frame
+  of the application every two and a half seconds for as long as it was open. It
+  asks a cheap question first now and scans only when something has moved.
+- **Nothing spins forever.** Every request to the page has a deadline and says
+  what timed out, instead of leaving Start going round and round.
+
+## 1.15.0
+
+- **Every education and every job gets its own entry, with its own record.**
+  The first entry of a repeating block carries something the others do not --
+  "This is my most recent education" -- and later ones carry a remove button the
+  first lacks, so comparing blocks for an exact match found no twins at all.
+  Every entry then reported itself as the first one, which meant the same school
+  was filled into all of them, and the count of entries never rose, so adding
+  announced it had failed while entries appeared on screen. The entry number
+  stated in a control's own name is believed first now, and blocks that ask
+  mostly the same questions count as repeats. However many records are on file,
+  that many entries get made and each takes its own.
+- **The extension no longer slows the page down.** Waiting for something to
+  happen meant asking every sixty milliseconds -- two hundred walks of the whole
+  document over a twelve-second wait, one of them a full page scan each time.
+  Polling eases off the longer it waits, and nothing on a loop scans any more.
+- **Texas is not tried against an empty list.** A choice with nothing real on
+  offer yet goes last, so Country is set before State is reached. Nothing in the
+  rule knows what a State is.
+
+## 1.14.0
+
+- **"Back Next" is gone.** The row at the foot of a form holds two buttons, and
+  read as one element it says "Back Next". That was being offered as the way
+  onward and then could not be pressed, because nothing on the page is called
+  that. An element with a control inside it is a container now, not a control.
+- **Adding another education or work entry works.** Two things were wrong.
+  Scanning looked at every kind of element -- a real application uses a bare
+  span for "+ Add other education" -- while pressing looked only at buttons and
+  links, so a control the panel had just listed came back as missing. And the
+  check for whether an entry appeared waited three seconds and counted only
+  fields already drawn, so a slow application looked like a click that had done
+  nothing. One list of controls for both, every field counted whether drawn or
+  not, and a page that fetches gets time to answer.
+- Gemini 3.5 Flash-Lite is the default model, and the name is editable in
+  Settings.
+
+## 1.13.0
+
+- **Filling is fast again.** The five injected files were being fetched and
+  evaluated before *every single action*, so each field carried the cost of
+  loading the whole toolkit. A tab is injected once now and remembered until it
+  navigates.
+- **Switching tabs no longer breaks the run.** A hidden tab stops laying itself
+  out, so every control measured as invisible and every action came back "the
+  control is no longer on the page". Work waits for the page to be on screen and
+  says so.
+- **"Add other education" presses once.** Dispatching a click *and* calling
+  click() ran the handler twice and added two entries.
+- The model name is settable in Settings, so any model your key can reach will
+  do. A small fast one is the right choice: the model is only ever asked to
+  suggest an option a form already offers.
+
+## 1.12.0
+
+- **A dependent field is filled once it becomes answerable.** State holds nothing
+  but "Choose" until a Country is chosen, so retrying State was useless — the
+  answer did not exist yet. After any choice, the page is read again and the
+  fields that now have options are filled.
+- **A page takes seconds, not minutes.** Every control was given six seconds to
+  come back from a search, including ones with nothing to type into, and a
+  control that had already refused a value was asked again on every pass.
+- **The résumé is not a setup question.** It is a document, uploaded in Settings;
+  asking for it as a line of text to type was no use to anyone.
+
+## 1.11.0
+
+All three found by driving the live application, and confirmed there.
+
+- **The school picker fills.** Its search box sits two levels above where the
+  search for it stopped, so a control that types perfectly well was never typed
+  into — and the answer was reported missing from a list that had never been
+  searched.
+- **"+ Add other education" gets pressed.** It is a bare span with no role and
+  no href, so the search for clickable controls never saw it and the extra
+  entries were never added.
+- **The résumé attaches.** Its file input is `display:none` behind a styled
+  dropzone, so the scan skipped it and there was no file control to attach to.
+
+## 1.10.1
+
+Fixes a regression introduced in 1.7.0.
+
+- **The page watcher no longer fights the fill.** Filling a form changes the
+  page, and the watcher reacted to that as though someone else had done it —
+  re-planning on top of work in progress, over and over, so nothing ever
+  finished and the panel sat there looking busy. It now stays out of the way
+  while anything is in flight, waits for the page to settle across two checks,
+  and ignores a page it has already planned against.
+
+## 1.10.0
+
+Read off the live application rather than guessed at.
+
+- **A dropdown appended to `<body>` is found.** The school picker keeps a hidden
+  select with no options for its value, shows a `role="combobox"` span, and hangs
+  its dropdown — search box inside it — off the end of the document. A control
+  that says it is open, with exactly one open list on the page, owns that list.
+- **A name in bracket notation is read from its last meaningful part**, so
+  `custom[eeo][race]` is a question about race.
+- **A label belongs to its own field's row.** A field labelled with a bare
+  asterisk was taking the label of the field above it and answering as that
+  field.
+- **A widget showing the field's own name is showing a placeholder**, not an
+  answer.
+
+## 1.9.0
+
+- **A picker that searches a remote list is typed into properly and waited for.**
+  Each character gets the events a real key press produces; a list that opens
+  saying "Please enter 1 or more characters" is recognised as empty and gets the
+  filter typed into it; and the search is given time to come back. When the
+  answer really is absent, the failure now says what was on offer.
+- **A widget's own value is no longer read as the field's label.** The picker
+  renders the chosen school immediately before its input, so selecting anything
+  changed the control's identity and every later action reported it as gone —
+  the selection had worked, the control had just stopped being findable.
+- Prompts like "Please enter…", "No results" and "Loading" are placeholders, so
+  they are never offered as answers or counted as options.
+
+## 1.8.0
+
+- **Only the step on screen is offered.** A wizard keeps every step in the
+  document, and the check for a styled control was returning true outright
+  instead of going on to look at whether an ancestor was hidden — so every
+  checkbox and radio in the document counted as visible. The panel offered a
+  veteran form and a login choice from steps that were not showing, while the
+  text fields on the step that *was* showing were judged hidden and left out.
+  Found by driving a real application rather than a fixture.
+
+## 1.7.0
+
+- **A search-as-you-type control is opened with the answer typed into it.** A
+  school picker that shows "Please enter 1 or more characters" offers nothing at
+  all until something is typed, so opening it and reading an empty list was
+  never going to work.
+- **A control whose options did not cover the saved answer is opened again.** A
+  dependent dropdown is usually read before the field it depends on is filled,
+  so the options seen at scan time were the wrong ones.
+- **When nothing matches, the panel says what was on offer** and how many, so a
+  mismatch can be looked at rather than just wondered about.
+- **"Add other education" gets pressed.** A form that starts with one education
+  block and one job would only ever hold the most recent of each, however many
+  are on file.
+- **The panel notices when you move the page yourself.** Pressing Continue by
+  hand used to leave it showing the previous step's plan until it was stopped
+  and started again.
+
+## 1.6.0
+
+- **A section heading does not have to be a heading tag.** A form styling
+  "Education" and "Work experience" as coloured divs looked, to the scanner, as
+  though it had no sections at all — which blocked every education and
+  employment field from resolving on a page whose answers were all saved.
+- **A history record only answers inside its own kind of block.** "Start year"
+  fitted an education entry and a job equally well, and an even fit is refused,
+  so a field with an obvious answer came back as a question.
+- **"start" is no longer owned by the notice-period question.** It is the
+  ordinary word in "Start date" and "Start year", and owning it had been
+  blocking both history start dates from ever resolving.
+- **Your résumé is attached automatically** when a form asks for one, with a
+  toggle in Settings. Attaching is verified from the control's own file list.
+- **Education and work history have their own Save buttons.** One Save at the
+  bottom of a long page did not read as saving the sections above it.
+- Work history is described as one bullet point per line, which is how it is
+  written out again.
+
+## 1.5.0
+
+- **A field the page fills in for itself is corrected.** Choosing a country made
+  one form pick the first state in the list, so a saved Texas came out as
+  Alabama and nothing said so. Filling now keeps going while the page keeps
+  changing its mind, and says which fields it had to set again.
+- **What you did in each role is visible and editable** in Settings. It was read
+  out of your résumé and kept — it is what a tailored résumé reorders — but
+  there was no way to see or correct it.
+
+## 1.4.0
+
+- **"Fill this in for me" is the first thing in Settings**, with two routes:
+  your résumé (.docx) and your **LinkedIn data export** (.zip). Both only add
+  what the file actually says and never overwrite what you entered yourself.
+- The LinkedIn export carries every position, every school and your skills —
+  usually more than a résumé spells out. There is deliberately no "Sign in with
+  LinkedIn": it returns a name, an email and a picture and nothing else, so it
+  would save nobody any work, and reading a profile page instead is against
+  LinkedIn's terms.
+- A three-part location such as "Austin, Texas, United States" is read as city,
+  state and country rather than putting "Texas, United States" in the state.
+
+## 1.3.0
+
+- **A slashed label names the field twice.** "School / education institution"
+  matched neither reading and was left empty on a form that had the school in
+  the profile all along. Either side of a spaced slash now names the field.
+- **Questions read as questions.** Required markers are stripped from what is
+  shown, so "*GPA *" is "GPA *", and a field in a repeating block says which
+  entry it belongs to rather than appearing three identical times.
+- **Answering a history question saves into the right record.** A key such as
+  `education.gpa` was written into the flat set of facts, where nothing read it,
+  so answering it once did not stop it being asked again.
+- **Setup asks what matters first.** It was stalling on "Middle name" at 28 of
+  37 while work authorisation was still unanswered. Optional questions come last.
+- **Résumé upload is in Settings**, not only during first-time setup, so it can
+  be redone whenever the document changes.
+- "Graduation Year" and "Start year" resolve, and a year-shaped field gets the
+  year rather than "Jul 2025".
+
+## 1.2.0
+
+- **A required marker is no longer read as a field name.** On a form that puts
+  its asterisk in its own element between the name and the control, every field
+  came back labelled `*`, nothing matched, and the panel reported there was
+  nothing it could fill on a form asking for a first name and an address. The
+  asterisk is skipped when reading a label and looked for separately when
+  deciding whether a field is required.
+- **Fill and continue on its own**, as a toggle in the panel. It works through
+  the steps, stops at the first thing it cannot answer, and never presses final
+  Submit -- that stays governed by the submission policy in Settings.
+- **The report is grouped the way it reads**: "Needs you" with the whole
+  question, and "Completed" collapsed underneath. One primary control at the
+  bottom says what happens next.
+- A dependent dropdown holding only "Choose" is no longer offered as a question
+  with no answers; it fills on the next pass once the field it depends on is in.
+- "Zipcode" and "Pincode" answer the postal code.
+- A busy model reads as busy, not as a broken key.
+
+## 1.1.0
+
+Fixes from the first run on a real application.
+
+- **A dropdown is never handed back as a text box.** Options that load only when
+  a control is touched are opened and read before anyone is asked, and a saved
+  answer that matches one of them is chosen rather than asked about.
+- **Actions run in the frame their control lives in.** Applications are very
+  often inside one; every field in one used to come back missing.
+- **Option labels no longer identify a dropdown.** A control that populated when
+  opened changed fingerprint at that moment, so every action on it afterwards
+  reported it as gone.
+- **Today's date is filled, not asked**, in the shape the control asks for.
+  "Date of Birth" is guarded off.
+- **Buttons say when they are working and cannot be pressed twice.** Pressing
+  Save with no feedback skipped four questions in a row.
+- **The panel is rebuilt around one thing at a time.** The question owns the
+  card, options are shown as options with the suggested one marked, and the
+  checklist and activity log collapse behind summaries.
+- The model can now suggest one of the page's own options for a question nothing
+  saved covers. Its answer is checked against that same list before it is
+  offered, and a suggestion is never filled in without being accepted.
+
+## 1.0.0
+
+Rebuilt from nothing. The previous tree is gone; the history is not.
+
+### The rule everything is built around
+
+"Verified" now means one thing: a fresh read found the requested value in state
+the page itself owns. Four outcomes are reported and kept distinct — attempted,
+accepted, verified, failed — and a failure is never overwritten by a later,
+weaker claim of success.
+
+### Matching
+
+- Structural rather than substring. An alias has to line up with the whole
+  visible label, so "Position" no longer answers "Position Location".
+- When a label names several subjects the most specific one owns it, so a saved
+  Country stops answering a question about visa sponsorship.
+- Modifiers and trailing digits make a different field: "Home Phone" is not
+  "Phone", "Address Line 1" is not "Address Line 2".
+- Only the visible label is read. A form naming its State control
+  `countryRegion` gets no vote.
+- Structured history answers inside an education or employment block, or behind
+  a label that can mean nothing else.
+- Options are ranked by closeness with a length-gap ceiling; placeholder rows are
+  never answers; a tie is a question.
+- Value vocabulary is scoped by fact, so `MS` is Mississippi to an address field
+  and a Master's degree to an education one.
+
+### Reading pages
+
+- Traversal pierces shadow roots, in document order.
+- Page kind comes from the controls present, never the URL.
+- An application no longer needs a `<form>` element.
+- A list of jobs offers no fields, including boards that link to opaque paths.
+- The invisible reCAPTCHA badge is a badge.
+- Options come only from a list the control owns.
+
+### Getting to the right page
+
+- Host identity is decided from the URL. A model never decides to stop.
+- Adapters for Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable,
+  Recruitee, SuccessFactors, Phenom, iCIMS, Taleo, Jobvite, ADP and others.
+  Workable and Phenom were falling back to generic; both are recognised now,
+  Phenom from the page when it is served from the employer's own domain.
+- The posting's own apply control beats a board search, and a board match on the
+  company alone is never followed.
+
+### The rest
+
+- Guided onboarding, with the legal questions grouped so they are answered once.
+- Résumé extraction into editable education and work records.
+- Learning hygiene: option ids, placeholders, page furniture and mis-scanned
+  labels are refused.
+- Side panel with one Start/Stop, one question at a time, and a checklist that
+  scrolls to and highlights a field.
+- Chat instructions that always end in a scoped action, a choice card or one
+  focused question.
+- Local encrypted application history, exportable as CSV.
+- Session sign-in authorisation that holds no secret and matches hosts exactly.
+- `/health` reports the running version and the panel warns on drift.
+- A live-site check that reads real employer pages before every push.
+
+Everything in `docs/REGRESSIONS.md` has a test.

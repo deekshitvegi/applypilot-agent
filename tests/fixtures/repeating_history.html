@@ -1,58 +1,38 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Application with repeating history sections</title>
-    <style>
-      main { width: 640px; margin: 24px; font-family: sans-serif; }
-      section { border-top: 1px solid #ddd; margin-top: 16px; padding-top: 12px; }
-      label { display: block; margin: 8px 0 3px; }
-      input { width: 300px; padding: 5px; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <form>
-        <section id="education-section">
-          <h2>Education History</h2>
-          <div class="education-block">
-            <label>School <input name="school" type="text" /></label>
-            <label>Degree <input name="degree" type="text" /></label>
-          </div>
-          <button type="button" id="add-education">+ Add Education</button>
-        </section>
+<meta charset="utf-8">
+<title>Apply -- History</title>
+<!--
+  A repeating employment section. Pressing "Add another" must be confirmed by
+  the form actually growing, not by the click returning without an error.
 
-        <section id="experience-section">
-          <h2>Work Experience</h2>
-          <div class="experience-block">
-            <label>Company <input name="company" type="text" /></label>
-            <label>Job Title <input name="title" type="text" /></label>
-          </div>
-          <button type="button" id="add-experience">Add another</button>
-        </section>
+  The two blocks are built identically, so which entry a control belongs to
+  comes from its position among its sibling blocks rather than from a name.
+-->
+<main>
+  <h1>Work Experience</h1>
+  <div id="blocks">
+    <div class="entry">
+      <h3>Employment</h3>
+      <div><label>Company<input name="company"></label></div>
+      <div><label>Title<input name="title"></label></div>
+      <div><label>Location<input name="location"></label></div>
+      <div><label>Start Date<input name="start"></label></div>
+      <div><label>End Date<input name="end"></label></div>
+    </div>
+  </div>
+  <button id="add" type="button">Add another</button>
 
-        <section id="reference-section">
-          <h2>References</h2>
-          <!-- A bare "Add another" that must never be clicked for education. -->
-          <button type="button" id="add-reference">Add another</button>
-        </section>
-      </form>
-    </main>
-    <script>
-      const clone = (sectionId, blockClass) => {
-        const section = document.querySelector(sectionId);
-        const block = section.querySelector(blockClass);
-        const copy = block.cloneNode(true);
-        copy.querySelectorAll("input").forEach((input) => { input.value = ""; });
-        block.after(copy);
-      };
-      window.__referenceClicks = 0;
-      document.querySelector("#add-education")
-        .addEventListener("click", () => clone("#education-section", ".education-block"));
-      document.querySelector("#add-experience")
-        .addEventListener("click", () => clone("#experience-section", ".experience-block"));
-      document.querySelector("#add-reference")
-        .addEventListener("click", () => { window.__referenceClicks += 1; });
-    </script>
-  </body>
-</html>
+  <h2>Personal</h2>
+  <div><label for="fn">First Name *</label><input id="fn" name="first" required></div>
+  <div><label for="ln">Last Name *</label><input id="ln" name="last" required></div>
+  <div><label for="em">Email *</label><input id="em" name="email" type="email" required></div>
+  <button type="button">Submit Application</button>
+</main>
+<script>
+  document.getElementById("add").addEventListener("click", () => {
+    const blocks = document.getElementById("blocks");
+    const copy = blocks.firstElementChild.cloneNode(true);
+    copy.querySelectorAll("input").forEach((input) => { input.value = ""; });
+    blocks.appendChild(copy);
+  });
+</script>

@@ -1,49 +1,31 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Careers - Complete your application</title>
-    <style>
-      main { width: 560px; margin: 24px; font-family: sans-serif; }
-      label { display: block; margin: 10px 0 4px; }
-      input, select { width: 320px; padding: 6px; }
-    </style>
-  </head>
-  <body>
-    <main>
-      <!--
-        The filename deliberately contains "postLogin", exactly as the live
-        ADP application URL does. An application form must never be mistaken
-        for a sign-in page just because its URL contains "login" and it asks
-        for an email address.
-      -->
-      <form id="application">
-        <label for="email">Email Address</label>
-        <input id="email" name="email" type="email" />
+<meta charset="utf-8">
+<title>Application</title>
+<!--
+  A real application served from a URL called postLogin.html. It has an email
+  field and no password field. It was detected as a sign-in page and the runner
+  looped waiting for a password manager that had nothing to do.
 
-        <label for="mobile">Mobile Number</label>
-        <input id="mobile" name="mobilePhone" type="tel" />
-
-        <label for="home">Home Phone Number</label>
-        <input id="home" name="homePhone" type="tel" />
-
-        <label for="country">Country</label>
-        <select id="country" name="country">
-          <option value="">Select...</option>
-          <option value="US">United States</option>
-        </select>
-
-        <label for="addr1">Address Line 1</label>
-        <input id="addr1" name="addressLine1" type="text" />
-
-        <label for="city">City</label>
-        <input id="city" name="city" type="text" />
-
-        <label for="zip">Zip Code</label>
-        <input id="zip" name="postalCode" type="text" />
-
-        <button type="button">Next</button>
-      </form>
-    </main>
-  </body>
-</html>
+  Nothing here may be decided from the URL.
+-->
+<main>
+  <h2>Candidate Details</h2>
+  <div class="row"><label for="a">First Name *</label><input id="a" name="fname" required></div>
+  <div class="row"><label for="b">Last Name *</label><input id="b" name="lname" required></div>
+  <div class="row"><label for="c">Email Address *</label><input id="c" name="email" type="email" required></div>
+  <div class="row"><label for="d">Mobile Phone *</label><input id="d" name="mobile" type="tel" required></div>
+  <div class="row"><label for="e">Address Line 1</label><input id="e" name="addr1"></div>
+  <div class="row"><label for="f">Address Line 2</label><input id="f" name="addr2"></div>
+  <div class="row"><label for="g">City</label><input id="g" name="city"></div>
+  <div class="row"><label for="h">State</label>
+    <select id="h" name="countryRegion">
+      <option value="">- Select -</option>
+      <option>Texas</option>
+      <option>Utah</option>
+    </select>
+  </div>
+  <div class="row"><label for="i">ZIP Code</label><input id="i" name="zip"></div>
+  <div class="row"><label for="j">Resume *</label><input id="j" name="resume" type="file" required></div>
+  <div class="row"><label for="k">Why do you want this role?</label><textarea id="k" name="why"></textarea></div>
+  <button type="button">Save and Continue</button>
+</main>

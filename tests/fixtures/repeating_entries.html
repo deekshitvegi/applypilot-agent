@@ -1,0 +1,130 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Education and work</title>
+<!--
+  Built from the structure of a real application, read off the live page.
+
+  The first entry of each list carries something the others do not -- "This is
+  my most recent education" -- and the later ones carry a remove button the
+  first one does not have. Comparing blocks for an exact match therefore found
+  no twins anywhere, so every entry reported itself as the first one, every
+  entry was filled from the first record on file, and the run announced it had
+  added nothing while entries piled up on screen.
+
+  The entry number is stated plainly in each control's name.
+-->
+
+<main>
+  <div class="section-title">Education</div>
+
+  <div class="entry">
+    <label class="main-label">*School / education institution</label>
+    <input name="custom[education][0][school]">
+    <label class="main-label">Graduation Year</label>
+    <input name="custom[education][0][grad]">
+    <label class="main-label">*Degree</label>
+    <select name="custom[education][0][degree]">
+      <option value="">Choose</option>
+      <option>Bachelor's degree</option>
+      <option>Master's degree</option>
+    </select>
+    <label><input type="checkbox" name="custom[education][0][recent]"> This is my most recent education</label>
+  </div>
+
+  <div class="entry">
+    <button type="button" class="remove">&times;</button>
+    <label class="main-label">*School / education institution</label>
+    <input name="custom[education][1][school]">
+    <label class="main-label">Graduation Year</label>
+    <input name="custom[education][1][grad]">
+    <label class="main-label">*Degree</label>
+    <select name="custom[education][1][degree]">
+      <option value="">Choose</option>
+      <option>Bachelor's degree</option>
+      <option>Master's degree</option>
+    </select>
+  </div>
+
+  <span class="add">+ Add other education</span>
+
+  <div class="section-title">Work experience</div>
+
+  <div class="entry">
+    <label class="main-label">*Company</label>
+    <input name="custom[experience][0][company]">
+    <label class="main-label">*Job title</label>
+    <input name="custom[experience][0][title]">
+    <label><input type="checkbox" name="custom[experience][0][recent]"> This is my most recent work experience</label>
+  </div>
+
+  <div class="entry">
+    <button type="button" class="remove">&times;</button>
+    <label class="main-label">*Company</label>
+    <input name="custom[experience][1][company]">
+    <label class="main-label">*Job title</label>
+    <input name="custom[experience][1][title]">
+  </div>
+
+  <span class="add">+ Add other work experience</span>
+
+  <div class="section-title">Address</div>
+  <div>
+    <label class="main-label">*Country</label>
+    <select name="country">
+      <option value="">Choose</option>
+      <option>India</option>
+      <option>United States</option>
+    </select>
+    <label class="main-label">*State</label>
+    <!-- Holds nothing until a country is picked. -->
+    <select name="state">
+      <option value="">Choose</option>
+    </select>
+  </div>
+
+  <div class="footer">
+    <button type="button">Back</button>
+    <button type="button">Next</button>
+  </div>
+</main>
+
+<script>
+  // Each "add" grows its own list, the way the real form does.
+  for (const add of document.querySelectorAll(".add")) {
+    add.addEventListener("click", () => {
+      const kind = /education/i.test(add.textContent) ? "education" : "experience";
+      const entries = document.querySelectorAll(`[name^="custom[${kind}]"]`);
+      const next = Number(entries[entries.length - 1].name.match(/\[(\d+)\]/)[1]) + 1;
+      const block = document.createElement("div");
+      block.className = "entry";
+      const asks =
+        kind === "education"
+          ? [["school", "*School / education institution"], ["grad", "Graduation Year"]]
+          : [["company", "*Company"], ["title", "*Job title"]];
+      block.innerHTML =
+        '<button type="button" class="remove">&times;</button>' +
+        asks
+          .map(
+            ([key, text]) =>
+              `<label class="main-label">${text}</label>` +
+              `<input name="custom[${kind}][${next}][${key}]">`
+          )
+          .join("");
+      add.parentNode.insertBefore(block, add);
+    });
+  }
+
+  // Picking a country fills the state list, and not before.
+  const STATES = { "United States": ["Alabama", "Texas"], India: ["Goa", "Kerala"] };
+  const country = document.querySelector("select[name=country]");
+  const state = document.querySelector("select[name=state]");
+  country.addEventListener("change", () => {
+    state.innerHTML = '<option value="">Choose</option>';
+    for (const name of STATES[country.value] || []) {
+      const option = document.createElement("option");
+      option.textContent = name;
+      option.value = name;
+      state.appendChild(option);
+    }
+  });
+</script>

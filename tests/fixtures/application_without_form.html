@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Apply -- Machine Learning Engineer</title>
+<!--
+  A complete application rendered without a <form> element anywhere. The scanner
+  saw all of the fields and still refused to treat the page as an application,
+  because it was judging by markup rather than by what is on screen.
+-->
+<div id="root">
+  <h1>Machine Learning Engineer</h1>
+
+  <div class="section"><h2>Personal Information</h2>
+    <div><label for="a">First Name *</label><input id="a" name="_systemfield_name.first" required></div>
+    <div><label for="b">Last Name *</label><input id="b" name="_systemfield_name.last" required></div>
+    <div><label for="c">Email *</label><input id="c" type="email" name="_systemfield_email" required></div>
+    <div><label for="d">Phone</label><input id="d" type="tel" name="_systemfield_phone"></div>
+    <div><label for="e">Resume *</label><input id="e" type="file" name="_systemfield_resume" required></div>
+    <div><label for="f">LinkedIn</label><input id="f" name="linkedin"></div>
+    <div><label for="g">Website</label><input id="g" name="website"></div>
+  </div>
+
+  <div class="section"><h2>Education</h2>
+    <div><label for="h">School</label><input id="h" name="school"></div>
+    <div><label for="i">Degree</label><input id="i" name="degree"></div>
+    <div><label for="j">Field of Study</label><input id="j" name="discipline"></div>
+    <div><label for="k">Start Date</label><input id="k" name="edu_start"></div>
+    <div><label for="l">End Date</label><input id="l" name="edu_end"></div>
+  </div>
+
+  <div class="section"><h2>Work Experience</h2>
+    <div><label for="m">Company</label><input id="m" name="company"></div>
+    <div><label for="n">Title</label><input id="n" name="title"></div>
+    <div><label for="o">Location</label><input id="o" name="job_location"></div>
+    <div><label for="p">Start Date</label><input id="p" name="exp_start"></div>
+    <div><label for="q">End Date</label><input id="q" name="exp_end"></div>
+  </div>
+
+  <div class="section"><h2>Additional Questions</h2>
+    <fieldset>
+      <legend>Are you legally authorized to work in the United States? *</legend>
+      <label><input type="radio" name="auth" value="y" required> Yes</label>
+      <label><input type="radio" name="auth" value="n"> No</label>
+    </fieldset>
+    <fieldset>
+      <legend>Will you now or in the future require visa sponsorship to work in the country in which this role is based? *</legend>
+      <label><input type="radio" name="spon" value="y" required> Yes</label>
+      <label><input type="radio" name="spon" value="n"> No</label>
+    </fieldset>
+    <div><label for="r">If yes, what department and what country?</label><input id="r" name="followup"></div>
+    <div><label for="s">Middle Name</label><input id="s" name="middle"></div>
+    <div><label for="t">Phone Extension</label><input id="t" name="ext"></div>
+    <div><label for="u">County</label><input id="u" name="county"></div>
+  </div>
+
+  <button type="button">Submit Application</button>
+</div>

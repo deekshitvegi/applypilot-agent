@@ -1,21 +1,14 @@
-#!/usr/bin/env sh
-set -eu
+#!/usr/bin/env bash
+# One-time setup on macOS or Linux. See setup.ps1 for Windows.
+set -euo pipefail
+cd "$(dirname "$0")/.."
 
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$ROOT"
+python3 -m venv .venv
+./.venv/bin/python -m pip install --upgrade pip --quiet
+./.venv/bin/python -m pip install -e ".[dev]"
+./.venv/bin/python -m playwright install chromium
 
-if [ ! -d .venv ]; then
-  python3 -m venv .venv
-fi
-
-.venv/bin/python -m pip install -e .
-
-if [ ! -f .env ]; then
-  cp .env.example .env
-fi
-
-printf '%s\n' \
-  "ApplyPilot setup complete." \
-  "1. Run: ./scripts/start.sh" \
-  "2. Load the extension folder as an unpacked Chrome/Edge extension." \
-  "3. Connect Gemini, OpenAI, or Anthropic securely inside the side panel."
+echo
+echo "Done. Next:"
+echo "  1. ./scripts/start.sh"
+echo "  2. chrome://extensions -> Developer mode -> Load unpacked -> the extension folder"

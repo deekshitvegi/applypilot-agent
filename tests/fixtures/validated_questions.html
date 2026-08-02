@@ -1,0 +1,57 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Other info</title>
+<!--
+  Built from the structure of a real application, read off the live page.
+
+  Three required questions, none of them marked required in any way a machine
+  can see until the form has been submitted once: no `required` attribute, no
+  aria-required, and the asterisk is inside a long paragraph sitting above the
+  buttons rather than on a label of their own.
+
+  They were read as optional, left blank, continued past, and rejected -- and
+  nothing was asked, because nothing knew anything was missing. Deliberately no
+  asterisks here: this is the form that tells you nothing until it refuses. What the page
+  says when it rejects them is the evidence: "Please select an option".
+-->
+
+<main>
+  <div class="form-group">
+    <p>Have you ever been employed by Example Ltd. or any of its subsidiary
+       companies? If you need additional information please visit
+       <a href="https://example.test">example.test</a></p>
+    <label><input type="radio" name="employed_before" value="Yes"> Yes</label>
+    <label><input type="radio" name="employed_before" value="No"> No</label>
+    <div class="hidden complaint" style="color:#d00">Please select an option</div>
+  </div>
+
+  <div class="form-group">
+    <p>Please Check the box below:</p>
+    <label><input type="checkbox" name="arbitration">
+      I have read and agree to the terms of the Mutual Arbitration Agreement.</label>
+    <div class="hidden complaint" style="color:#d00">Please select an option</div>
+  </div>
+
+  <div class="form-group">
+    <label class="main-label">Anything else you would like us to know?</label>
+    <textarea name="extra"></textarea>
+  </div>
+
+  <button type="button" id="next">Next</button>
+</main>
+
+<style>.hidden { display: none; }</style>
+<script>
+  // The form only says what it wants once it has been asked to move on.
+  document.getElementById("next").addEventListener("click", () => {
+    const answered = new Set();
+    for (const el of document.querySelectorAll("input")) {
+      if (el.checked) answered.add(el.name);
+    }
+    for (const group of document.querySelectorAll(".form-group")) {
+      const input = group.querySelector("input");
+      if (!input) continue;
+      group.querySelector(".complaint").classList.toggle("hidden", answered.has(input.name));
+    }
+  });
+</script>

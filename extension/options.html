@@ -1,41 +1,187 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ApplyPilot settings</title>
-    <link rel="stylesheet" href="options.css" />
-  </head>
-  <body>
-    <main>
-      <p class="eyebrow">CONNECTION</p>
-      <h1>ApplyPilot agent service</h1>
-      <p class="intro">
-        Use the local service for private candidate data and browser automation. A hosted demo
-        URL can demonstrate public, stateless features only.
-      </p>
-      <form id="settings-form">
-        <label for="api-base">Service URL</label>
-        <input id="api-base" type="url" required />
-        <div class="actions">
-          <button type="submit">Save and test</button>
-          <button id="use-local" class="secondary" type="button">Use local service</button>
-        </div>
-      </form>
-      <p id="result" class="result" aria-live="polite"></p>
-      <section id="diagnostics" class="diagnostics hidden">
-        <h2>Connection diagnostics</h2>
-        <dl>
-          <div><dt>Service</dt><dd id="diag-service">—</dd></div>
-          <div><dt>Mode</dt><dd id="diag-mode">—</dd></div>
-          <div><dt>AI provider</dt><dd id="diag-provider">—</dd></div>
-          <div><dt>Model</dt><dd id="diag-model">—</dd></div>
-          <div><dt>Site adapters</dt><dd id="diag-adapters">—</dd></div>
-        </dl>
-        <p id="provider-help" class="provider-help"></p>
-        <p>Provider credentials are configured securely in the ApplyPilot side panel.</p>
-      </section>
-    </main>
-    <script src="options.js"></script>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <title>ApplyPilot settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+<main>
+  <h1>ApplyPilot</h1>
+  <p id="health" class="muted"></p>
+
+  <nav class="tabs" id="tabs">
+    <button type="button" data-tab="you" class="on">About you</button>
+    <button type="button" data-tab="settings">Settings</button>
+    <button type="button" data-tab="data">Your data</button>
+  </nav>
+
+  <section data-tab="you" class="feature">
+    <h2>Fill this in for me</h2>
+    <p class="muted">
+      Rather than typing all of it. Both routes only add what the file actually
+      says &mdash; nothing is guessed at, and nothing you have already entered is
+      overwritten.
+    </p>
+
+    <div class="import-grid">
+      <div class="import-card">
+        <strong>From your r&eacute;sum&eacute;</strong>
+        <p class="muted tiny">
+          A .docx. Reads your name, email, phone, location, education and work
+          history.
+        </p>
+        <input id="resume-file" type="file" accept=".docx">
+        <p id="resume-result" class="muted tiny"></p>
+      </div>
+
+      <div class="import-card">
+        <strong>From your LinkedIn export</strong>
+        <p class="muted tiny">
+          The .zip LinkedIn emails you: <em>Settings and Privacy &rarr; Data
+          privacy &rarr; Get a copy of your data</em>. Usually has more detail
+          than a r&eacute;sum&eacute;, including every position and skill.
+        </p>
+        <input id="linkedin-file" type="file" accept=".zip">
+        <p id="linkedin-result" class="muted tiny"></p>
+      </div>
+    </div>
+  </section>
+
+  <section data-tab="settings">
+    <h2>Model key</h2>
+    <p class="muted">
+      Matching your saved answers to a form works without a key. A key is only
+      used for wording: describing a page, and picking between options the page
+      itself offered. It is stored encrypted on this computer and is never sent
+      anywhere except to the model provider.
+    </p>
+    <label for="api-key">Gemini API key</label>
+    <input id="api-key" type="password" autocomplete="off" placeholder="paste your key here">
+    <label for="model-name">Model</label>
+    <input id="model-name" type="text" spellcheck="false"
+           placeholder="gemini-3.5-flash-lite">
+    <p class="muted tiny">
+      Any model name your key can reach. A small fast one is the right choice
+      here &mdash; the model is only asked to suggest an option a form already
+      offers, never to fill anything from your profile.
+    </p>
+    <div class="row">
+      <button id="save-key" class="primary">Save</button>
+      <span id="key-state" class="muted"></span>
+    </div>
+  </section>
+
+  <section data-tab="settings">
+    <h2>Appearance</h2>
+    <label for="theme">Theme</label>
+    <select id="theme">
+      <option value="system">Follow the browser</option>
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+    </select>
+    <p class="muted tiny">Applies to this page and the panel.</p>
+  </section>
+
+  <section data-tab="settings">
+    <h2>How I should behave</h2>
+    <label for="submission">Final Submit</label>
+    <select id="submission">
+      <option value="never">Never press Submit — I will do it myself</option>
+      <option value="confirm">Ask me first, every time</option>
+      <option value="auto">Press it once everything required is verified</option>
+    </select>
+    <label class="check">
+      <input id="easy-apply" type="checkbox">
+      Prefer a job board's quick apply over the employer's own site
+    </label>
+    <label class="check">
+      <input id="auto-attach" type="checkbox">
+      Attach my r&eacute;sum&eacute; whenever a form asks for one
+    </label>
+    <label class="check">
+      <input id="demographics" type="checkbox">
+      Answer the voluntary questions (gender, race, veteran, disability) from my saved answers
+    </label>
+    <p class="muted tiny">
+      Left off, those four are always handed back to you. Nothing is ever filled
+      in for them on your behalf.
+    </p>
+    <label class="check">
+      <input id="accept-agreements" type="checkbox">
+      Tick the agreements an application requires (terms, arbitration, privacy consent)
+    </label>
+    <p class="muted tiny">
+      <strong>This session only.</strong> It switches itself off when the
+      service restarts, so it is a decision you make when you sit down to apply
+      rather than one left running for months. Off, each agreement is handed
+      back for you to read and tick. On, the wording of whatever was accepted
+      goes into the activity log, so there is a record rather than a silent
+      tick. Nothing about this is written to disk.
+    </p>
+    <button id="save-behaviour" class="primary">Save</button>
+  </section>
+
+  <section data-tab="you">
+    <h2>Your answers</h2>
+    <p class="muted">Anything blank here is something a form will stop and ask you about.</p>
+    <div id="facts" class="grid"></div>
+    <div class="row"><button id="save-facts" class="primary">Save answers</button><span id="facts-saved" class="muted tiny"></span></div>
+  </section>
+
+  <section data-tab="you">
+    <h2>Education</h2>
+    <div id="education"></div>
+    <div class="row">
+      <button id="save-education" class="primary">Save education</button>
+      <button id="add-education" class="ghost">Add an entry</button>
+      <span id="education-saved" class="muted tiny"></span>
+    </div>
+  </section>
+
+  <section data-tab="you">
+    <h2>Work history</h2>
+    <p class="muted">
+      What you did in each role, as your r&eacute;sum&eacute; states it &mdash; one bullet
+      point per line. This is what a tailored r&eacute;sum&eacute; is built from, so
+      correcting it here corrects that too.
+    </p>
+    <div id="experience"></div>
+    <div class="row">
+      <button id="save-experience" class="primary">Save work history</button>
+      <button id="add-experience" class="ghost">Add an entry</button>
+      <span id="experience-saved" class="muted tiny"></span>
+    </div>
+  </section>
+
+  <section data-tab="data">
+    <h2>Answers learned from forms</h2>
+    <p class="muted">
+      Things you typed on an application that I kept so you would not have to
+      type them again. Delete anything that looks wrong.
+    </p>
+    <table id="learned"><tbody></tbody></table>
+    <button id="forget-all" class="ghost">Forget all of them</button>
+  </section>
+
+  <section data-tab="data">
+    <h2>Applications</h2>
+    <table id="applications"><tbody></tbody></table>
+    <div class="row">
+      <button id="export" class="ghost">Export as CSV</button>
+    </div>
+  </section>
+
+  <section data-tab="data" class="danger">
+    <h2>Erase everything</h2>
+    <p class="muted">
+      Deletes your profile, saved answers, documents and history from this
+      computer. The encryption key file stays where it is.
+    </p>
+    <button id="reset" class="bad">Erase everything</button>
+  </section>
+</main>
+<script src="theme.js"></script>
+  <script src="options.js"></script>
+</body>
 </html>

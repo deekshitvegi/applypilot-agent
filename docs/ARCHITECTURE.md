@@ -1,245 +1,149 @@
-# ApplyPilot architecture
+# Architecture
 
-## Shape of the system
+Two processes with one hard boundary between them.
 
-```text
-Job page / ATS
-      |
-Chrome extension content script
-      |
-ApplyPilot side panel  <---->  User review and chat
-      |
-Local FastAPI orchestrator
-      |---- Candidate profile and answer memory (local SQLite)
-      |---- Job-page normalization and site adapters
-      |---- Resume evidence extraction and tailoring
-      |---- Application planning and validation
-      `---- AI provider (local Ollama or encrypted remote credential)
+```
+  Chrome                                    your computer
+  ┌───────────────────────────────┐         ┌──────────────────────────────┐
+  │  side panel                   │  http   │  FastAPI on 127.0.0.1        │
+  │   UI, chat, checklist         │◄───────►│   profile, saved answers,    │
+  │   (never touches a page)      │         │   history, mapping, routing  │
+  │            │ runtime message  │         │            │                 │
+  │            ▼                  │         │            ▼                 │
+  │  service worker               │         │  SQLite, encrypted           │
+  │   the only browser boundary   │         │  key in a separate file      │
+  │            │ chrome.scripting │         └──────────────────────────────┘
+  │            ▼                  │
+  │  injected/  dom surface scan  │
+  │             verify act        │
+  └───────────────────────────────┘
 ```
 
-The browser extension owns page interaction. The local service owns reasoning,
-personal data, document generation, audit history, and validation. A remote
-provider credential entered in the dedicated side-panel form is sent only to
-the loopback service, encrypted immediately, and never persisted in extension
-storage or returned by the API. Ollama uses a fixed loopback endpoint and
-requires no credential.
+## Where authority lives
 
-Common application fields are mapped deterministically from the encrypted
-profile and reusable-answer store; this path does not call an AI model. The AI
-provider handles job-fit analysis, free-text assistance, evidence extraction,
-job-specific résumé tailoring, and structured form-action reasoning. The action
-planner never receives an unrestricted browser tool. It can select only field
-IDs and visible choices supplied by the extension.
+Deterministic code owns **identity, safety, execution and verification**. A
+model only ever does two things: describe a page in words, or pick among options
+that were already scraped off that page.
 
-```text
-detect form
-    |
-    +--> deterministic profile/source/résumé fill (no model)
-    |
-    +--> draft evidence-supported narrative answers
-    |
-    `--> unresolved fields only -> model typed actions -> validate/execute
-                                   ^                         |
-                                   `---- rescan/verify ------+
-                                         (up to 3 passes)
-                                              |
-                                 genuinely unknown -> native chat question
+Every model reply is re-validated against live data before anything acts on it —
+a chosen option must be one the page actually offered, a named control must be
+one currently on the page. A reply that does not match is discarded with a
+reason rather than repaired into something plausible.
+
+This split exists because of a specific failure. Asked whether a listing
+"belonged to the expected employer", a model answered no — correctly, since the
+page was a job board — and the runner halted on the page it was always going to
+start from. Describing a page is a model's job. Deciding whether to stop is not.
+
+## The injected functions
+
+`extension/injected/` holds five files, loaded in order into the isolated world
+by `chrome.scripting.executeScript`. The browser tests load the same files with
+`page.add_script_tag`, so what the tests drive is what ships.
+
+| File | Owns |
+|---|---|
+| `dom.js` | shadow-piercing traversal in document order, visibility, visible-label resolution, stable fingerprints, repeat-block detection |
+| `surface.js` | what kind of page this is, which controls could belong to an application, CAPTCHA state |
+| `verify.js` | reading a control's value from state the page owns; the four verdicts |
+| `scan.js` | building typed observations; no side effects, so it never opens a dropdown to see inside |
+| `act.js` | filling, choosing, checking, attaching, adding a repeat entry — all idempotent |
+
+`scan.js` has no side effects on purpose. A control's options are read at the
+moment of choosing, from the popup that control owns, so no list of options can
+be assembled out of unrelated things lying around the document.
+
+## Verification
+
+The signals, in the order `verify.js` prefers them:
+
+1. native `checked` / `value` / selected option / file list
+2. a hidden backing input inside the widget — what will actually be submitted
+3. ARIA checked / pressed / selected, set by the page
+4. `aria-activedescendant` → the option the page says is current
+5. the page's own `data-*` state attribute
+6. the page's own CSS state class
+7. the widget's own rendered value element
+
+A combobox's text box is deliberately absent. Anything the executor typed into
+is marked and can never be read back. When nothing authoritative exists the
+verdict is `attempted`, said plainly, with a request to look.
+
+## Identity, not position
+
+A control is identified by a fingerprint over frame, normalised visible label,
+control kind, option labels, control name, and which entry of a repeating block
+it belongs to. Never by index — a page that re-renders moves every index, and
+several of them re-render as soon as you touch a country field.
+
+The first entry of a repeating section carries no block marker, so adding a
+second entry beside it does not change the identity of the first.
+
+## Deciding what a page is
+
+By the controls present. Never by the URL — an application served from
+`postLogin.html` is an application, and a sign-in whose form lives in a shadow
+root is a sign-in even with no password field on it.
+
+```
+registration?   two password fields, or one labelled Choose/Retype/Confirm
+sign-in?        one password field and little else, or a lone username-shaped
+                field with a Next button and nothing to attach or write
+confirmation?   no controls and the page says the application was received
+application?    five labelled controls, or a file input and two -- and not a
+                page listing dozens of other jobs
+list of jobs?   six or more posting links; its controls are filters
+listing?        a single posting with its own apply control
 ```
 
-Only verified actions are written to reusable memory. Password, CAPTCHA, MFA,
-payment, file-upload, destructive, low-confidence, and unavailable actions are
-rejected before execution. If the provider is unavailable or rate-limited, the
-deterministic mapper remains operational.
+An application does not need a `<form>` element. A complete 21-field application
+rendered without one was seen and refused, so the test is what is on screen.
 
-## Verified control layer
+## Where to apply
 
-One injected function (`runFormPass` in the extension service worker) owns
-both observation and execution, so the scan that verifies is exactly the scan
-that plans. Every field carries a stable **fingerprint** built from its
-normalized question label, control type, visible option labels, and name —
-never a numeric DOM index — so an action still resolves after a reactive
-re-render replaces the elements.
+The employer's own site. Host role comes from the URL: a recognised hiring
+system is the employer, a recognised board is where a search starts, an
+aggregator is neither, and an unknown host is the only thing worth stopping on.
+Some systems are served from the employer's own domain, so the page reports
+hints — script hosts and distinctive markup — and the adapter is matched from
+those too.
 
-Execution follows `pre-state → one scoped action → bounded wait → fresh
-rescan → compare`:
+Routes are scored by where they came from. The posting's own apply control wins
+outright; a board match on both company and role can be followed; a board match
+on the company alone cannot, because company slugs are shared between parents
+and subsidiaries; a URL assembled from a pattern is last, because hand-built
+apply endpoints redirect to careers home pages.
 
-1. The authoritative pre-state is read from page-owned signals only: native
-   `checked`/`value`, ARIA checked/pressed/selected, page `data-state` or
-   `data-selected`, page CSS state classes, or a hidden backing input behind
-   segmented Yes/No buttons. ApplyPilot never writes any of these signals, so
-   it cannot verify its own claim.
-2. If the target value is already authoritatively selected, nothing is
-   clicked (idempotence — a second click could toggle a custom control off).
-3. Otherwise exactly one scoped action runs, followed by a bounded observation
-   window for framework updates, re-resolving by fingerprint if the DOM was
-   replaced.
-4. A full fresh rescan then compares the page-owned semantic value with the
-   target and produces one of four explicit outcomes per action:
-   - `verified` — the fresh scan shows the requested value;
-   - `unverified` — the action ran but the control exposes no page-owned
-     state to confirm it (reported to the user, never persisted, never
-     auto-repeated);
-   - `failed` — the fresh scan shows a different value, with evidence;
-   - `skipped` — file/password controls that are handled elsewhere.
+## The mapper
 
-### Custom dropdowns
+`mapper.py` decides which saved fact answers a field, and it is deliberately hard
+to satisfy. It would rather hand a question back than put a plausible value in
+the wrong box.
 
-A combobox is the one control ApplyPilot must write to in order to read: the
-executor types into the widget's own input to filter its option list. That text
-is therefore **never** evidence. A custom dropdown is confirmed only from
-signals the page owns — `aria-activedescendant`, an `aria-selected` option, the
-widget's own rendered value element, a hidden backing input, or a value the
-page wrote *after* ApplyPilot cleared its filter text. When no option matches,
-the filter text is restored so no later scan can mistake it for an answer, and
-a dropdown whose only signal is loose text in its own input is reported
-unreadable rather than verified.
+- Only the visible label is reasoned about.
+- An alias must line up with the whole label — as the label, as its opening
+  followed by a connector, or as its ending behind nothing but filler.
+- The most specific subject in a label wins it.
+- A modifier makes a different field; a trailing digit makes a different field.
+- History answers inside a history block, or behind a label that can mean nothing
+  else.
+- Sentence questions get a separate, lower-scoring path that opens only once the
+  sentence's dominant subject already belongs to the fact.
+- Two facts fitting equally well is a question, not a coin toss.
 
-Because these widgets commit on the pointer sequence a real user produces,
-opening one dispatches `pointerdown`/`mousedown`/`mouseup`/`click` rather than a
-bare `click()`, and filter input never dispatches `blur` — that would close the
-menu being read. A scan pass can additionally **enumerate** an optionless
-dropdown by opening it, reading the employer's real choices, and closing it, so
-the planner never has to guess at a required question.
+`docs/REGRESSIONS.md` maps each of these to the failure that motivated it.
 
-`filled_ids` therefore means "a fresh scan observed the requested value", not
-"a click was issued". Only verified values become reusable answers or
-canonical profile facts. File uploads trigger a complete re-observation, and
-fields the page reset are restored through the same idempotent path.
+## Storage
 
-## Chat command routing
+SQLite holds opaque encrypted blobs. The key is a file beside the database and
+never a column inside it. Ids and timestamps stay in the clear so the panel can
+list applications without decrypting them all; nothing identifying is ever a
+plain column.
 
-Explicit user instructions are interpreted by a deterministic scoped-intent
-parser before any model call. Canonical statements (sponsorship,
-authorization, relocation — including "anywhere" over a multi-select), named
-options ("add GitHub CI"), source corrections, and short option replies are
-bound to specific visible questions and executed through the verified control
-layer. A bare reply that fits several questions produces a clarification
-question, not a guess. If neither the parser nor the model agent can act on an
-actionable form instruction, the panel asks a focused question — an explicit
-request about the visible form never falls through to generic chat prose.
+## Versions move together
 
-When local Ollama is active and a Gemini key exists in the local environment,
-the manager selectively routes résumé tailoring, unfamiliar page/form
-reasoning, unique application-answer drafting, and generated cover letters to
-Gemini. Routine chat remains local, deterministic fields use no model, and any
-Gemini provider failure falls back to Ollama.
-
-Ambiguous choice fields are rendered from the current page scan as chat choice
-cards. The user selects the employer's exact options, and the same constrained
-executor, page verification, and reusable-memory path handles the result. The
-model never invents the option list.
-
-## Company-site-first routing
-
-The source listing is not assumed to be the application destination. For every
-job, the orchestrator attempts to resolve and verify an official company career
-page or recognized ATS URL first. This remains the preferred route even when
-the listing exposes LinkedIn Easy Apply.
-
-```text
-Job listing
-    |---- verified company/ATS URL ----> company application (preferred)
-    |---- Easy Apply only -------------> resolve the employer's own board
-    |                                     |-- verified -> company application
-    |                                     `-- unverified -> Easy Apply
-    `---- ambiguous or unsafe URL ------> ask the user
-```
-
-A listing that exposes only Easy Apply is not accepted as the destination.
-`company_route.py` derives candidate board slugs from the company name (legal
-suffixes and batch tags removed), tries only recognised ATS hosts over HTTPS,
-and **verifies the board actually names that company** before trusting it — a
-slug collision must never send an application to the wrong employer. The
-matching posting is located by title similarity; when only the board verifies,
-that is still preferred over the aggregator. An unverified guess is never
-returned, and loopback/private targets are refused before any fetch.
-
-Redirects are recorded and revalidated. Unknown domains, shortened URLs, and
-URLs that request unusual credentials or payment stop the agent for review.
-
-## Application state machine
-
-```text
-DISCOVERED -> ANALYZED -> MATERIALS_READY -> FILLING -> REVIEW_REQUIRED
-                                                        |
-                                user approves ----------+
-                                                        v
-                                                    SUBMITTED
-```
-
-`BLOCKED` is entered for CAPTCHA, MFA, an unknown required question, a site
-change, or a validation failure. The agent pauses and explains the exact action
-needed in the side panel.
-
-Each transition is appended to an encrypted local audit record. A required
-unknown question can be answered in the side panel and stored as a reusable
-answer; the form is then replanned. The final submit action requires an explicit
-side-panel confirmation, refuses to act when CAPTCHA/MFA is visible, targets
-only a unique known submit label, and waits for an employer-site confirmation
-signal before recording `SUBMITTED`.
-
-## Site adapters
-
-Every supported application surface implements the same small contract:
-
-1. detect whether the adapter applies;
-2. extract job title, company, description, location, and form fields;
-3. map known profile answers to visible inputs;
-4. report unknown or ambiguous questions;
-5. validate the filled form;
-6. apply the user's ask-before-submit or always-allow policy.
-
-The generic form mapper runs before site-specific logic. It handles standard
-HTML and common custom controls, maps high-confidence profile fields and
-reusable answers, blocks payment fields, and returns every unanswered visible
-question. A guided queue asks, remembers, replans, fills, and resumes the
-runner. Login credentials remain browser-managed; the extension checks only
-whether login fields are already populated before clicking an allowed login.
-Site adapters add stronger selectors and multi-step navigation without changing
-the submission-policy boundary.
-
-Current adapter coverage:
-
-- **LinkedIn:** job extraction, Easy Apply detection, external company-route
-  discovery, and modal-scoped field scanning.
-- **Greenhouse:** job/application extraction and application-form scoping.
-- **Lever:** posting extraction and application-form scoping.
-- **Workday:** job extraction and active application-page scoping.
-- **Indeed, Dice, Glassdoor, ZipRecruiter, Monster, SimplyHired:** job boards.
-  Their own pages are read as listings and are never treated as application
-  forms; scanning is scoped to a genuine apply surface.
-- **Ashby, SmartRecruiters, iCIMS, Jobvite, Workable** and other recognised ATS
-  hosts route as employer application destinations.
-- **Generic:** standards-based JobPosting JSON-LD plus visible HTML controls.
-
-A **job board is never an application destination.** Search and filter inputs,
-site chrome, and saved-job toggles are excluded from surface detection, so a
-results page cannot be mistaken for a form to fill.
-
-## Resume tailoring rules
-
-- The base resume is parsed into evidence-backed facts.
-- Tailoring may reorder, select, and rephrase existing evidence.
-- It may not invent employers, dates, degrees, metrics, tools, or experience.
-- A generated claim retains links to its source evidence for review.
-- Each job gets a separate generated document and audit record.
-- Generated DOCX/PDF files use a single-column US Letter layout and remain in
-  the local service. The extension can attach a generated DOCX to a detected
-  resume file input without exposing the provider key or local file paths.
-
-## Delivery milestones
-
-1. **Foundation:** local API, profile memory, side panel, tests, and privacy
-   boundaries.
-2. **Onboarding:** complete questionnaire, encrypted local sensitive fields,
-   resume import, and answer editing.
-3. **Job understanding:** page extraction, normalized job model, fit analysis,
-   and chat grounded in the active job.
-4. **Resume tailoring:** evidence model, DOCX/PDF output, diff preview, and user
-   approval.
-5. **Application engine:** field mapping, synthetic ATS test harness, validation,
-   screenshots, and audit log.
-6. **Site adapters:** LinkedIn Easy Apply and employer ATS adapters, built and
-   tested individually because their DOMs change independently.
-7. **Hardening:** retries, recovery, observability, packaging, privacy review,
-   and end-to-end tests.
+`pyproject.toml`, `extension/manifest.json` and `src/applypilot/__init__.py`
+carry the same version, and a test asserts it. `/health` reports what the service
+is actually running; the panel compares it with the extension's and says so when
+they differ. A running service keeps serving the code it started with, and that
+has cost more time than any bug in it.

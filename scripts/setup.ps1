@@ -1,21 +1,37 @@
-$ErrorActionPreference = "Stop"
+# One-time setup on Windows.
+#
+#   .\scripts\setup.ps1
+#
+# Creates the virtual environment, installs everything, and fetches the headless
+# browser the tests drive.
 
-$root = Resolve-Path (Join-Path $PSScriptRoot "..")
+$ErrorActionPreference = "Stop"
+$root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-if (-not (Test-Path -LiteralPath ".venv")) {
-    python -m venv .venv
+$python = "python"
+$pinned = "$env:LOCALAPPDATA\Programs\Python\Python314\python.exe"
+if (Test-Path $pinned) { $python = $pinned }
+
+if (-not (Test-Path ".venv")) {
+    Write-Host "Creating .venv with $python"
+    & $python -m venv .venv
 }
 
-& ".venv\Scripts\python.exe" -m pip install -e "."
-
-if (-not (Test-Path -LiteralPath ".env")) {
-    Copy-Item -LiteralPath ".env.example" -Destination ".env"
+$venvPython = Join-Path $root ".venv\Scripts\python.exe"
+if (-not (Test-Path $venvPython)) {
+    throw ".venv exists but has no interpreter. Delete the .venv folder and run this again."
 }
 
-& ".\scripts\enable-autostart.ps1"
+Write-Host "Installing ApplyPilot and its development tools"
+& $venvPython -m pip install --upgrade pip --quiet
+& $venvPython -m pip install -e ".[dev]"
 
-Write-Host "ApplyPilot setup complete." -ForegroundColor Green
-Write-Host "1. Load the extension folder as an unpacked Chrome/Edge extension."
-Write-Host "2. Open a job page and click ApplyPilot. The companion starts automatically."
-Write-Host "3. Select local Ollama, or connect Gemini, OpenAI, or Anthropic inside Settings."
+Write-Host "Installing headless Chromium for the browser tests"
+& $venvPython -m playwright install chromium
+
+Write-Host ""
+Write-Host "Done. Next:"
+Write-Host "  1. .\scripts\start.ps1                      start the local service"
+Write-Host "  2. chrome://extensions -> Developer mode -> Load unpacked -> the extension folder"
+Write-Host "  3. Open the side panel and work through the setup questions"

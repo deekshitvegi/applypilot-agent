@@ -1,1016 +1,904 @@
+"""The local service.
+
+Bound to 127.0.0.1 and nowhere else. It owns the profile, the saved answers, the
+history and the reasoning; the extension owns the browser. Nothing crosses that
+line except typed observations one way and typed actions the other.
+
+/health reports the running version. The panel compares it with the extension's
+own and says so when they differ, because a service left running keeps serving
+the code it started with, and chasing a bug that was already fixed on disk costs
+an afternoon.
+"""
+
 from __future__ import annotations
 
-import csv
-import io
-import os
-import re
-from contextlib import asynccontextmanager
-from pathlib import Path
+from typing import Any
 
-import httpx
-import uvicorn
-from fastapi import FastAPI, File, HTTPException, Response, UploadFile, status
+from fastapi import Body, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel, Field
 
-from . import __version__
-from .adapters import is_job_board, is_recognized_ats_url
-from .ai import AIProviderError, AIProviderManager
-from .applications import (
-    InvalidApplicationTransition,
-    create_application,
-    transition_application,
+from . import (
+    __version__,
+    ai,
+    applications,
+    chat,
+    documents,
+    learning,
+    linkedin,
+    onboarding,
+    resume,
+    runloop,
 )
-from .company_route import resolve_company_application_url, safe_public_url
-from .config import settings
-from .documents import (
-    artifact_filename,
-    build_cover_letter_docx,
-    build_docx,
-    build_pdf,
-    build_reconstructed_resume_docx,
-)
-from .form_mapper import (
-    coerce_option,
-    map_exact_reusable_answer,
-    map_profile_field,
-    map_source_field,
-    normalize,
-    plan_form_fill,
-    resume_mentions_option,
-)
+from .adapters import classify_host
+from .config import load_settings
+from .facts import BY_KEY
+from .mapper import describe_match
+from .matching import rank_options, real_options
 from .models import (
-    ApplicationAnswerDraft,
-    ApplicationAnswerRefineRequest,
-    ApplicationCreate,
-    ApplicationQuestionDraftRequest,
+    ActionResult,
     ApplicationRecord,
-    ApplicationRouteDecision,
-    ApplicationTransition,
-    CandidateProfile,
-    ChatRequest,
-    ChatResponse,
-    CompanyRouteRequest,
-    CompanyRouteResult,
-    CoverLetterDocument,
-    FormAgentDecision,
-    FormAgentRequest,
-    FormField,
-    FormFillPlan,
-    FormPlanRequest,
-    GeneratedCoverLetter,
-    JobApplicationOptions,
-    JobContext,
-    JobFitAnalysis,
-    JobPreparation,
-    OnboardingState,
-    PageActionDecision,
-    PageActionRequest,
-    PageUnderstanding,
-    PageUnderstandingRequest,
-    ProfileFacts,
-    ProviderConfigRequest,
-    ProviderStatus,
-    ResumeDocument,
-    ResumeEvidence,
-    ReusableAnswer,
-    SessionCredentialMatch,
-    SessionCredentialRequest,
-    SessionCredentialSummary,
-    TailoredArtifact,
-    TailoredArtifactRequest,
-    TailoredResume,
-    TailorRequest,
+    ChecklistItem,
+    EducationRecord,
+    ExperienceRecord,
+    FieldObservation,
+    Option,
+    PageKind,
+    PageObservation,
+    PendingQuestion,
+    PlannedAction,
+    Profile,
+    RunState,
 )
-from .onboarding import get_onboarding_state
-from .resume import ResumeExtractionError, extract_resume
-from .routing import choose_application_route
-from .session_credentials import SessionCredentialVault
-from .store import ProfileStore
+from .routing import RouteCandidate, decide
+from .session_credentials import SessionSignIn
+from .store import Store
+from .text import normalise
 
-store = ProfileStore(settings.database_path)
-# In memory only: sign-in details last for this run of the companion.
-session_credentials = SessionCredentialVault()
-ai_provider = AIProviderManager(store, settings)
-web_directory = Path(__file__).parent / "web"
+settings = load_settings()
+store = Store(settings)
+session_sign_in = SessionSignIn()
 
+#: Whether agreements an application requires may be ticked without asking.
+#: Held here rather than in the profile, so it lives as long as this service is
+#: running and no longer: something with legal weight should be chosen again
+#: rather than sit switched on for months because of one afternoon's clicking.
+#: Nothing about it reaches the disk.
+session_accept_agreements = False
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    if not settings.demo_mode:
-        store.initialize()
-        prune_canonical_reusable_answers(store)
-    yield
-
-
-app = FastAPI(title="ApplyPilot Agent", version=__version__, lifespan=lifespan)
+app = FastAPI(title="ApplyPilot", version=__version__)
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^(chrome-extension|moz-extension)://.*$",
+    allow_origin_regex=r"^(chrome-extension://.*|http://(127\.0\.0\.1|localhost)(:\d+)?)$",
     allow_credentials=False,
-    allow_methods=["GET", "PUT", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-app.mount("/assets", StaticFiles(directory=web_directory), name="assets")
 
 
-def require_local_data_mode() -> None:
-    if settings.demo_mode:
-        raise HTTPException(
-            status_code=403,
-            detail="The public demo does not store candidate data. Use the local agent.",
-        )
+def _model() -> ai.Model:
+    return ai.Model(
+        api_key=store.get_value("model_api_key", "") or "",
+        name=store.get_value("model_name", settings.model_name) or settings.model_name,
+    )
 
 
-def prune_canonical_reusable_answers(profile_store: ProfileStore) -> int:
-    """Remove page-answer copies of canonical profile fields.
-
-    Canonical facts are edited in the candidate profile. Keeping a second copy
-    in reusable answers creates two competing truths and made one bad model
-    mapping persist across later applications.
-    """
-    profile = profile_store.load()
-    removed = 0
-    for answer in profile_store.list_answers():
-        label = normalize(answer.question)
-        field_type = (
-            "checkbox"
-            if "background check" in label
-            else "radio"
-            if any(token in label for token in ("authorized to work", "sponsor", "relocate", "travel"))
-            else "text"
-        )
-        field = FormField(id=answer.id, label=answer.question, field_type=field_type)
-        if map_profile_field(label, field, profile) is not None:
-            removed += int(profile_store.delete_answer(answer.id))
-    return removed
-
-
-@app.get("/", include_in_schema=False)
-def dashboard() -> FileResponse:
-    return FileResponse(web_directory / "index.html")
-
-
-@app.get("/demo/ats", include_in_schema=False)
-def synthetic_ats() -> FileResponse:
-    return FileResponse(web_directory / "synthetic-ats.html")
+# ---------------------------------------------------------------------------
+# Health and settings
+# ---------------------------------------------------------------------------
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
+def health() -> dict[str, Any]:
+    profile = store.get_profile()
     return {
-        "status": "ok",
-        "service": "applypilot",
-        "mode": "demo" if settings.demo_mode else "local",
+        "ok": True,
         "version": __version__,
-        "revision": os.getenv("RENDER_GIT_COMMIT", "local")[:7],
+        "data_dir": str(settings.data_dir),
+        "key_fingerprint": store.key_fingerprint,
+        "model_configured": bool(store.get_value("model_api_key", "")),
+        "profile_answered": len([v for v in profile.facts.values() if v]),
+        "onboarding_complete": onboarding.build(profile).complete,
+        "missing_for_applications": onboarding.missing_for_applications(profile),
+        "documents": len(store.list_documents()),
+        "applications": applications.summary(store),
     }
 
 
-@app.get("/api/capabilities")
-def capabilities() -> dict[str, object]:
+class SettingsPayload(BaseModel):
+    model_api_key: str | None = None
+    model_name: str | None = None
+    submission_policy: str | None = None
+    prefer_easy_apply: bool | None = None
+    answer_demographics: bool | None = None
+    accept_agreements: bool | None = None
+    auto_advance: bool | None = None
+    auto_attach_resume: bool | None = None
+
+
+@app.get("/settings")
+def get_settings() -> dict[str, Any]:
+    profile = store.get_profile()
     return {
-        "mode": "demo" if settings.demo_mode else "local",
-        "stores_candidate_data": not settings.demo_mode,
-        "company_site_first": True,
-        "live_site_automation": not settings.demo_mode,
-        "resume_tailoring": ai_provider.configured and not settings.demo_mode,
-        "job_fit_analysis": ai_provider.configured and not settings.demo_mode,
-        "model_form_agent": ai_provider.configured and not settings.demo_mode,
-        "hybrid_reasoning": ai_provider.hybrid_reasoning_enabled and not settings.demo_mode,
-        "deterministic_autofill": not settings.demo_mode,
-        "editable_reusable_profile": not settings.demo_mode,
-        "automation_policies": ["review_each", "always_allow"],
-        "supported_adapters": ["linkedin", "greenhouse", "lever", "workday", "generic"],
-        "review_before_submit": True,
+        "model_configured": bool(store.get_value("model_api_key", "")),
+        "model_name": store.get_value("model_name", settings.model_name),
+        "submission_policy": profile.submission_policy,
+        "prefer_easy_apply": profile.prefer_easy_apply,
+        "answer_demographics": profile.answer_demographics,
+        "accept_agreements": session_accept_agreements,
+        "accept_agreements_scope": "this session only",
+        "auto_advance": profile.auto_advance,
+        "auto_attach_resume": profile.auto_attach_resume,
+        "authorised_sign_in_hosts": session_sign_in.authorised_hosts(),
     }
 
 
-@app.get("/api/provider", response_model=ProviderStatus)
-def provider_status() -> ProviderStatus:
-    return ai_provider.status()
+@app.put("/settings")
+def put_settings(payload: SettingsPayload) -> dict[str, Any]:
+    if payload.model_api_key is not None:
+        # Encrypted at rest like everything else, and never echoed back.
+        store.set_value("model_api_key", payload.model_api_key.strip())
+    if payload.model_name:
+        store.set_value("model_name", payload.model_name)
+
+    profile = store.get_profile()
+    if payload.submission_policy in {"never", "confirm", "auto"}:
+        profile.submission_policy = payload.submission_policy  # type: ignore[assignment]
+    if payload.prefer_easy_apply is not None:
+        profile.prefer_easy_apply = payload.prefer_easy_apply
+    if payload.answer_demographics is not None:
+        profile.answer_demographics = payload.answer_demographics
+    if payload.accept_agreements is not None:
+        global session_accept_agreements
+        session_accept_agreements = payload.accept_agreements
+    if payload.auto_advance is not None:
+        profile.auto_advance = payload.auto_advance
+    if payload.auto_attach_resume is not None:
+        profile.auto_attach_resume = payload.auto_attach_resume
+    store.save_profile(profile)
+    return get_settings()
 
 
-@app.put("/api/provider", response_model=ProviderStatus)
-def configure_provider(config: ProviderConfigRequest) -> ProviderStatus:
-    require_local_data_mode()
-    return ai_provider.configure(config)
+# ---------------------------------------------------------------------------
+# Profile and onboarding
+# ---------------------------------------------------------------------------
 
 
-@app.delete("/api/provider", response_model=ProviderStatus)
-def disconnect_provider() -> ProviderStatus:
-    require_local_data_mode()
-    return ai_provider.disconnect()
+@app.get("/profile")
+def get_profile() -> Profile:
+    return store.get_profile()
 
 
-@app.get("/api/provider/reasoning", response_model=ProviderStatus)
-def reasoning_provider_status() -> ProviderStatus:
-    return ai_provider.reasoning_status()
+@app.put("/profile")
+def put_profile(profile: Profile) -> Profile:
+    return store.save_profile(profile)
 
 
-@app.put("/api/provider/reasoning", response_model=ProviderStatus)
-def configure_reasoning_provider(config: ProviderConfigRequest) -> ProviderStatus:
-    require_local_data_mode()
-    try:
-        return ai_provider.configure_reasoning(config)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.delete("/api/provider/reasoning", response_model=ProviderStatus)
-def disconnect_reasoning_provider() -> ProviderStatus:
-    require_local_data_mode()
-    return ai_provider.disconnect_reasoning()
-
-
-@app.get("/api/profile", response_model=CandidateProfile)
-def get_profile() -> CandidateProfile:
-    require_local_data_mode()
-    return store.load()
-
-
-@app.put("/api/profile", response_model=CandidateProfile)
-def put_profile(profile: CandidateProfile) -> CandidateProfile:
-    require_local_data_mode()
-    return store.save(profile)
-
-
-@app.get("/api/onboarding", response_model=OnboardingState)
-def onboarding() -> OnboardingState:
-    require_local_data_mode()
-    return get_onboarding_state(store.load())
-
-
-@app.get("/api/answers", response_model=list[ReusableAnswer])
-def list_answers() -> list[ReusableAnswer]:
-    require_local_data_mode()
-    return store.list_answers()
-
-
-@app.put("/api/answers/{answer_id}", response_model=ReusableAnswer)
-def put_answer(answer_id: str, answer: ReusableAnswer) -> ReusableAnswer:
-    require_local_data_mode()
-    if answer.id != answer_id:
-        raise HTTPException(status_code=400, detail="Answer ID does not match the URL")
-    return store.save_answer(answer)
-
-
-@app.delete("/api/answers/{answer_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_answer(answer_id: str) -> Response:
-    require_local_data_mode()
-    if not store.delete_answer(answer_id):
-        raise HTTPException(status_code=404, detail="Answer not found")
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@app.post("/api/resumes", response_model=ResumeDocument)
-async def upload_resume(file: UploadFile = File(...)) -> ResumeDocument:
-    require_local_data_mode()
-    content = await file.read()
-    try:
-        resume = extract_resume(
-            filename=file.filename or "resume",
-            content=content,
-            media_type=file.content_type or "",
-        )
-    except ResumeExtractionError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    saved = store.save_resume(resume)
-    store.save_resume_file(resume.sha256, content)
-    return saved
-
-
-@app.get("/api/resumes", response_model=list[ResumeDocument])
-def list_resumes() -> list[ResumeDocument]:
-    require_local_data_mode()
-    return store.list_resumes()
-
-
-@app.get("/api/resumes/active", response_model=ResumeDocument)
-def active_resume() -> ResumeDocument:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="No resume has been uploaded")
-    return resume
-
-
-@app.get("/api/resumes/active/file")
-def active_resume_file() -> Response:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="No resume has been uploaded")
-    content = store.get_resume_file(resume.sha256)
-    if content is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Re-upload this resume once to enable original-file attachment",
-        )
-    safe_name = resume.filename.replace('"', "").replace("\r", "").replace("\n", "")
-    return Response(
-        content=content,
-        media_type=resume.media_type or "application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
-    )
-
-
-@app.get("/api/resumes/active/file-status")
-def active_resume_file_status() -> dict[str, str | bool]:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="No resume has been uploaded")
+@app.get("/onboarding")
+def get_onboarding() -> dict[str, Any]:
+    built = onboarding.build(store.get_profile())
     return {
-        "available": store.get_resume_file(resume.sha256) is not None,
-        "filename": resume.filename,
+        "steps": [step.__dict__ for step in built.steps],
+        "answered": built.answered,
+        "total": built.total,
+        "complete": built.complete,
+        "required_remaining": built.required_remaining,
+        "notes": built.notes,
+        "next": built.next_step.__dict__ if built.next_step else None,
     }
 
 
-@app.get("/api/resumes/active/reconstructed.docx")
-def reconstructed_active_resume() -> Response:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="No resume has been uploaded")
-    stem = Path(resume.filename).stem or "resume"
-    filename = f"{stem}-reconstructed.docx".replace('"', "")
-    return Response(
-        content=build_reconstructed_resume_docx(resume),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+class FactAnswer(BaseModel):
+    fact_key: str
+    value: str = ""
+    entry: int = 0
 
 
-@app.post("/api/cover-letters", response_model=CoverLetterDocument)
-async def upload_cover_letter(file: UploadFile = File(...)) -> CoverLetterDocument:
-    require_local_data_mode()
-    content = await file.read()
-    try:
-        extracted = extract_resume(
-            filename=file.filename or "cover-letter",
-            content=content,
-            media_type=file.content_type or "",
-        )
-    except ResumeExtractionError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    document = CoverLetterDocument(**extracted.model_dump(exclude={"id", "uploaded_at"}))
-    saved = store.save_cover_letter(document)
-    store.save_cover_letter_file(document.sha256, content)
-    return saved
+@app.post("/profile/fact")
+def save_fact(payload: FactAnswer) -> dict[str, Any]:
+    """Save one answer, into the right place.
 
-
-@app.get("/api/cover-letters/active", response_model=CoverLetterDocument)
-def active_cover_letter() -> CoverLetterDocument:
-    require_local_data_mode()
-    document = store.get_active_cover_letter()
-    if document is None:
-        raise HTTPException(status_code=404, detail="No cover letter has been uploaded")
-    return document
-
-
-@app.get("/api/cover-letters/active/file")
-def active_cover_letter_file() -> Response:
-    require_local_data_mode()
-    document = store.get_active_cover_letter()
-    if document is None:
-        raise HTTPException(status_code=404, detail="No cover letter has been uploaded")
-    content = store.get_cover_letter_file(document.sha256)
-    if content is None:
-        raise HTTPException(status_code=404, detail="Re-upload this cover letter to attach it")
-    safe_name = document.filename.replace('"', "").replace("\r", "").replace("\n", "")
-    return Response(
-        content=content,
-        media_type=document.media_type or "application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
-    )
-
-
-@app.post("/api/cover-letters/generate", response_model=GeneratedCoverLetter)
-def generate_cover_letter(request: TailorRequest) -> GeneratedCoverLetter:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="Upload a resume before generating a cover letter")
-    try:
-        draft = ai_provider.draft_cover_letter(store.load(), resume, request.job)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return store.save_generated_cover_letter(
-        GeneratedCoverLetter(
-            job_title=request.job.title,
-            company=request.job.company,
-            body=draft.body,
-        )
-    )
-
-
-@app.get("/api/cover-letters/generated/{document_id}.docx")
-def generated_cover_letter_file(document_id: str) -> Response:
-    require_local_data_mode()
-    document = store.get_generated_cover_letter(document_id)
-    if document is None:
-        raise HTTPException(status_code=404, detail="Generated cover letter not found")
-    job = JobContext(
-        title=document.job_title,
-        company=document.company,
-        description="Generated cover-letter artifact",
-    )
-    company = re.sub(r"[^a-z0-9]+", "-", document.company.lower()).strip("-")
-    filename = f"{company}-cover-letter" if company else "cover-letter"
-    return Response(
-        content=build_cover_letter_docx(document, store.load(), job),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}.docx"'},
-    )
-
-
-@app.post("/api/resumes/evidence", response_model=ResumeEvidence)
-def extract_active_resume_evidence() -> ResumeEvidence:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="No resume has been uploaded")
-    try:
-        return ai_provider.extract_evidence(resume)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.post("/api/tailor", response_model=TailoredResume)
-def tailor_resume(request: TailorRequest) -> TailoredResume:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="Upload a resume before tailoring")
-    try:
-        return ai_provider.tailor_resume(resume, request.job)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.post("/api/jobs/analyze", response_model=JobFitAnalysis)
-def analyze_job(request: TailorRequest) -> JobFitAnalysis:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="Upload a resume before analyzing job fit")
-    try:
-        return ai_provider.analyze_job(resume, request.job)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.post("/api/jobs/prepare", response_model=JobPreparation)
-def prepare_job(request: TailoredArtifactRequest) -> JobPreparation:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="Upload a resume before preparing a job")
-    if request.application_id and store.get_application(request.application_id) is None:
-        raise HTTPException(status_code=404, detail="Application not found")
-    try:
-        evidence = ai_provider.extract_evidence(resume)
-        analysis = ai_provider.analyze_job(resume, request.job, evidence)
-        tailored = ai_provider.tailor_resume(resume, request.job, evidence)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    artifact = store.save_tailored_artifact(
-        TailoredArtifact(application_id=request.application_id, tailored=tailored)
-    )
-    return JobPreparation(analysis=analysis, artifact=artifact)
-
-
-@app.post("/api/tailored", response_model=TailoredArtifact)
-def create_tailored_artifact(request: TailoredArtifactRequest) -> TailoredArtifact:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="Upload a resume before tailoring")
-    if request.application_id and store.get_application(request.application_id) is None:
-        raise HTTPException(status_code=404, detail="Application not found")
-    try:
-        tailored = ai_provider.tailor_resume(resume, request.job)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return store.save_tailored_artifact(
-        TailoredArtifact(application_id=request.application_id, tailored=tailored)
-    )
-
-
-def load_artifact(artifact_id: str) -> TailoredArtifact:
-    artifact = store.get_tailored_artifact(artifact_id)
-    if artifact is None:
-        raise HTTPException(status_code=404, detail="Tailored resume not found")
-    return artifact
-
-
-@app.get("/api/tailored/{artifact_id}.docx")
-def download_tailored_docx(artifact_id: str) -> Response:
-    require_local_data_mode()
-    artifact = load_artifact(artifact_id)
-    filename = artifact_filename(store.load(), "docx")
-    return Response(
-        content=build_docx(artifact, store.load()),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@app.get("/api/tailored/{artifact_id}.pdf")
-def download_tailored_pdf(artifact_id: str) -> Response:
-    require_local_data_mode()
-    artifact = load_artifact(artifact_id)
-    filename = artifact_filename(store.load(), "pdf")
-    return Response(
-        content=build_pdf(artifact, store.load()),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@app.post("/api/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
-    require_local_data_mode()
-    try:
-        return ai_provider.chat(
-            message=request.message,
-            profile=store.load(),
-            answers=store.list_answers(),
-            resume=store.get_active_resume(),
-            job=request.job,
-            images=request.images,
-        )
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.post("/api/page-action", response_model=PageActionDecision)
-def page_action(request: PageActionRequest) -> PageActionDecision:
-    require_local_data_mode()
-    try:
-        decision = ai_provider.plan_page_action(request)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    allowed = {control.id for control in request.controls if not control.disabled}
-    if decision.intent == "click" and decision.action_id not in allowed:
-        raise HTTPException(status_code=422, detail="AI selected an unavailable page control")
-    return decision
-
-
-@app.post("/api/questions/draft", response_model=ApplicationAnswerDraft)
-def draft_application_answer(request: ApplicationQuestionDraftRequest) -> ApplicationAnswerDraft:
-    require_local_data_mode()
-    try:
-        return ai_provider.draft_application_answer(
-            question=request.question,
-            profile=store.load(),
-            resume=store.get_active_resume(),
-            job=request.job,
-        )
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.post("/api/questions/refine", response_model=ApplicationAnswerDraft)
-def refine_application_answer(
-    request: ApplicationAnswerRefineRequest,
-) -> ApplicationAnswerDraft:
-    require_local_data_mode()
-    try:
-        return ai_provider.refine_application_answer(
-            question=request.question,
-            user_answer=request.user_answer,
-            profile=store.load(),
-            resume=store.get_active_resume(),
-            job=request.job,
-        )
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@app.post("/api/application-route", response_model=ApplicationRouteDecision)
-def application_route(options: JobApplicationOptions) -> ApplicationRouteDecision:
-    return choose_application_route(options)
-
-
-@app.get("/api/session-credentials", response_model=list[SessionCredentialSummary])
-def list_session_credentials() -> list[SessionCredentialSummary]:
-    require_local_data_mode()
-    return [SessionCredentialSummary(**entry) for entry in session_credentials.hosts()]
-
-
-@app.put("/api/session-credentials", response_model=SessionCredentialSummary)
-def put_session_credential(request: SessionCredentialRequest) -> SessionCredentialSummary:
-    """Hold sign-in details for this session. Never written to disk."""
-    require_local_data_mode()
-    try:
-        host = session_credentials.save(request.host, request.username, request.password)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return SessionCredentialSummary(host=host, username=request.username)
-
-
-@app.delete("/api/session-credentials")
-def clear_session_credentials(host: str = "") -> dict[str, int]:
-    require_local_data_mode()
-    if host:
-        return {"removed": int(session_credentials.forget(host))}
-    return {"removed": session_credentials.clear()}
-
-
-@app.post("/api/session-credentials/resolve", response_model=SessionCredentialMatch)
-def resolve_session_credential(request: PageUnderstandingRequest) -> SessionCredentialMatch:
-    """Release the credential for this exact host, or nothing.
-
-    The extension calls this only when the current page has been confirmed a
-    sign-in page. A near-miss deliberately returns nothing: typing a password
-    into the wrong site's form is the failure that matters most here.
+    A history key such as ``education.gpa`` belongs in an education record, not
+    in the flat set of facts -- writing it flat meant answering it once did not
+    stop it being asked again.
     """
-    require_local_data_mode()
-    match = session_credentials.resolve(request.page_url)
-    if match is None:
-        return SessionCredentialMatch(found=False)
-    return SessionCredentialMatch(
-        found=True, host=match.host, username=match.username, password=match.password
-    )
+    profile = store.get_profile()
+    spec = BY_KEY.get(payload.fact_key)
+    if spec is None:
+        raise HTTPException(400, f"no such fact: {payload.fact_key}")
 
-
-@app.post("/api/company-route", response_model=CompanyRouteResult)
-def company_route(request: CompanyRouteRequest) -> CompanyRouteResult:
-    """Find the employer's own application page for a job seen on a board.
-
-    Used when a listing offers only Easy Apply: the employer almost always
-    still posts the role on their own ATS, and applying there is preferred.
-    Only a verified recognised-ATS URL is returned.
-    """
-    require_local_data_mode()
-
-    def fetch(url: str) -> tuple[int, str]:
-        if not safe_public_url(url):
-            raise ValueError("Refusing to fetch a non-public URL.")
-        response = httpx.get(
-            url,
-            timeout=8.0,
-            follow_redirects=True,
-            headers={"User-Agent": "ApplyPilot/1.0 (+local job application agent)"},
-        )
-        return response.status_code, response.text
-
-    resolved = resolve_company_application_url(request.company, request.title, fetch)
-    if resolved is None:
-        return CompanyRouteResult(found=False)
-    return CompanyRouteResult(
-        found=True,
-        url=resolved.url,
-        board_url=resolved.board_url,
-        matched_title=resolved.matched_title,
-        confidence=resolved.confidence,
-    )
-
-
-@app.post("/api/forms/plan", response_model=FormFillPlan)
-def form_plan(request: FormPlanRequest) -> FormFillPlan:
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    return plan_form_fill(
-        page_url=request.page_url,
-        source_url=request.source_url,
-        fields=request.fields,
-        profile=store.load(),
-        answers=store.list_answers(),
-        resume_text=resume.extracted_text if resume else "",
-        adapter=request.adapter,
-    )
-
-
-@app.post("/api/profile/from-resume", response_model=ProfileFacts)
-def profile_from_resume() -> ProfileFacts:
-    """Extract education and work history from the saved résumé and store it.
-
-    Employer forms ask for these entry by entry, so they must exist as records
-    on the profile rather than only as résumé prose.
-    """
-    require_local_data_mode()
-    resume = store.get_active_resume()
-    if resume is None:
-        raise HTTPException(status_code=404, detail="Upload a résumé first.")
-    try:
-        facts = ai_provider.extract_profile_facts(resume)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    profile = store.load()
-    profile.education = facts.education
-    profile.experience = facts.experience
-    store.save(profile)
-    return facts
-
-
-@app.post("/api/pages/understand", response_model=PageUnderstanding)
-def understand_page(request: PageUnderstandingRequest) -> PageUnderstanding:
-    """Classify the current page so the runner can stop instead of blundering on."""
-    require_local_data_mode()
-    try:
-        result = ai_provider.understand_page(request)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    # Deterministic code owns identity. The model reads page copy and called a
-    # LinkedIn listing and a SmartRecruiters careers portal "third party", which
-    # would have halted every run at its starting point.
-    if is_recognized_ats_url(request.page_url):
-        result.host_kind = "ats"
-        result.belongs_to_expected_employer = True
-    elif is_job_board(request.page_url):
-        result.host_kind = "job_board"
-        result.belongs_to_expected_employer = True
+    if spec.record:
+        records = profile.education if spec.record == "education" else profile.experience
+        while len(records) <= payload.entry:
+            records.append(
+                EducationRecord() if spec.record == "education" else ExperienceRecord()
+            )
+        record = records[payload.entry]
+        current = getattr(record, spec.record_field, "")
+        if isinstance(current, bool):
+            setattr(record, spec.record_field, payload.value.strip().lower() in {"yes", "true"})
+        else:
+            setattr(record, spec.record_field, payload.value.strip())
+    elif payload.value.strip():
+        profile.facts[payload.fact_key] = payload.value.strip()
     else:
-        result.host_kind = "unknown"
-    return result
+        profile.facts.pop(payload.fact_key, None)
+
+    store.save_profile(profile)
+    return {"ok": True, "fact_key": payload.fact_key, "entry": payload.entry}
 
 
-@app.post("/api/forms/agent-plan", response_model=FormAgentDecision)
-def form_agent_plan(request: FormAgentRequest) -> FormAgentDecision:
-    require_local_data_mode()
+class OnboardingAnswer(BaseModel):
+    key: str
+    value: str = ""
+
+
+@app.post("/onboarding/answer")
+def post_onboarding_answer(payload: OnboardingAnswer) -> dict[str, Any]:
+    profile = onboarding.answer(store.get_profile(), payload.key, payload.value)
+    store.save_profile(profile)
+    return get_onboarding()
+
+
+@app.post("/resume")
+async def upload_resume(file: UploadFile) -> dict[str, Any]:
+    data = await file.read()
+    if not (file.filename or "").lower().endswith(".docx"):
+        raise HTTPException(400, "Upload a .docx resume; other formats are not read yet.")
     try:
-        decision = ai_provider.plan_form_actions(request)
-    except AIProviderError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        extracted = resume.extract(data)
+    except Exception as exc:  # noqa: BLE001 - report the real reason to the panel
+        raise HTTPException(400, f"That file could not be read: {exc}") from exc
 
-    profile = store.load()
-    answers = store.list_answers()
-    resume = store.get_active_resume()
-    fields = {field.id: field for field in request.fields}
-    safe_actions = []
-    for action in decision.actions:
-        field = fields.get(action.field_id)
-        if field is None or field.field_type in {"password", "file", "other"}:
-            continue
-        label = normalize(f"{field.label} {field.name}")
-        if any(
-            marker in label
-            for marker in (
-                "password",
-                "captcha",
-                "verification code",
-                "one time code",
-                "mfa",
-                "credit card",
-                "bank account",
-            )
-        ):
-            continue
-        if action.confidence < 0.55:
-            continue
-        value = action.value.strip()
-        if field.field_type == "checkbox":
-            semantic = normalize(value)
-            if semantic in {"true", "yes", "1", "on"}:
-                value = "true"
-            elif semantic in {"false", "no", "0", "off"}:
-                value = "false"
-            elif semantic in {
-                normalize(field.option_label),
-                normalize(field.label),
-            }:
-                value = "true"
-            else:
-                continue
-        elif field.field_type in {"radio", "select"}:
-            value = coerce_option(value, field)
-            allowed = {
-                normalize(option.label)
-                for option in field.options
-                if option.label
-            } | {
-                normalize(option.value)
-                for option in field.options
-                if option.value and normalize(option.value) != "on"
+    profile, added = onboarding.apply_resume(store.get_profile(), extracted)
+    store.save_profile(profile)
+    stored = store.add_document("resume", file.filename or "resume.docx", data)
+    store.set_value("primary_resume_id", stored["id"])
+
+    return {
+        "document": stored,
+        "added": added,
+        "notes": extracted.notes,
+        "education": [record.model_dump() for record in extracted.education],
+        "experience": [record.model_dump() for record in extracted.experience],
+        "skills": extracted.skills,
+        "onboarding": get_onboarding(),
+    }
+
+
+@app.post("/import/linkedin")
+async def import_linkedin(file: UploadFile) -> dict[str, Any]:
+    """Import LinkedIn's own data export.
+
+    This reads the archive LinkedIn sends when you ask for a copy of your data.
+    It does not sign in to LinkedIn and it does not read any page: signing in
+    with LinkedIn returns a name, an email and a picture and nothing else, and
+    reading a profile page is against their terms.
+    """
+    data = await file.read()
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(
+            400,
+            "Upload the .zip LinkedIn emails you. Get it from Settings and Privacy "
+            "-> Data privacy -> Get a copy of your data.",
+        )
+    try:
+        extracted = linkedin.extract(data)
+    except linkedin.NotALinkedInExport as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    profile, added = onboarding.apply_resume(store.get_profile(), extracted)
+    store.save_profile(profile)
+    return {
+        "added": added,
+        "notes": extracted.notes,
+        "education": [record.model_dump() for record in extracted.education],
+        "experience": [record.model_dump() for record in extracted.experience],
+        "skills": extracted.skills,
+        "onboarding": get_onboarding(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Documents
+# ---------------------------------------------------------------------------
+
+
+@app.get("/documents")
+def list_documents() -> dict[str, Any]:
+    return {
+        "documents": store.list_documents(),
+        "primary_resume_id": store.get_value("primary_resume_id", ""),
+    }
+
+
+class TailorRequest(BaseModel):
+    job_title: str = ""
+    company: str = ""
+    job_description: str = ""
+
+
+@app.post("/documents/tailored-resume")
+def tailored_resume(payload: TailorRequest) -> dict[str, Any]:
+    profile = store.get_profile()
+    if not profile.experience and not profile.education:
+        raise HTTPException(
+            400,
+            "There is nothing in your profile to build a resume from yet. "
+            "Upload your resume or add your history first.",
+        )
+    built = documents.build_resume(
+        profile, payload.job_description, payload.job_title, payload.company
+    )
+    stored = store.add_document("tailored_resume", built.filename, built.data)
+    return {
+        "document": stored,
+        "ordering": built.ordering,
+        "highlighted_skills": built.highlighted_skills,
+        "notes": built.notes,
+    }
+
+
+@app.get("/documents/{document_id}/content")
+def document_content(document_id: str) -> dict[str, str]:
+    """The bytes of a stored document, for the service worker to attach.
+
+    Base64 because it travels through a message to the extension, which builds
+    the File itself. The page is never handed a way to reach this service.
+    """
+    import base64
+
+    found = store.read_document(document_id)
+    if found is None:
+        raise HTTPException(404, "no such document")
+    filename, data = found
+    return {
+        "filename": filename,
+        "mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if filename.lower().endswith(".docx")
+        else "application/octet-stream",
+        "base64": base64.b64encode(data).decode("ascii"),
+    }
+
+
+@app.delete("/documents/{document_id}")
+def delete_document(document_id: str) -> dict[str, bool]:
+    store.delete_document(document_id)
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Planning a page
+# ---------------------------------------------------------------------------
+
+
+class PlanResponse(BaseModel):
+    kind: PageKind
+    adapter: str
+    host_role: str
+    host_reason: str
+    actions: list[PlannedAction] = Field(default_factory=list)
+    questions: list[PendingQuestion] = Field(default_factory=list)
+    checklist: list[ChecklistItem] = Field(default_factory=list)
+    needs_options: list[str] = Field(default_factory=list)
+    narration: str = ""
+    notes: list[str] = Field(default_factory=list)
+    version: str = __version__
+
+
+@app.post("/plan", response_model=PlanResponse)
+def plan(observation: PageObservation, after_continue: bool = False) -> PlanResponse:
+    profile = store.get_profile()
+    identity = classify_host(observation.url, hints=observation.hints)
+
+    state = store.get_run()
+    if after_continue:
+        # Only an attempt to move the page on can stall. Filling a page means
+        # planning it several times over by design -- the page is re-read after
+        # every choice and again on each correction pass -- and counting those
+        # as failures to progress declared every page stuck on the third look,
+        # which is how a run reached a new step and then refused to touch it.
+        runloop.note_observation(state, observation.signature)
+        store.save_run(state)
+
+    # The session's answer to the agreements question, never the saved one:
+    # the profile on disk has no opinion about this and is not given one.
+    profile = profile.model_copy(update={"accept_agreements": session_accept_agreements})
+    built = runloop.plan_page(observation, profile, store.learned_values())
+    notes = list(observation.notes) + built.notes
+
+    if runloop.is_stalled(state):
+        notes.append(
+            "This page has not changed after several attempts, so I have stopped "
+            "rather than keep trying the same thing."
+        )
+    if observation.captcha == "badge_only":
+        notes.append("There is a reCAPTCHA badge here. It needs nothing from anyone.")
+
+    missing = onboarding.missing_for_applications(profile)
+    if missing and observation.kind is PageKind.APPLICATION:
+        notes.append("Still missing from your profile: " + ", ".join(missing[:5]))
+
+    return PlanResponse(
+        kind=observation.kind,
+        adapter=identity.adapter,
+        host_role=identity.role.value,
+        host_reason=identity.reason,
+        actions=built.actions,
+        questions=built.questions,
+        checklist=runloop.build_checklist(observation, built, []),
+        needs_options=built.needs_options,
+        narration=_narrate(observation, built),
+        notes=notes,
+    )
+
+
+def _narrate(observation: PageObservation, built: runloop.Plan) -> str:
+    if observation.kind is PageKind.APPLICATION:
+        parts = [f"I can see {len(observation.fields)} fields on this application."]
+        if built.actions:
+            parts.append(f"I am filling {len(built.actions)} of them from what you have saved.")
+        if built.questions:
+            parts.append(f"{len(built.questions)} need you.")
+        if built.skipped:
+            parts.append(f"{len(built.skipped)} are optional extras I am leaving blank.")
+        return " ".join(parts)
+    if observation.kind in {PageKind.SEARCH, PageKind.BOARD}:
+        return "This is a list of jobs, not an application, so there is nothing here to fill in."
+    if observation.kind is PageKind.SIGN_IN:
+        return "This is a sign-in page. Sign in in the browser and I will carry on."
+    if observation.kind is PageKind.REGISTRATION:
+        return (
+            "This page wants an account. I will fill everything except the password -- "
+            "creating the account accepts their terms, so that part is yours."
+        )
+    if observation.kind is PageKind.CONFIRMATION:
+        return "The page says the application was received."
+    return f"This looks like a {observation.kind.value} page."
+
+
+class ResultsPayload(BaseModel):
+    observation: PageObservation
+    results: list[ActionResult] = Field(default_factory=list)
+
+
+@app.post("/results")
+def post_results(payload: ResultsPayload) -> dict[str, Any]:
+    """Take what actually happened and record it, honestly."""
+    profile = store.get_profile()
+    built = runloop.plan_page(payload.observation, profile, store.learned_values())
+    merged = runloop.merge_all(payload.results)
+
+    state = store.get_run()
+    state.results = merged
+    state.pending = built.questions
+    state.checklist = runloop.build_checklist(payload.observation, built, merged)
+    state.phase = runloop.next_phase(state, payload.observation, built, merged)  # type: ignore[assignment]
+    state.message = runloop.summarise(merged, built.questions)
+    store.save_run(state)
+
+    return {
+        "summary": state.message,
+        "phase": state.phase,
+        "checklist": [item.model_dump() for item in state.checklist],
+        "unverified": [
+            {"label": r.label, "requested": r.requested, "evidence": r.evidence}
+            for r in merged
+            if r.outcome.value in {"attempted", "accepted"}
+        ],
+        "failed": [
+            {"label": r.label, "requested": r.requested, "evidence": r.evidence}
+            for r in merged
+            if r.outcome.value == "failed"
+        ],
+    }
+
+
+class OptionsPayload(BaseModel):
+    fingerprint: str
+    label: str = ""
+    saved_value: str = ""
+    fact_key: str = ""
+    options: list[Option] = Field(default_factory=list)
+    source: str = "owned_popup"
+
+
+@app.post("/options")
+async def rank_page_options(payload: OptionsPayload) -> dict[str, Any]:
+    """Rank the options a control actually opened.
+
+    Only options that came from the control's own popup arrive here; an empty
+    list means the control has none, and that is reported as such rather than
+    turned into a question with invented answers.
+    """
+    if payload.source == "none" or not payload.options:
+        return {
+            "chosen": None,
+            "options": [],
+            "note": "this control opened no list of its own, so I cannot tell you what it offers",
+        }
+    if payload.source not in {"owned_popup", "native"}:
+        return {
+            "chosen": None,
+            "options": [],
+            "note": "these options did not come from a list the control owns, so they are ignored",
+        }
+
+    offered = real_options(payload.options)
+    if not offered:
+        return {
+            "chosen": None,
+            "options": [],
+            "note": "this dropdown has nothing to choose from yet -- it may depend on "
+                    "another field being filled in first",
+        }
+    ranked = rank_options(payload.saved_value, payload.options, payload.fact_key)
+    chosen = ranked[0] if ranked else None
+    ambiguous = len(ranked) > 1 and ranked[1].score == ranked[0].score
+
+    if chosen is not None and not ambiguous and chosen.score >= 400:
+        return {
+            "chosen": chosen.option.label,
+            "why": chosen.reason,
+            "options": [o.model_dump() for o in offered],
+        }
+
+    note = "none of the options is close enough to your saved answer"
+    if ambiguous:
+        note = "two options fit equally well, so this is yours to pick"
+    if not payload.saved_value:
+        note = "nothing saved answers this"
+    return {"chosen": None, "note": note, "options": [o.model_dump() for o in offered]}
+
+
+# ---------------------------------------------------------------------------
+# Routing
+# ---------------------------------------------------------------------------
+
+
+class RoutePayload(BaseModel):
+    url: str
+    kind: PageKind = PageKind.UNKNOWN
+    company: str = ""
+    title: str = ""
+    hints: list[str] = Field(default_factory=list)
+    candidates: list[dict[str, str]] = Field(default_factory=list)
+
+
+@app.post("/route")
+def route(payload: RoutePayload) -> dict[str, Any]:
+    profile = store.get_profile()
+    candidates = [
+        RouteCandidate(
+            url=c.get("url", ""),
+            source=c.get("source", "constructed"),
+            company=c.get("company", ""),
+            title=c.get("title", ""),
+            label=c.get("label", ""),
+        )
+        for c in payload.candidates
+        if c.get("url")
+    ]
+    decision = decide(
+        payload.url,
+        payload.kind,
+        expected_company=payload.company,
+        expected_title=payload.title,
+        candidates=candidates,
+        hints=payload.hints,
+        prefer_easy_apply=profile.prefer_easy_apply,
+    )
+    return {
+        "action": decision.action,
+        "url": decision.url,
+        "message": decision.message,
+        "host": decision.identity.host if decision.identity else "",
+        "host_role": decision.identity.role.value if decision.identity else "",
+        "adapter": decision.identity.adapter if decision.identity else "generic",
+        "considered": [
+            {"url": c.url, "score": c.score, "reason": c.reason, "source": c.source}
+            for c in decision.candidates
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Chat
+# ---------------------------------------------------------------------------
+
+
+class ChatPayload(BaseModel):
+    text: str
+    fields: list[FieldObservation] = Field(default_factory=list)
+    last_fingerprint: str = ""
+    pending_fingerprint: str = ""
+
+
+@app.post("/chat")
+def post_chat(payload: ChatPayload) -> dict[str, Any]:
+    profile = store.get_profile()
+    outcome = chat.interpret(
+        payload.text,
+        payload.fields,
+        profile=profile,
+        last_fingerprint=payload.last_fingerprint,
+        pending_fingerprint=payload.pending_fingerprint,
+    )
+
+    # An instruction that names a fact is worth keeping, whether or not this
+    # page happened to ask for it.
+    if outcome.remember and outcome.fact_key and outcome.value:
+        profile.facts[outcome.fact_key] = outcome.value
+        store.save_profile(profile)
+
+    return {
+        "kind": outcome.kind,
+        "message": outcome.message,
+        "action": outcome.action.model_dump() if outcome.action else None,
+        "fingerprint": outcome.fingerprint,
+        "label": outcome.label,
+        "value": outcome.value,
+        "fact_key": outcome.fact_key,
+        "options": [o.model_dump() for o in outcome.options],
+    }
+
+
+class SuggestPayload(BaseModel):
+    label: str
+    options: list[Option] = Field(default_factory=list)
+    saved_value: str = ""
+    fact_key: str = ""
+    source: str = "owned_popup"
+
+
+@app.post("/suggest")
+async def suggest(payload: SuggestPayload) -> dict[str, Any]:
+    """Suggest one of the page's own options for a question nothing answers.
+
+    Matching gets first refusal. Only when that finds nothing is the model asked,
+    and it is asked to pick from a list scraped off the page -- then its answer
+    is checked against that same list before it is offered. A suggestion is
+    shown as a suggestion; it is never filled in without being accepted.
+    """
+    if not payload.options:
+        return {"suggested": None, "why": "this control has no options to choose between"}
+
+    if payload.saved_value:
+        ranked = rank_options(payload.saved_value, payload.options, payload.fact_key)
+        if ranked and ranked[0].score >= 400:
+            return {
+                "suggested": ranked[0].option.label,
+                "why": f"your saved answer, {ranked[0].reason}",
+                "from": "profile",
             }
-            if allowed and normalize(value) not in allowed:
-                continue
-        message = normalize(request.user_message)
-        pending = normalize(request.pending_question)
-        normalized_value = normalize(value).replace("expereinced", "experienced")
-        normalized_message = message.replace("expereinced", "experienced")
-        label_tokens = {
-            token
-            for token in normalize(field.group_label or field.label).split()
-            if len(token) >= 4
-            and token
-            not in {"what", "your", "this", "that", "with", "have", "will", "does"}
+
+    model = _model()
+    if not model.available:
+        return {
+            "suggested": None,
+            "why": "nothing saved answers this, and there is no model key set",
+            "kind": "model_unavailable",
         }
-        field_named = bool(label_tokens.intersection(message.split()))
-        pending_matches = bool(pending) and (pending in label or label in pending)
-        value_named = normalized_value in normalized_message
-        if field.field_type == "checkbox" and normalized_value in {"true", "false"}:
-            option = normalize(field.option_label or field.label)
-            option_named = bool(option) and option in message
-            consent_named = (
-                "background check" in label
-                and any(
-                    phrase in message
-                    for phrase in ("fine with", "ok with", "okay with", "reviewed", "consent")
-                )
-            )
-            broad_multi_select = (
-                normalized_value == "true"
-                and field_named
-                and any(
-                    phrase in message
-                    for phrase in (
-                        "anywhere",
-                        "any of these",
-                        "all of them",
-                        "all options",
-                        "select all",
-                    )
-                )
-            )
-            value_named = option_named or consent_named or broad_multi_select
-        explicit_user_supported = (
-            request.origin == "chat"
-            and action.grounding in {"user_message", "visible_option"}
-            and value_named
-            and (field_named or pending_matches)
-        )
-
-        canonical = map_profile_field(label, field, profile)
-        if canonical is not None:
-            expected = coerce_option(canonical[0], field)
-            if normalize(value) != normalize(expected) and not explicit_user_supported:
-                continue
-        elif action.grounding == "profile":
-            continue
-        elif action.grounding == "saved_answer":
-            saved = map_exact_reusable_answer(label, field, answers)
-            if saved is None or normalize(value) != normalize(coerce_option(saved[0], field)):
-                continue
-        elif action.grounding == "source_context":
-            sourced = map_source_field(label, field, request.source_url)
-            if sourced is None or normalize(value) != normalize(coerce_option(sourced[0], field)):
-                continue
-        elif action.grounding == "resume":
-            if resume is None:
-                continue
-            if field.field_type == "checkbox":
-                if not resume_mentions_option(field.option_label, resume.extracted_text):
-                    continue
-            elif normalize(value) not in normalize(resume.extracted_text):
-                continue
-        elif action.grounding == "derived_answer":
-            open_ended = field.field_type in {"text", "textarea"} and any(
-                marker in label
-                for marker in (
-                    "why ",
-                    "describe",
-                    "tell us",
-                    "explain",
-                    "interest in",
-                    "interested in",
-                    "motivation",
-                    "project you",
-                    "experience with",
-                    "additional information",
-                )
-            )
-            protected = any(
-                marker in label
-                for marker in (
-                    "gender",
-                    "race",
-                    "ethnicity",
-                    "veteran",
-                    "disability",
-                    "date of birth",
-                    "age",
-                    "salary",
-                    "compensation",
-                    "authorized",
-                    "sponsor",
-                    "background check",
-                )
-            )
-            if (
-                request.origin != "automation"
-                or not open_ended
-                or protected
-                or action.confidence < 0.75
-                or len(value) < 2
-            ):
-                continue
-        elif request.origin == "automation":
-            # The automatic instruction supplies no new candidate facts. A
-            # visible option alone is not evidence and must never be guessed.
-            continue
-        elif action.grounding in {"user_message", "visible_option"}:
-            if not explicit_user_supported:
-                continue
-        safe_actions.append(
-            action.model_copy(
-                update={
-                    "value": value,
-                    "remember": action.remember and request.origin == "chat",
-                }
-            )
-        )
-
-    question = decision.question
-    if decision.actions and not safe_actions and not question:
-        question = "I could not safely match that request to a visible field. Which visible option should I use?"
-    return decision.model_copy(
-        update={
-            "actions": safe_actions,
-            "question": question,
-            "handled": decision.handled or bool(safe_actions) or bool(question),
-        }
-    )
-
-
-@app.post("/api/applications", response_model=ApplicationRecord)
-def start_application(request: ApplicationCreate) -> ApplicationRecord:
-    require_local_data_mode()
-    return store.save_application(create_application(request))
-
-
-@app.get("/api/applications", response_model=list[ApplicationRecord])
-def list_applications() -> list[ApplicationRecord]:
-    require_local_data_mode()
-    return store.list_applications()
-
-
-@app.get("/api/applications.csv")
-def export_applications_csv() -> Response:
-    require_local_data_mode()
-    output = io.StringIO(newline="")
-    writer = csv.writer(output)
-    writer.writerow(
-        [
-            "created_at",
-            "updated_at",
-            "status",
-            "job_title",
-            "company",
-            "location",
-            "source_url",
-            "route",
-            "last_event",
-        ]
-    )
-    for application in store.list_applications():
-        last_event = application.events[-1].message if application.events else ""
-        writer.writerow(
-            [
-                application.created_at.isoformat(),
-                application.updated_at.isoformat(),
-                application.status,
-                application.job.title,
-                application.job.company,
-                application.job.location,
-                application.job.source_url,
-                application.route.route if application.route else "",
-                last_event,
-            ]
-        )
-    return Response(
-        content=output.getvalue(),
-        media_type="text/csv",
-        headers={"Content-Disposition": 'attachment; filename="applypilot-applications.csv"'},
-    )
-
-
-@app.get("/api/applications/{application_id}", response_model=ApplicationRecord)
-def get_application(application_id: str) -> ApplicationRecord:
-    require_local_data_mode()
-    application = store.get_application(application_id)
-    if application is None:
-        raise HTTPException(status_code=404, detail="Application not found")
-    return application
-
-
-@app.post(
-    "/api/applications/{application_id}/transition",
-    response_model=ApplicationRecord,
-)
-def transition_saved_application(
-    application_id: str, transition: ApplicationTransition
-) -> ApplicationRecord:
-    require_local_data_mode()
-    application = store.get_application(application_id)
-    if application is None:
-        raise HTTPException(status_code=404, detail="Application not found")
     try:
-        updated = transition_application(application, transition)
-    except InvalidApplicationTransition as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return store.save_application(updated)
+        chosen, why = await ai.choose_among(
+            model, payload.label, payload.options, payload.saved_value
+        )
+    except ai.ModelUnavailable as exc:
+        # Flagged so the panel keeps it out of the question card: a busy model
+        # is not something the applicant needs to read while answering.
+        return {"suggested": None, "why": str(exc), "kind": "model_unavailable"}
+    if chosen is None:
+        return {"suggested": None, "why": why}
+    return {"suggested": chosen.label, "why": why, "from": "model"}
 
 
-def run() -> None:
-    uvicorn.run("applypilot.main:app", host=settings.host, port=settings.port, reload=False)
+class DescribePayload(BaseModel):
+    observation: PageObservation
 
 
-if __name__ == "__main__":
-    run()
+@app.post("/describe")
+async def describe(payload: DescribePayload) -> dict[str, str]:
+    """Words for the panel. The model never decides anything here."""
+    model = _model()
+    if not model.available:
+        return {"text": "", "note": "no model key is set, so this is running on matching alone"}
+    try:
+        return {"text": await ai.describe_page(model, payload.observation)}
+    except ai.ModelUnavailable as exc:
+        return {"text": "", "note": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Learned answers
+# ---------------------------------------------------------------------------
+
+
+class LearnPayload(BaseModel):
+    field: FieldObservation
+    value: str
+    host: str = ""
+    page_labels: list[str] = Field(default_factory=list)
+
+
+@app.post("/learn")
+def learn(payload: LearnPayload) -> dict[str, Any]:
+    profile = store.get_profile()
+    decision = learning.judge(
+        payload.field,
+        payload.value,
+        page_labels=frozenset(normalise(label) for label in payload.page_labels),
+        allow_demographics=profile.answer_demographics,
+    )
+    if not decision.learn:
+        return {"learned": False, "reason": decision.reason}
+    saved = store.save_learned(learning.build(payload.field, payload.value, payload.host))
+    return {"learned": True, "reason": decision.reason, "question": saved.question}
+
+
+@app.get("/learned")
+def get_learned() -> dict[str, Any]:
+    return {
+        "answers": [
+            {
+                "question": answer.question,
+                "value": answer.value,
+                "host": answer.host,
+                "times_seen": answer.times_seen,
+                "updated_at": answer.updated_at.isoformat(timespec="seconds"),
+            }
+            for answer in sorted(
+                store.get_learned().values(), key=lambda a: a.updated_at, reverse=True
+            )
+        ]
+    }
+
+
+@app.delete("/learned")
+def delete_learned(question: str = "") -> dict[str, Any]:
+    if question:
+        store.forget_learned(question)
+        return {"forgotten": 1}
+    return {"forgotten": store.forget_all_learned()}
+
+
+@app.post("/explain")
+def explain(field: FieldObservation) -> dict[str, str]:
+    """Why a field resolved the way it did. For the panel and for debugging."""
+    return {"label": field.display_label, "explanation": describe_match(field)}
+
+
+# ---------------------------------------------------------------------------
+# Run state
+# ---------------------------------------------------------------------------
+
+
+@app.get("/run")
+def get_run() -> RunState:
+    return store.get_run()
+
+
+class RunCommand(BaseModel):
+    command: str
+    url: str = ""
+    company: str = ""
+    role: str = ""
+
+
+@app.post("/run")
+def post_run(payload: RunCommand) -> RunState:
+    state = store.get_run()
+    if payload.command == "start":
+        state.phase = "scanning"
+        state.url = payload.url or state.url
+        state.company = payload.company or state.company
+        state.role = payload.role or state.role
+        state.message = "Starting."
+        state = runloop.clear_stall(state)
+    elif payload.command == "resume":
+        state = runloop.resume(state)
+    elif payload.command == "stop":
+        state.phase = "idle"
+        state.message = "Stopped."
+    elif payload.command == "unblock":
+        state = runloop.clear_stall(state)
+    else:
+        raise HTTPException(400, f"unknown command {payload.command!r}")
+    return store.save_run(state)
+
+
+# ---------------------------------------------------------------------------
+# Sign-in authorisation (this service never holds the details themselves)
+# ---------------------------------------------------------------------------
+
+
+class SignInHost(BaseModel):
+    host: str
+
+
+@app.post("/sign-in/authorise")
+def authorise_sign_in(payload: SignInHost) -> dict[str, Any]:
+    authorisation = session_sign_in.authorise(payload.host)
+    return {
+        "host": authorisation.host,
+        "expires_in": 15 * 60,
+        "note": (
+            "Your sign-in details stay in the panel and are never sent here or written "
+            "to disk. This only records that you allowed this one host."
+        ),
+    }
+
+
+@app.delete("/sign-in/authorise")
+def revoke_sign_in(host: str = "") -> dict[str, Any]:
+    session_sign_in.revoke(host)
+    return {"authorised": session_sign_in.authorised_hosts()}
+
+
+class SignInCheck(BaseModel):
+    url: str
+    kind: PageKind
+
+
+@app.post("/sign-in/check")
+def check_sign_in(payload: SignInCheck) -> dict[str, Any]:
+    decision = session_sign_in.may_release(payload.url, payload.kind)
+    return {"allowed": decision.allowed, "reason": decision.reason}
+
+
+# ---------------------------------------------------------------------------
+# Applications
+# ---------------------------------------------------------------------------
+
+
+@app.get("/applications")
+def list_applications() -> dict[str, Any]:
+    return {
+        "applications": [record.model_dump(mode="json") for record in store.list_applications()],
+        "summary": applications.summary(store),
+    }
+
+
+@app.post("/applications")
+def upsert_application(record: ApplicationRecord) -> ApplicationRecord:
+    return store.upsert_application(record)
+
+
+class SubmitPayload(BaseModel):
+    application_id: str
+    confirmation: str = ""
+
+
+@app.post("/applications/submitted")
+def mark_application_submitted(payload: SubmitPayload) -> dict[str, Any]:
+    record = next(
+        (r for r in store.list_applications() if r.id == payload.application_id), None
+    )
+    if record is None:
+        raise HTTPException(404, "no such application")
+    updated, message = applications.mark_submitted(store, record, payload.confirmation)
+    return {"application": updated.model_dump(mode="json"), "message": message}
+
+
+@app.get("/applications/export", response_class=PlainTextResponse)
+def export_applications() -> str:
+    return applications.export_csv(store)
+
+
+@app.delete("/applications/{application_id}")
+def delete_application(application_id: str) -> dict[str, bool]:
+    store.delete_application(application_id)
+    return {"ok": True}
+
+
+@app.post("/reset")
+def reset(confirm: str = Body("", embed=True)) -> dict[str, Any]:
+    """Clear everything local. Deliberately awkward to trigger by accident."""
+    if confirm != "erase everything":
+        raise HTTPException(400, 'send {"confirm": "erase everything"} to do this')
+    store.delete_value("profile")
+    store.delete_value("run_state")
+    forgotten = store.forget_all_learned()
+    for document in store.list_documents():
+        store.delete_document(document["id"])
+    return {"ok": True, "forgotten_answers": forgotten}
