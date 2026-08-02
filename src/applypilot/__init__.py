@@ -6,6 +6,6 @@ warns when they differ, because a service left running keeps serving the code it
 started with.
 """
 
-__version__ = "1.63.0"
+__version__ = "1.64.0"
 
 __all__ = ["__version__"]

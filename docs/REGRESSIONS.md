@@ -1144,3 +1144,30 @@ and "Higher Education Level" were added as supplementary, which means both
 "leave blank rather than ask" and "do not ask for this during setup" -- so they
 were skipped on every form and there was nowhere to fill them in. Every form
 asks both.
+
+**135. Every custom question on a form came back with no label.** The search for
+a label sitting before a control gave up after three levels. A form that wraps
+each control in four or five nested divs put the question further out than
+that, so eight required questions had no label at all -- and fell back to the
+random name the form had given the input, so the applicant was asked
+"q Rd OBSq YRu H" and "0 SEV4 Jb VVXa".
+*Mechanism.* The walk goes further out. What keeps it honest was never the
+depth: it stops the moment it reaches a container holding more than one
+control, because from there the neighbours are other fields. Six of the eight
+now read their real question -- "What is your desired base salary?", "Which AWS
+services have you used to deploy and operate production workloads?".
+
+**136. A widget's own "Select" was read as the question it was asking.** Two
+required questions -- about work authorisation and about sponsorship -- came
+back as a field called "Select", which answers nothing. That text is the
+control saying it is waiting.
+*Mechanism.* The shared placeholder list already knows what a "choose
+something" prompt looks like, and no acceptance point in the label search takes
+one now.
+
+**137. A name a program made up was offered to the applicant as a question.**
+Some forms give every control an id like "R0sWBoTw0J3"; split into words that
+reads as "R0s WBo Tw0 J3", which looked enough like a label to be used as one.
+*Mechanism.* Long, and mixing digits with both cases, is not something a person
+names a field. Saying nothing is worse than saying the truth and better than
+saying that. "field-51", "firstName" and "phone_number" all still count.

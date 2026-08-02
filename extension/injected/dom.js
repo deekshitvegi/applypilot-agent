@@ -215,6 +215,10 @@
 
   /* --------------------------------------------------------------- labels */
 
+  //: How many levels out to look for a label sitting before a control. The
+  //: guard on control count is what makes this safe, not the number.
+  const LABEL_SEARCH_DEPTH = 6;
+
   const LABEL_HINT = "label,[class*='label' i],[class*='Label'],[data-automation-id*='label' i]";
 
   /*
@@ -272,6 +276,12 @@
    * Deliberately excludes name, id and placeholder: a form that calls its State
    * control `countryRegion` must not be able to argue it is a country field.
    */
+  /** The control's own "choose something" text, which is not its name. */
+  function isChoosePrompt(text) {
+    const shared = globalThis.ApplyPilotPlaceholders;
+    return Boolean(shared && shared.looksLikePlaceholder(text));
+  }
+
   function visibleLabel(el) {
     if (!el) return "";
 
@@ -280,30 +290,37 @@
     if (el.labels && el.labels.length) {
       for (const label of el.labels) {
         const text = textOf(label);
-        if (!isDecoration(text)) return text;
+        if (!isDecoration(text) && !isChoosePrompt(text)) return text;
       }
     }
 
     const byRef = referencedText(el, "aria-labelledby");
-    if (!isDecoration(byRef)) return byRef;
+    if (!isDecoration(byRef) && !isChoosePrompt(byRef)) return byRef;
 
     const wrapping = closestDeep(el, "label");
     if (wrapping) {
       const clone = wrapping.cloneNode(true);
       clone.querySelectorAll("input,select,textarea,button").forEach((n) => n.remove());
       const text = textOf(clone);
-      if (!isDecoration(text)) return text;
+      if (!isDecoration(text) && !isChoosePrompt(text)) return text;
     }
 
     const aria = (el.getAttribute("aria-label") || "").trim();
-    if (!isDecoration(aria)) return aria;
+    if (!isDecoration(aria) && !isChoosePrompt(aria)) return aria;
 
     // A label sitting just before the control inside the same field row: the
     // common shape when a form does not use <label for>. The walk stops as soon
     // as it meets navigation, because a tab bar several levels up is not a
     // label -- one was read as the name of a file input.
+    // How far out to look. What keeps this honest is the guard just below --
+    // the walk stops the moment it reaches a container holding more than one
+    // control, because from there the neighbours are other fields. Depth on its
+    // own was never the safeguard, and three was too shallow for forms that
+    // wrap each control in four or five nested divs: on one, every custom
+    // question came back with no label at all and was reported to the applicant
+    // by the random name the form had given the input, "q Rd OBSq YRu H".
     let node = el;
-    for (let depth = 0; depth < 3 && node; depth += 1) {
+    for (let depth = 0; depth < LABEL_SEARCH_DEPTH && node; depth += 1) {
       // A label belongs to a field's own row. Once the walk reaches a container
       // holding several controls it has left that row, and its neighbours are
       // other fields -- one EEO question labelled only with an asterisk took the
@@ -332,7 +349,13 @@
         const text = textOf(hint || sibling);
         // A lone asterisk between the name and the control is skipped over,
         // not taken as the name.
-        if (text && !isDecoration(text)) return text.length <= 200 ? text : "";
+        // Nor is the control's own "Select". That is the widget saying it is
+        // waiting, and reading it as the question turned two real questions --
+        // about work authorisation and about sponsorship -- into a field called
+        // "Select" that answered nothing.
+        if (text && !isDecoration(text) && !isChoosePrompt(text)) {
+          return text.length <= 200 ? text : "";
+        }
         sibling = sibling.previousElementSibling;
       }
       node = node.parentElement;
@@ -380,6 +403,24 @@
     return "";
   }
 
+  /*
+   * A name a program made up, not a name a person chose.
+   *
+   * Some forms give every control an id like "R0sWBoTw0J3". Split into
+   * words that reads as "R0s WBo Tw0 J3", which is not a label -- but it
+   * looked like one, so eleven required questions were put to the applicant
+   * under names like "q Rd OBSq YRu H". Nothing can be answered from that.
+   * Saying nothing is worse than saying the truth, and better than that.
+   *
+   * Kept tight: long, and mixing digits with both cases, which real field
+   * names do not. "field-51", "firstName" and "phone_number" all survive.
+   */
+  function looksGenerated(raw) {
+    const text = String(raw || "").trim();
+    if (text.length < 8 || /[\s]/.test(text)) return false;
+    return /[0-9]/.test(text) && /[a-z]/.test(text) && /[A-Z]/.test(text);
+  }
+
   function attributeLabel(el) {
     if (!el) return "";
     const candidates = [
@@ -390,6 +431,7 @@
       el.getAttribute("id"),
     ];
     for (const candidate of candidates) {
+      if (looksGenerated(candidate)) continue;
       const text = splitIdentifier(candidate);
       if (text && /[a-z]/i.test(text) && text.length <= 80) return text;
     }
