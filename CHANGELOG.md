@@ -3,6 +3,15 @@
 Versions in `pyproject.toml`, `extension/manifest.json` and
 `src/applypilot/__init__.py` move together, and a test asserts it.
 
+## 1.46.0
+
+- **A dropdown is never a text box.** Where a select's choices could not be read
+  -- one holding nothing but "— Make a Selection —" until the page fills it --
+  the panel fell back to a box to type in, and typing into a dropdown does
+  nothing whatsoever. It now says it could not read the choices, hides Save, and
+  scrolls the control into view so the one thing that does work is what is
+  offered.
+
 ## 1.45.0
 
 - **The block heading is read through its own furniture.** Last version let a

@@ -565,6 +565,25 @@ async function renderQuestion() {
   const choices = offered
     .map((o) => o.label)
     .filter((label) => label && label.trim() && !isPlaceholderLabel(label));
+  // A dropdown is never handed back as a text box. Where its choices could not
+  // be read -- a select that holds nothing until the page fills it, a picker
+  // that only answers once opened -- the honest thing is to say so and offer to
+  // show you the control, because typing into a dropdown does nothing at all.
+  if (isChoice(question.control) && !choices.length) {
+    const note = document.createElement("p");
+    note.className = "sub";
+    note.textContent =
+      "This is a dropdown and I could not read what it offers. Open it on the " +
+      "page and choose, and I will carry on from what you pick.";
+    host.appendChild(note);
+    card._read = () => "";
+    card._readAll = () => [];
+    el("question-save").classList.add("hidden");
+    showOnPage(question.fingerprint);
+    return;
+  }
+  el("question-save").classList.remove("hidden");
+
   const control = buildControl(
     choices.length ? "choice" : question.control === "textarea" ? "textarea" : "text",
     choices,

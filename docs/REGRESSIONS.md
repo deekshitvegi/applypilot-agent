@@ -839,3 +839,11 @@ page is "Phones (1)* required. 2" -- the count, the required marker and the
 block number all stuck to it -- so nothing was stripped and the phone number
 still went unfilled.
 *Mechanism.* The heading is taken up to the first bracket, marker or digit.
+
+**107. A dropdown handed back as a text box, again.** Where a select's choices
+could not be read -- one that holds nothing but "— Make a Selection —" until the
+page fills it -- the panel fell through to a text input. Typing into a dropdown
+does nothing at all, so every one of those was unanswerable.
+*Mechanism.* A choice control never renders a text box. When its options cannot
+be read the panel says so, hides Save, and scrolls the control into view, so the
+one thing that does work is the thing offered.
