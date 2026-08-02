@@ -11,50 +11,191 @@
     "so a stale entry costs a line of output and nothing else."
   ],
   "companies": [
-    { "ats": "greenhouse", "slug": "anthropic" },
-    { "ats": "greenhouse", "slug": "databricks" },
-    { "ats": "greenhouse", "slug": "figma" },
-    { "ats": "greenhouse", "slug": "airbnb" },
-    { "ats": "greenhouse", "slug": "robinhood" },
-    { "ats": "greenhouse", "slug": "discord" },
-    { "ats": "greenhouse", "slug": "reddit" },
-    { "ats": "greenhouse", "slug": "cloudflare" },
-    { "ats": "greenhouse", "slug": "stripe" },
-    { "ats": "greenhouse", "slug": "scaleai" },
-    { "ats": "greenhouse", "slug": "coinbase" },
-    { "ats": "greenhouse", "slug": "instacart" },
-    { "ats": "greenhouse", "slug": "pinterest" },
-    { "ats": "greenhouse", "slug": "gitlab" },
-    { "ats": "greenhouse", "slug": "datadog" },
-    { "ats": "greenhouse", "slug": "samsara" },
-    { "ats": "greenhouse", "slug": "affirm" },
-    { "ats": "greenhouse", "slug": "chime" },
-    { "ats": "greenhouse", "slug": "twilio" },
-    { "ats": "greenhouse", "slug": "asana" },
-
-    { "ats": "lever", "slug": "palantir" },
-    { "ats": "lever", "slug": "spotify" },
-    { "ats": "lever", "slug": "binance" },
-    { "ats": "lever", "slug": "matchgroup" },
-
-    { "ats": "ashby", "slug": "ramp" },
-    { "ats": "ashby", "slug": "linear" },
-    { "ats": "ashby", "slug": "vanta" },
-    { "ats": "ashby", "slug": "openai" },
-    { "ats": "ashby", "slug": "notion" },
-    { "ats": "ashby", "slug": "posthog" },
-    { "ats": "ashby", "slug": "replit" },
-    { "ats": "ashby", "slug": "runway" },
-    { "ats": "ashby", "slug": "modal" },
-
-    { "ats": "smartrecruiters", "slug": "Visa" },
-
-    { "ats": "workday", "slug": "nvidia", "pod": "wd5", "site": "NVIDIAExternalCareerSite" },
-    { "ats": "workday", "slug": "salesforce", "pod": "wd12", "site": "External_Career_Site" },
-    { "ats": "workday", "slug": "adobe", "pod": "wd5", "site": "external_experienced" },
-    { "ats": "workday", "slug": "paypal", "pod": "wd1", "site": "jobs" },
-    { "ats": "workday", "slug": "dell", "pod": "wd1", "site": "External" },
-    { "ats": "workday", "slug": "hp", "pod": "wd5", "site": "ExternalCareerSite" },
-    { "ats": "workday", "slug": "workday", "pod": "wd5", "site": "Workday" }
+    {
+      "ats": "greenhouse",
+      "slug": "anthropic"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "databricks"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "figma"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "airbnb"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "robinhood"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "discord"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "reddit"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "cloudflare"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "stripe"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "scaleai"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "coinbase"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "instacart"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "pinterest"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "gitlab"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "datadog"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "samsara"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "affirm"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "chime"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "twilio"
+    },
+    {
+      "ats": "greenhouse",
+      "slug": "asana"
+    },
+    {
+      "ats": "lever",
+      "slug": "palantir"
+    },
+    {
+      "ats": "lever",
+      "slug": "spotify"
+    },
+    {
+      "ats": "lever",
+      "slug": "binance"
+    },
+    {
+      "ats": "lever",
+      "slug": "matchgroup"
+    },
+    {
+      "ats": "ashby",
+      "slug": "ramp"
+    },
+    {
+      "ats": "ashby",
+      "slug": "linear"
+    },
+    {
+      "ats": "ashby",
+      "slug": "vanta"
+    },
+    {
+      "ats": "ashby",
+      "slug": "openai"
+    },
+    {
+      "ats": "ashby",
+      "slug": "notion"
+    },
+    {
+      "ats": "ashby",
+      "slug": "posthog"
+    },
+    {
+      "ats": "ashby",
+      "slug": "replit"
+    },
+    {
+      "ats": "ashby",
+      "slug": "runway"
+    },
+    {
+      "ats": "ashby",
+      "slug": "modal"
+    },
+    {
+      "ats": "smartrecruiters",
+      "slug": "Visa"
+    },
+    {
+      "ats": "workday",
+      "slug": "nvidia",
+      "pod": "wd5",
+      "site": "NVIDIAExternalCareerSite"
+    },
+    {
+      "ats": "workday",
+      "slug": "salesforce",
+      "pod": "wd12",
+      "site": "External_Career_Site"
+    },
+    {
+      "ats": "workday",
+      "slug": "adobe",
+      "pod": "wd5",
+      "site": "external_experienced"
+    },
+    {
+      "ats": "workday",
+      "slug": "paypal",
+      "pod": "wd1",
+      "site": "jobs"
+    },
+    {
+      "ats": "workday",
+      "slug": "dell",
+      "pod": "wd1",
+      "site": "External"
+    },
+    {
+      "ats": "workday",
+      "slug": "hp",
+      "pod": "wd5",
+      "site": "ExternalCareerSite"
+    },
+    {
+      "ats": "workday",
+      "slug": "workday",
+      "pod": "wd5",
+      "site": "Workday"
+    },
+    {
+      "ats": "rippling",
+      "slug": "fullthrottle1"
+    },
+    {
+      "ats": "rippling",
+      "slug": "rippling"
+    }
   ]
 }

@@ -109,8 +109,6 @@ def test_an_answer_that_opens_by_saying_which_it_is_can_answer_yes_or_no(saved, 
 @pytest.mark.parametrize(
     "saved",
     [
-        # Says neither in its first word, so it settles nothing.
-        "I am not a protected veteran",
         # And a word that merely starts with those letters is not the word.
         "Notarised documents were provided",
         "Yesterday",
@@ -126,3 +124,18 @@ def test_the_full_wording_still_wins_where_it_is_offered():
     options = [Option(label=x, value=x) for x in ["Yes, I am a protected veteran", full]]
     match = best_option(full, options)
     assert match is not None and match.option.label == full
+
+
+def test_a_sentence_that_says_no_without_the_word_is_read_as_no():
+    """Changed deliberately in 1.65.0.
+
+    When this file was written the only rule was "opens with yes or no", and
+    this sentence opens with neither, so it was asserted to match nothing.
+    Equal-opportunity questions are answered in whole sentences and no two
+    forms use the same ones -- one offers "No, I am not a veteran under one of
+    the classifications listed above", the next offers "I am not a protected
+    veteran". They are the same answer, and it is now read as one.
+    """
+    match = best_option("I am not a protected veteran", YES_NO)
+    assert match is not None
+    assert match.option.label == "No"

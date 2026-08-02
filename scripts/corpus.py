@@ -137,12 +137,44 @@ def harvest_workday(entry: dict, per_company: int) -> list[dict]:
     return out
 
 
+#: Rippling answers with a bare list and gives the posting's URL, not the
+#: form's. The apply step is a query on the same address.
+def harvest_rippling(entry: dict, per_company: int) -> list[dict]:
+    slug = entry["slug"]
+    jobs = get_json(f"https://ats.rippling.com/api/v1/board/{slug}/jobs")
+    out = []
+    for job in (jobs or [])[:per_company]:
+        uuid = job.get("uuid")
+        if not uuid:
+            continue
+        out.append(
+            {
+                "ats": "rippling",
+                "company": slug,
+                "title": str(job.get("name", ""))[:120],
+                "url": (
+                    f"https://ats.rippling.com/{slug}/jobs/{uuid}/apply"
+                    f"?jobBoardSlug={slug}&jobId={uuid}&step=application"
+                ),
+            }
+        )
+    print(f"  ok rippling/{slug}: {len(jobs or [])} open, took {len(out)}")
+    return out
+
+
 def harvest(per_company: int, pause: float) -> list[dict]:
     """Ask each seeded company's ATS what is open, and where to apply."""
     seeds = json.loads(SEEDS.read_text(encoding="utf-8"))
     found: list[dict] = []
 
     for entry in seeds["companies"]:
+        if entry["ats"] == "rippling":
+            try:
+                found.extend(harvest_rippling(entry, per_company))
+            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError) as err:
+                print(f"  -  rippling/{entry['slug']}: {err}")
+            time.sleep(pause)
+            continue
         if entry["ats"] == "workday":
             try:
                 found.extend(harvest_workday(entry, per_company))

@@ -141,9 +141,55 @@ BAND_SCORE = 700
 #: match, so a control that really does offer the full statute still wins it.
 SAME_ANSWER_SHORTER = 500
 
+#: The same answer, given in the form's own words. Below a wording match, so a
+#: control offering the exact saved sentence still wins with it, and above the
+#: threshold because agreeing on yes or no is not a guess.
+SAME_MEANING = 450
+
 #: An answer whose first word settles it. Kept to exactly that: a sentence that
 #: merely contains "no" somewhere has settled nothing.
 _OPENS_YES_NO = re.compile(r"^\s*(yes|no)\b", re.IGNORECASE)
+
+#: Saying you would rather not answer. Checked first and never treated as
+#: either answer: "I don't wish to answer" contains "don't", and counting that
+#: as a No would answer a voluntary question on somebody's behalf.
+_DECLINES = re.compile(
+    r"\b(prefer\s+not|do\s*n[o']?t\s+wish|decline\s+to|choose\s+not\s+to|"
+    r"rather\s+not\s+say|not\s+disclose|prefer\s+to\s+self)\b",
+    re.IGNORECASE,
+)
+
+_SAYS_NO = re.compile(
+    r"^no\b|\b(i\s+am\s+not|i'?m\s+not|i\s+do\s+not|i\s+don'?t|i\s+have\s+not|"
+    r"i\s+haven'?t|do\s+not\s+have|does\s+not|am\s+not\s+a)\b",
+    re.IGNORECASE,
+)
+
+_SAYS_YES = re.compile(
+    r"^yes\b|\b(i\s+am|i'?m|i\s+have|i\s+identify|i\s+do|one\s+or\s+more)\b",
+    re.IGNORECASE,
+)
+
+
+def _polarity(text: str) -> str:
+    """Whether a sentence is saying yes, saying no, or declining to say.
+
+    Equal-opportunity questions are asked in whole sentences and answered in
+    whole sentences, and no two forms use the same ones. One offers "No, I am
+    not a veteran under one of the classifications listed above"; the next
+    offers "I am not a protected veteran". They are the same answer.
+
+    Negative is tested before positive, because every negative sentence here
+    contains a positive one: "I am not" contains "I am".
+    """
+    plain = normalise(text)
+    if not plain or _DECLINES.search(plain):
+        return "decline" if plain else ""
+    if _SAYS_NO.search(plain):
+        return "no"
+    if _SAYS_YES.search(plain):
+        return "yes"
+    return ""
 
 
 def _opens_with_yes_or_no(desired: str) -> str:
@@ -306,6 +352,7 @@ def rank_options(
     """Every usable option, best first. Placeholders and disabled rows drop out."""
     groups = groups_for(fact_key)
     number = _as_number(desired)
+    wanted_polarity = _polarity(desired)
     ranked: list[OptionMatch] = []
     for option in options:
         if option.disabled:
@@ -318,6 +365,13 @@ def rank_options(
             # The same fact, asked at a different resolution.
             score = BAND_SCORE
             reason = f"{desired} falls inside {option.label}"
+        if score <= 0 and wanted_polarity in {"yes", "no"}:
+            # Said in the form's own words. Every option is scored the same way,
+            # so two options meaning the same thing tie -- and a tie is refused,
+            # which is the right answer when a form really is ambiguous.
+            if _polarity(option.label) == wanted_polarity:
+                score = SAME_MEANING
+                reason = f'both say "{wanted_polarity}", in different words'
         if score <= 0:
             plain = _opens_with_yes_or_no(desired)
             if plain and normalise(option.label) == plain:

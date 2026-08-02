@@ -1171,3 +1171,19 @@ reads as "R0s WBo Tw0 J3", which looked enough like a label to be used as one.
 *Mechanism.* Long, and mixing digits with both cases, is not something a person
 names a field. Saying nothing is worse than saying the truth and better than
 saying that. "field-51", "firstName" and "phone_number" all still count.
+
+**138. The same answer, refused because the form worded it differently.**
+Equal-opportunity questions are asked in whole sentences and answered in whole
+sentences, and no two forms use the same ones. One offers "No, I am not a
+veteran under one of the classifications listed above"; the next offers "I am
+not a protected veteran". They are the same answer. One offers "No"; another
+offers "No, I don't have a disability". Every form wording these differently
+from the one the answer was saved on left a required question unanswerable.
+*Mechanism.* Whether a sentence says yes, says no, or declines to say. Negative
+is tested before positive because every negative sentence contains a positive
+one -- "I am not" contains "I am". Declining is tested before either: "I don't
+wish to answer" contains "don't", and reading that as No would put an answer on
+a form that the applicant deliberately withheld. Scored below a wording match,
+so a control offering the exact saved sentence still wins with it, and two
+options meaning the same thing tie -- which is refused, because a tie is a
+question for the applicant and not a coin flip.
