@@ -47,6 +47,19 @@ On macOS or Linux, `./scripts/setup.sh`.
 
 Leave it running. It prints the version and where your data lives.
 
+Or have it start itself when you sign in, so opening Chrome is all you ever do:
+
+```powershell
+.\scripts\install-autostart.ps1
+```
+
+That puts one shortcut in your own Startup folder and starts the service
+straight away. It runs `pythonw.exe`, so there is no console window and nothing
+in the taskbar. Undo it with `.\scripts\install-autostart.ps1 -Remove`, which
+deletes that one shortcut and nothing else.
+
+Either way the service listens on `127.0.0.1` only.
+
 ### 3. Load the extension, the first time
 
 1. Open `chrome://extensions`
