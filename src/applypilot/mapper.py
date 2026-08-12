@@ -721,11 +721,26 @@ def is_agreement(field: FieldObservation) -> bool:
     return bool(_AGREEMENT_RE.search(field.display_label or field.label or ""))
 
 
+def _unnamed_document_upload(fields: list[FieldObservation]) -> str:
+    """The fingerprint of the file control that must be the resume, or "".
+
+    Empty when the page names one already, when it names none but offers
+    several, or when there is nothing to attach to. Guessing between two
+    unlabelled uploads is how a resume ends up in a transcript box.
+    """
+    uploads = [f for f in fields if f.visible and f.control is ControlKind.FILE]
+    if len(uploads) != 1:
+        return ""
+    only = uploads[0]
+    return "" if document_wanted(only) else only.fingerprint
+
+
 def resolve_field(
     field: FieldObservation,
     profile: Profile,
     learned: dict[str, str] | None = None,
     page_has_password: bool = False,
+    assume_resume: bool = False,
 ) -> Resolution:
     """Decide what to do with one field: fill it, ask about it, or leave it."""
     learned = learned or {}
@@ -827,6 +842,8 @@ def resolve_field(
     # read, and a file control can only ever be asking for a document.
     if spec is None:
         wanted = document_wanted(field)
+        if not wanted and assume_resume:
+            wanted = "resume"
         if wanted:
             spec = BY_KEY[wanted]
             match = FactMatch(
@@ -1026,11 +1043,26 @@ def resolve_page(
     # apart from an ordinary box that happens to be called "Login", so it has
     # to be known before any one field is looked at.
     page_has_password = any(f.control is ControlKind.PASSWORD for f in fields)
+
+    # Which file control is the resume, when none of them says so.
+    #
+    # A dropzone is often drawn with no label at all, or with nothing but the
+    # file types it takes. Across the corpus that was twenty-eight uploads left
+    # unattached -- the most important field on an application, on forms that
+    # were otherwise filled. A bare file control on a job application is the
+    # CV; a form wanting anything else says which.
+    #
+    # Only ever one of them, and only when no other file control has already
+    # claimed it by name, so a page offering a resume and a portfolio still
+    # gets the resume in the resume box and nothing in the other.
+    unnamed = _unnamed_document_upload(fields)
+
     out: list[Resolution] = []
     for field in fields:
         if not field.visible:
             continue
-        out.append(resolve_field(field, profile, learned, page_has_password))
+        assume = field.fingerprint == unnamed
+        out.append(resolve_field(field, profile, learned, page_has_password, assume))
     return out
 
 

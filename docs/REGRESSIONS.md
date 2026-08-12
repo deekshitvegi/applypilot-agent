@@ -1269,3 +1269,18 @@ says. Separately, a short bracketed code after a name says the same thing twice
 and is not part of the name, so it is ignored when nothing else matches. Only a
 short one -- "Content (e.g. videos, ads, billboards etc)" is a thing a form is
 offering, not a name with a code after it.
+
+**145. There was no way to tell whether a change helped.** Every claim about a
+form getting better rested on rerunning something by hand and remembering what
+it said last time. `scripts/scoreboard.py` writes one row per application per
+run -- fields, filled, asked, left blank -- and one row per unanswered field
+with the kind of control it is and the options it offers. Two runs either side
+of a change say plainly whether it helped, hurt, or did nothing.
+*It earned its keep immediately.* The largest cluster of unanswered fields
+looked like twenty-eight resume uploads nobody was attaching. A rule was
+written for it; the scoreboard reported no change at all. Nineteen of those
+forms draw a second, unnamed dropzone beside a named "Resume" input which was
+already being matched -- so the cluster was mostly duplicates, and the rule was
+solving a problem that did not exist. The rule is kept because a page with one
+unlabelled upload is a real shape, but it is worth nothing today and the
+numbers say so.

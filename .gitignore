@@ -39,3 +39,5 @@ extension.zip
 Thumbs.db
 corpus/forms/
 corpus/targets.json
+corpus/scoreboard.csv
+corpus/questions.csv
