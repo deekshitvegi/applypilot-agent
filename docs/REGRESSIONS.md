@@ -1314,3 +1314,35 @@ is not loosening it -- it is undoing our own formatting. "Maybe" and
 *And it says what it saw.* A reply naming something the control does not offer
 now reports what was named. Before, that was indistinguishable from a refusal,
 which is how this survived: both came back as the model's own sentence.
+
+**148. The model was never told where the applicant lives.** "Are you based in
+a US or equivalent timezone?" went unanswered on form after form, while the
+profile held Denton, Texas, United States. The evidence put in front of the
+model was skills, education and jobs -- and nothing else. It refused correctly:
+it had genuinely not been shown an address.
+*Mechanism.* Where they live, and what they may do about it -- authorisation,
+sponsorship, relocation, notice, travel, highest education -- are part of the
+evidence now. The lines are theirs; none of them is computed.
+
+**149. One rule sat across two different things, and blocked both.** The
+prompt said "do not infer". That stopped the model rounding two years of Python
+up into eight, which is the point. It also stopped it reading "Denton, Texas"
+as living in the United States, because that needs one fact about the world.
+The asymmetry showed it: "willing to work anywhere except Arkansas" answered a
+question about a Little Rock office, since Arkansas was named in the line --
+but the same preference could not answer one about NYC.
+*Mechanism.* The two are separated. Common knowledge -- that a city sits in a
+country, that a master's is above a bachelor's -- may join what they wrote to
+what is asked. It may never supply a fact about them. A question about their
+years, their tools, or a clearance is still refused outright.
+
+**150. It would not say it was excited.** Employers write "Are you excited and
+able to work from our NYC office?", and the model refused: no line said the
+applicant was excited. True, and useless -- it is the same question as "can you
+work from NYC", which a stated willingness answers.
+*Mechanism.* Enthusiasm wording is named as the dressing it is. A contradiction
+is still answered honestly rather than agreeably: someone who will only work
+remotely answers No to an office question, rather than the prompt reaching for
+the pleasant option.
+→ `test_answer_from_evidence.py::test_common_knowledge_may_join_a_line_to_the_question`,
+`test_where_they_live_is_part_of_what_the_model_is_shown`

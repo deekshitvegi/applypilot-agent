@@ -165,3 +165,66 @@ def test_the_prompt_forbids_estimating():
     answer(model, "How many years?", "Skills listed: Python")
     assert "do not estimate" in model.prompt
     assert "in the applicant's name" in model.prompt
+
+
+# ---------------------------------------------------------------------------
+# Where they live, and what follows from it.
+#
+# Half of what these forms ask turns on an address the profile already holds.
+# "Are you based in a US or equivalent timezone?" is settled by a line reading
+# Denton, Texas -- but only if that line is put in front of the model at all,
+# and for a long time it was not: the evidence was skills and jobs and nothing
+# else, so the model correctly refused a question anyone would call obvious.
+# ---------------------------------------------------------------------------
+
+
+LOCATED = Profile(
+    facts={
+        "city": "Denton",
+        "state": "Texas",
+        "country": "United States",
+        "work_authorization": "Yes",
+        "requires_sponsorship": "No",
+    }
+)
+
+
+def test_where_they_live_is_part_of_what_the_model_is_shown():
+    lines = ai.evidence_from(LOCATED)
+    assert "Lives in: Denton, Texas, United States" in lines
+
+
+def test_what_they_may_do_about_it_is_shown_too():
+    lines = ai.evidence_from(LOCATED)
+    assert "Legally authorised to work" in lines
+    assert "Requires visa sponsorship: No" in lines
+
+
+def test_a_profile_with_no_address_says_nothing_about_one():
+    assert "Lives in" not in ai.evidence_from(PROFILE)
+
+
+def test_common_knowledge_may_join_a_line_to_the_question():
+    """Texas being in the US is a fact about the world, not about them.
+
+    The prompt used to forbid inference outright, which stopped the model
+    inventing experience -- and also stopped it reading a US address as a US
+    address. Two different things had one rule between them.
+    """
+    model = FakeModel('{"option": null, "why": "-"}')
+    answer(model, "Do you live in the US?", "Lives in: Denton, Texas")
+    assert "ordinary knowledge about the world" in model.prompt
+    assert "may never supply a fact about them" in model.prompt
+
+
+def test_the_prompt_says_enthusiasm_is_not_the_question():
+    """"Are you excited to work from our NYC office?" asks whether they can.
+
+    Left to itself the model refused these, on the grounds that no line said
+    they were excited. Correct, and useless: it is the same question as "can
+    you work from NYC", which a stated willingness answers.
+    """
+    model = FakeModel('{"option": null, "why": "-"}')
+    answer(model, "Are you excited to work here?", "Willing to work onsite: Yes")
+    assert "Employers dress these questions up" in model.prompt
+    assert "not by picking the agreeable option" in model.prompt

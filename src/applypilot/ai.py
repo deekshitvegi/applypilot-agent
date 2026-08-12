@@ -214,6 +214,31 @@ def evidence_from(profile) -> str:
     required to say so rather than answer anyway.
     """
     lines: list[str] = []
+
+    # Where they are, and what they may do about it.
+    #
+    # This was missing, and it is the thing half these questions turn on. "Are
+    # you based in a US or equivalent timezone?" is settled by an address the
+    # profile already holds; without it the model had nothing and correctly
+    # refused, on a question the applicant would call obvious.
+    address = (profile.fact("city"), profile.fact("state"), profile.fact("country"))
+    where = ", ".join(part for part in address if part)
+    if where:
+        lines.append(f"Lives in: {where}")
+    for key, said in (
+        ("work_authorization", "Legally authorised to work in the country of the role"),
+        ("requires_sponsorship", "Requires visa sponsorship"),
+        ("citizenship", "Citizenship"),
+        ("willing_to_relocate", "Willing to relocate"),
+        ("work_arrangement", "Preferred work arrangement"),
+        ("notice_period", "Can start"),
+        ("willing_to_travel", "Willing to travel"),
+        ("highest_education", "Highest level of education"),
+    ):
+        value = profile.fact(key)
+        if value:
+            lines.append(f"{said}: {value}")
+
     if profile.skills:
         lines.append("Skills listed: " + ", ".join(profile.skills[:40]))
     for record in profile.education[:4]:
@@ -245,19 +270,41 @@ Everything known about the applicant, taken from what they wrote down:
 
 {evidence}
 
-Answer ONLY from those lines. They are the whole of what is known.
+Every fact about this applicant must come from those lines. They are the whole
+of what is known about them.
 
-If a line supports an answer, reply with a JSON object:
+You may use ordinary knowledge about the world to connect a line to the
+question -- that New York City is in the United States, that Texas is in the
+United States, that a master's degree is above a bachelor's. Common knowledge
+may join up what they wrote with what is being asked.
+Common knowledge may never supply a fact about them that they did not write.
+
+  - "Lives in: Denton, Texas" + asked whether they live in the US -> yes, \
+because Texas is in the US.
+  - "Willing to work onsite anywhere in the US" + asked about an office in \
+Boston -> yes, because Boston is in the US.
+  - "Role: Engineer (2022 to now)" + asked for five years of experience -> \
+NOT enough. Their years are a fact about them.
+  - Nothing about a tool + asked whether they know it -> NOT enough, however \
+usual it would be for this background.
+
+If a line settles it, reply with a JSON object:
   {{"option": "<exact text of one option above>", "quote": "<the line that \
 supports it, copied exactly>", "why": "<one short sentence>"}}
 
-If nothing in those lines settles it -- including anything about how many \
-years, which tools, where they live, or what they are willing to do -- reply \
+If nothing in those lines settles it, reply \
 {{"option": null, "why": "<what is missing>"}}.
 
-Do not infer, do not estimate, do not answer from what is usual for someone \
-with this background, and do not invent an option. A wrong answer here goes on \
-a real job application in the applicant's name.
+Employers dress these questions up. "Are you excited and able to work from our
+Boston office?", "Are you passionate about working onsite?" and "Can you work
+from our Boston office?" are the same question, and a stated willingness
+answers all three -- do not refuse because enthusiasm itself was not written
+down. But if the lines contradict what is being asked -- they will only work
+remotely, and the question is about being in an office -- say so by answering
+honestly, not by picking the agreeable option.
+
+Never guess: do not estimate, do not round up, and do not invent an option.
+A wrong answer here goes on a real job application in the applicant's name.
 """
 
 
