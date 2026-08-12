@@ -1373,3 +1373,31 @@ names, uploads and anything a page wrote for itself are never offered. Taking
 them all without asking is a Settings toggle, off by default: moving values off
 a page into a profile is not something to start doing quietly.
 → `test_keeping_page_answers.py`
+
+**153. "Saved" was said about answers that were not saved.** The service
+declines to remember some answers, for fourteen reasons that are each
+defensible: a voluntary question, a value that is not one of the control's own
+options, a bare number that is really an option id, a question with no visible
+label to key it by. Every one of them returned `learned: false` -- and the
+panel threw the reply away and flashed "Saved". Nothing was saved, the next
+scan found nothing saved, and the same question was asked again. Reported as
+"even after I answer a question it keeps asking me again and again", which is
+exactly what it does, for as long as anyone keeps answering.
+*Mechanism.* The reply is read. A refusal says so, with its reason, and goes in
+the journal below. The fact path throws on a value a fact cannot hold, and that
+is caught and reported the same way rather than passing for success.
+
+**154. A report was a photograph of a page, and the faults are sequences.** A
+question answered three times that keeps returning, an instruction typed into
+the chat that changed nothing, an answer taken and then not kept -- none of
+them can be seen in the state of a page at one moment. A snapshot of a looping
+question is identical to a snapshot of one being asked for the first time,
+which is why these went unreported however many bundles were sent.
+*Mechanism.* The panel keeps a journal: every question put to somebody and how
+many times, every answer with whether it landed on the page, every answer not
+kept and why, every chat instruction with what came of it, and every fill with
+what verified. It goes in the bundle, with the repeats counted out separately.
+A question on its second time round says so on screen as well.
+*And it is bounded.* Four hundred entries, oldest dropped, so a form left open
+all afternoon does not grow without end.
+→ `test_session_journal.py`

@@ -552,6 +552,10 @@ button.done { color: var(--good) !important; }
 .item-label { display: block; overflow-wrap: anywhere; }
 .item-value { display: block; margin-top: 1px; font-size: 12px; color: var(--text-soft); }
 
+/* A question that has come round again after being answered. Saying so is the
+   difference between a rule somebody can work with and a loop. */
+.warn-text { color: var(--warn); font-weight: 600; }
+
 /* An answer the page was already holding, offered to be kept. It sits inside a
    row that is itself pressable, so it has to read as its own target. */
 .item-label { flex: 1; min-width: 0; }

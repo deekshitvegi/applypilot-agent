@@ -89,7 +89,37 @@ const state = {
   stableTicks: 0,
   submissionPolicy: "confirm",
   primaryResumeId: "",
+  keepPageAnswers: false,
+  //: Everything that happened on this page, in order, with the time.
+  //:
+  //: A report used to be a photograph: the state of the page at the moment
+  //: somebody pressed Save. The failures worth reporting are not states. They
+  //: are sequences -- a question answered three times that keeps coming back,
+  //: an instruction typed into the chat that changed nothing, an answer taken
+  //: and then not kept. All of those look identical to a working page in a
+  //: photograph, which is why they went unreported for so long.
+  journal: [],
+  //: question (lowercased) -> how many times it has been put to somebody.
+  asked: new Map(),
 };
+
+//: Long enough to reconstruct a session; short enough not to grow without end
+//: on a form somebody leaves open all afternoon.
+const JOURNAL_LIMIT = 400;
+
+/**
+ * Write down one thing that happened, for the report.
+ *
+ * Kept separate from the Activity log, which is prose for reading as you go.
+ * This is a record with a shape, so a sequence can be counted afterwards
+ * rather than read.
+ */
+function note(kind, what, extra) {
+  state.journal.push(
+    Object.assign({ at: new Date().toISOString(), kind: kind, what: what }, extra || {})
+  );
+  if (state.journal.length > JOURNAL_LIMIT) state.journal.shift();
+}
 
 /* ------------------------------------------------------------------ plumbing */
 
@@ -519,6 +549,53 @@ function questions() {
   return (state.plan && state.plan.questions) || [];
 }
 
+/**
+ * How a question is counted across a session.
+ *
+ * Not by fingerprint: an application that rebuilds itself hands out new ones,
+ * and the whole point is to notice the same question coming round again after
+ * it was answered. Its own words are what stays the same.
+ */
+function askKey(question) {
+  return (question.label || question.fingerprint || "").trim().toLowerCase();
+}
+
+function countAsk(question) {
+  const key = askKey(question);
+  if (!key) return 1;
+  const seen = (state.asked.get(key) || 0) + 1;
+  state.asked.set(key, seen);
+  note("asked", question.label || "", {
+    times: seen,
+    reason: question.reason || "",
+    required: Boolean(question.required),
+  });
+  return seen;
+}
+
+/**
+ * Say when an answer was taken but not kept.
+ *
+ * The service declines to remember some answers, for fourteen reasons that are
+ * each defensible -- a voluntary question, a value that is not one of the
+ * control's own options, a number that is really an option id. All of them
+ * were silent. The panel said "Saved", nothing was saved, and the next scan
+ * asked the same question again: the exact loop somebody hits when they answer
+ * a question three times and it keeps coming back.
+ *
+ * A snapshot report cannot show this, so it is written down as it happens.
+ */
+function noteNotRemembered(question, reason) {
+  const why = reason || "no reason given";
+  note("not_remembered", question.label || "", { reason: why });
+  log(`answered but not remembered -- ${question.label}: ${why}`);
+  showHint(
+    `Filled in, but not remembered for next time: ${why}. ` +
+      "It will be asked again on the next form.",
+    false
+  );
+}
+
 function currentQuestion() {
   return questions()[state.questionIndex] || null;
 }
@@ -568,9 +645,18 @@ async function renderQuestion() {
       ? `${questions().length - state.questionIndex - 1} more`
       : "last one";
   el("question-label").textContent = question.label;
-  el("question-reason").textContent = [question.section, question.reason]
+
+  // How many times this exact question has been put to somebody in this
+  // session. A report is a photograph of one moment: asked once and asked six
+  // times look identical in it, and being asked six times is the complaint.
+  // Counting here is the only place that can tell them apart.
+  const asked = countAsk(question);
+  const again =
+    asked > 1 ? `asked ${asked} times now -- answering it is not sticking` : "";
+  el("question-reason").textContent = [question.section, question.reason, again]
     .filter(Boolean)
     .join(" · ");
+  el("question-reason").classList.toggle("warn-text", asked > 1);
 
   const host = el("question-input");
   host.innerHTML = "";
@@ -834,6 +920,12 @@ async function answerQuestionInner(value, button, restoreLabel) {
         if (result && result.outcome === "failed") break;
       }
 
+      note("answered", question.label || "", {
+        value: value,
+        outcome: (result && result.outcome) || "none",
+        evidence: (result && result.evidence) || "",
+      });
+
       if (result && result.outcome === "failed") {
         // Do not move on from something that did not go in.
         showHint("That did not go onto the page: " + result.evidence, false);
@@ -842,13 +934,26 @@ async function answerQuestionInner(value, button, restoreLabel) {
 
       if (question.fact_key) {
         const field = fieldFor(question.fingerprint);
-        await post("/profile/fact", {
-          fact_key: question.fact_key,
-          value: value,
-          entry: (field && field.group_index) || 0,
-        });
+        try {
+          await post("/profile/fact", {
+            fact_key: question.fact_key,
+            value: value,
+            entry: (field && field.group_index) || 0,
+          });
+        } catch (err) {
+          // A fact that will not hold this value refuses it. Silently, until
+          // now: the answer went on the page, nothing was kept, and the next
+          // form asked again.
+          noteNotRemembered(question, String((err && err.message) || err));
+        }
       } else {
-        await post("/learn", {
+        // The service can decline to remember this, and used to do it in
+        // silence: fourteen reasons, all sound, none of which ever reached the
+        // panel. It flashed "Saved", the next scan found nothing saved, and
+        // asked the same question again -- and again, for as long as anyone
+        // kept answering it. Saying so is the difference between a rule and a
+        // loop.
+        const kept = await post("/learn", {
           field: fieldFor(question.fingerprint) || {
             fingerprint: question.fingerprint,
             label: question.label,
@@ -857,6 +962,9 @@ async function answerQuestionInner(value, button, restoreLabel) {
           host: new URL(state.observation.url).host,
           page_labels: (state.observation.fields || []).map((f) => f.label),
         });
+        if (kept && kept.learned === false) {
+          noteNotRemembered(question, kept.reason || "");
+        }
       }
       flashDone(button, "Saved", restoreLabel);
 
@@ -1035,6 +1143,10 @@ async function fillPageInner() {
   progress(1, 3);
   const results = await applyAll(actions);
   progress(actions.length, actions.length);
+  note("filled", `${actions.length} field(s)`, {
+    verified: results.filter((r) => r && r.outcome === "verified").length,
+    failed: results.filter((r) => r && r.outcome === "failed").length,
+  });
 
   // A choice can bring a whole field to life: State holds nothing but "Choose"
   // until a Country is picked, and no amount of retrying State first will get
@@ -1682,6 +1794,21 @@ async function saveReport() {
       results: state.results || [],
       checklist: state.checklist || [],
       activity: readActivity(),
+      // Everything that happened here, in order. The state above says what the
+      // page looks like now; this says what was done to get there -- every
+      // question put to somebody and how many times, every answer and whether
+      // it landed, every answer taken but not kept, and every instruction
+      // typed into the chat with what came of it.
+      //
+      // The failures worth reporting are sequences, not states. A question
+      // answered three times that keeps returning looks, in a photograph,
+      // exactly like a question being asked for the first time.
+      journal: state.journal || [],
+      // The same thing counted, so it does not have to be counted by hand.
+      asked_more_than_once: Array.from(state.asked.entries())
+        .filter(([, times]) => times > 1)
+        .sort((a, b) => b[1] - a[1])
+        .map(([question, times]) => ({ question: question, times: times })),
     };
 
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -1837,7 +1964,10 @@ el("question-save").addEventListener("click", () => {
 
 el("question-skip").addEventListener("click", () => {
   const question = currentQuestion();
-  if (question) say(`Left "${question.label}" blank.`);
+  if (question) {
+    say(`Left "${question.label}" blank.`);
+    note("skipped", question.label || "", { reason: question.reason || "" });
+  }
   answerQuestion("", el("question-skip"), "Skip");
 });
 
@@ -1887,10 +2017,24 @@ el("chat-form").addEventListener("submit", async (event) => {
       pending_fingerprint: (currentQuestion() || {}).fingerprint || "",
     });
     say(outcome.message);
+    // What was asked for, and what came of it. An instruction that was
+    // understood but changed nothing on the page is the hardest kind of
+    // failure to report afterwards, because the panel answered pleasantly and
+    // the page simply stayed as it was.
+    note("chat", text, {
+      kind: outcome.kind || "",
+      reply: outcome.message || "",
+      fact_key: outcome.fact_key || "",
+      value: outcome.value || "",
+    });
 
     if (outcome.kind === "action" && outcome.action) {
       state.busy = false;
-      await applyAndReport(outcome.action);
+      const done = await applyAndReport(outcome.action);
+      note("chat_result", text, {
+        outcome: (done && done.outcome) || "none",
+        evidence: (done && done.evidence) || "",
+      });
       await planPage();
     } else if (outcome.kind === "choices") {
       renderChoiceCard(outcome);

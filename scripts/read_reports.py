@@ -79,6 +79,30 @@ def summarise(path: Path, report: dict[str, Any], show_fields: bool) -> Counter:
         # Fill was pressed, which reads as total failure and is not one.
         print("    no actions were carried out (saved before filling?)")
 
+    # A question that kept coming back. This is the complaint that a snapshot
+    # cannot carry: asked once and asked six times look identical in one.
+    for loop in report.get("asked_more_than_once") or []:
+        print(f"      LOOP  asked {loop.get('times')}x: {str(loop.get('question'))[:76]}")
+
+    # An answer that was taken and then not kept -- which is what causes the
+    # loop above, and is invisible from the page's state alone.
+    for entry in report.get("journal") or []:
+        if entry.get("kind") == "not_remembered":
+            print(
+                f"      NOT KEPT  {str(entry.get('what'))[:44]:46}"
+                f" {str(entry.get('reason'))[:58]}"
+            )
+        elif entry.get("kind") == "answered" and entry.get("outcome") == "failed":
+            print(
+                f"      DID NOT LAND  {str(entry.get('what'))[:40]:42}"
+                f" {str(entry.get('evidence'))[:54]}"
+            )
+        elif entry.get("kind") == "chat_result" and entry.get("outcome") != "verified":
+            print(
+                f"      CHAT DID NOTHING  \"{str(entry.get('what'))[:38]}\""
+                f" -> {str(entry.get('outcome'))[:40]}"
+            )
+
     trouble: Counter = Counter()
     for item in checklist:
         if item.get("state") not in {"needs_you", "failed"}:
@@ -87,8 +111,8 @@ def summarise(path: Path, report: dict[str, Any], show_fields: bool) -> Counter:
         trouble[detail[:70]] += 1
         if show_fields:
             print(f"      [{item.get('state')}] {str(item.get('label'))[:44]:46} {detail[:60]}")
-    for note in report.get("activity") or []:
-        print(f"      note: {str(note)[:110]}")
+    for line in report.get("activity") or []:
+        print(f"      note: {str(line)[:110]}")
     return trouble
 
 
