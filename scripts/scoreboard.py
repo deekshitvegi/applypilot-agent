@@ -172,6 +172,7 @@ def record(note: str) -> int:
     print(f"  {QUESTIONS.relative_to(ROOT)}")
 
     _show_kinds(question_rows)
+    _write_tracker()
     return 0
 
 
@@ -191,6 +192,67 @@ def _append(path: Path, columns: list[str], rows: list[dict]) -> None:
         if fresh:
             writer.writeheader()
         writer.writerows(rows)
+
+
+TRACKER = CORPUS / "tracker.csv"
+
+TRACKER_COLUMNS = [
+    "ats", "company", "title", "url",
+    "tries", "first_try_percent", "latest_percent", "best_percent",
+    "fields", "latest_filled", "latest_asked", "latest_blank", "status",
+]
+
+
+def _write_tracker() -> None:
+    """One row per application, sorted, with every try summarised.
+
+    The scoreboard is a log and stays append-only; this is the readable view
+    of it -- how many tries each application took and where it stands now. It
+    is derived, so it is rewritten whole every time.
+    """
+    if not SCOREBOARD.exists():
+        return
+    with SCOREBOARD.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    by_url: dict[str, list[dict]] = {}
+    for row in rows:
+        by_url.setdefault(row["url"], []).append(row)
+
+    out = []
+    for url, tries in by_url.items():
+        tries.sort(key=lambda r: int(r["run"]))
+        last = tries[-1]
+        pcts = [int(r["percent_filled"] or 0) for r in tries]
+        latest_pct = pcts[-1]
+        fields = int(last["fields"] or 0)
+        filled = int(last["filled"] or 0)
+        asked = int(last["asked"] or 0)
+        if fields and filled == fields:
+            status = "everything filled"
+        elif asked == 0 and fields:
+            status = "filled all it should; rest left blank on purpose"
+        else:
+            status = f"{asked} question(s) still need an answer"
+        out.append(
+            {
+                "ats": last["ats"], "company": last["company"],
+                "title": last["title"], "url": url,
+                "tries": len(tries),
+                "first_try_percent": pcts[0], "latest_percent": latest_pct,
+                "best_percent": max(pcts),
+                "fields": fields, "latest_filled": filled,
+                "latest_asked": asked, "latest_blank": int(last["left_blank"] or 0),
+                "status": status,
+            }
+        )
+
+    out.sort(key=lambda r: (r["ats"], r["company"], -int(r["latest_percent"])))
+    with TRACKER.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=TRACKER_COLUMNS)
+        writer.writeheader()
+        writer.writerows(out)
+    print(f"  {TRACKER.relative_to(ROOT)}  (sorted, one row per application)")
 
 
 def ask_model(limit: int, pause: float) -> int:
@@ -309,6 +371,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--note", default="", help="what changed since the last run")
     parser.add_argument("--compare", action="store_true", help="show every run so far")
+    parser.add_argument("--sheet", action="store_true",
+                        help="rebuild the sorted per-application tracker and stop")
     parser.add_argument(
         "--ask-model",
         action="store_true",
@@ -318,6 +382,9 @@ def main() -> int:
     parser.add_argument("--pause", type=float, default=4.0,
                         help="seconds between requests; the free tier is easily annoyed")
     args = parser.parse_args()
+    if args.sheet:
+        _write_tracker()
+        return 0
     if args.compare:
         return compare()
     if args.ask_model:

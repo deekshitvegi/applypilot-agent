@@ -41,3 +41,5 @@ corpus/forms/
 corpus/targets.json
 corpus/scoreboard.csv
 corpus/questions.csv
+corpus/linkedin_sample.csv
+corpus/tracker.csv
