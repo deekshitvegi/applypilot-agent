@@ -1606,16 +1606,25 @@ async function saveReport() {
 
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     const host = (report.page.url.split("/")[2] || "page").replace(/[^a-z0-9.-]/gi, "");
-    download(`applypilot-report-${host}-${stamp}.json`, JSON.stringify(report, null, 1));
-    if (picture) download(`applypilot-report-${host}-${stamp}.jpg`, picture, true);
+    const entries = [
+      {
+        name: "report.json",
+        bytes: new TextEncoder().encode(JSON.stringify(report, null, 1)),
+      },
+    ];
+    const shot = bytesOfDataUrl(picture);
+    if (shot) entries.push({ name: "page.jpg", bytes: shot });
+
+    download(`applypilot-${host}-${stamp}.zip`, zipOf(entries));
 
     const unanswered = report.asked.length + report.skipped.length;
     say(
-      `Saved a report: ${report.fields.length} field(s) seen, ` +
-        `${report.planned.length} planned, ${unanswered} not answered.`,
+      `Saved one zip: ${report.fields.length} field(s) seen, ` +
+        `${report.planned.length} planned, ${unanswered} not answered` +
+        (shot ? ", picture included." : " (no picture -- the tab would not capture)."),
       "warn"
     );
-    activity("Report saved", "Check your downloads and send both files.");
+    activity("Report saved", "One .zip in your downloads. Send that.");
   } catch (err) {
     say("Could not save the report: " + err.message, "bad");
   } finally {
@@ -1632,15 +1641,102 @@ function readActivity() {
 }
 
 /** Hand a file to the browser's own download. Nothing leaves the machine. */
-function download(filename, contents, isDataUrl) {
-  const href = isDataUrl
-    ? contents
-    : URL.createObjectURL(new Blob([contents], { type: "application/json" }));
+function download(filename, blob) {
+  const href = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = href;
   link.download = filename;
   link.click();
-  if (!isDataUrl) setTimeout(() => URL.revokeObjectURL(href), 10000);
+  setTimeout(() => URL.revokeObjectURL(href), 10000);
+}
+
+/*
+ * A zip file, written by hand.
+ *
+ * One file to find, one file to send. Two downloads meant remembering to
+ * attach both, and a report arriving without its picture is a report about a
+ * page nobody can see.
+ *
+ * Entries are stored rather than compressed: a few hundred kilobytes of JSON
+ * and one JPEG do not need deflating, and doing it by hand keeps this
+ * dependency-free -- nothing is fetched to build it.
+ */
+const ZIP_SIGNATURE = { local: 0x04034b50, central: 0x02014b50, end: 0x06054b50 };
+
+function crc32(bytes) {
+  let table = crc32.table;
+  if (!table) {
+    table = crc32.table = new Uint32Array(256);
+    for (let i = 0; i < 256; i += 1) {
+      let value = i;
+      for (let bit = 0; bit < 8; bit += 1) {
+        value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+      }
+      table[i] = value >>> 0;
+    }
+  }
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function zipOf(entries) {
+  const encoder = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+
+  const write = (view, values) => {
+    let at = 0;
+    for (const [size, value] of values) {
+      if (size === 2) view.setUint16(at, value, true);
+      else view.setUint32(at, value, true);
+      at += size;
+    }
+  };
+
+  for (const entry of entries) {
+    const name = encoder.encode(entry.name);
+    const body = entry.bytes;
+    const sum = crc32(body);
+
+    const header = new Uint8Array(30);
+    write(new DataView(header.buffer), [
+      [4, ZIP_SIGNATURE.local], [2, 20], [2, 0], [2, 0], [2, 0], [2, 0],
+      [4, sum], [4, body.length], [4, body.length],
+      [2, name.length], [2, 0],
+    ]);
+    parts.push(header, name, body);
+
+    const record = new Uint8Array(46);
+    write(new DataView(record.buffer), [
+      [4, ZIP_SIGNATURE.central], [2, 20], [2, 20], [2, 0], [2, 0], [2, 0], [2, 0],
+      [4, sum], [4, body.length], [4, body.length],
+      [2, name.length], [2, 0], [2, 0], [2, 0], [2, 0], [4, 0], [4, offset],
+    ]);
+    central.push(record, name);
+    offset += header.length + name.length + body.length;
+  }
+
+  const directory = central.reduce((total, part) => total + part.length, 0);
+  const end = new Uint8Array(22);
+  write(new DataView(end.buffer), [
+    [4, ZIP_SIGNATURE.end], [2, 0], [2, 0],
+    [2, entries.length], [2, entries.length],
+    [4, directory], [4, offset], [2, 0],
+  ]);
+
+  return new Blob([...parts, ...central, end], { type: "application/zip" });
+}
+
+/** The bytes behind a "data:image/jpeg;base64,..." string. */
+function bytesOfDataUrl(dataUrl) {
+  const base64 = String(dataUrl || "").split(",")[1] || "";
+  if (!base64) return null;
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
 }
 
 el("report").addEventListener("click", saveReport);
