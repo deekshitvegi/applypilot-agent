@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from datetime import date
 
 import httpx
 
@@ -254,7 +255,18 @@ def evidence_from(profile) -> str:
             cleaned = bullet.strip().lstrip("-*• \t")
             if cleaned:
                 lines.append(f"  - {cleaned}")
-    return "\n".join(lines) or "(nothing recorded)"
+    if not lines:
+        return "(nothing recorded)"
+
+    # What "now" means, at the top, and only where there is something for it to
+    # date. Every role reads "Jun 2025 to now", and a model has no way to date
+    # "now": asked how many years of experience someone had, it answered "0-1"
+    # for somebody with two years of it -- not a guess it should have made, and
+    # not one it could have got right either. The date is a fact about the
+    # world, like a city sitting in a country, and it is what the arithmetic
+    # needs. It is not evidence about the applicant, so an empty profile is
+    # still empty.
+    return "\n".join([f"Today's date: {date.today():%d %B %Y}", *lines])
 
 
 _FROM_EVIDENCE_PROMPT = """\
@@ -308,6 +320,100 @@ A wrong answer here goes on a real job application in the applicant's name.
 """
 
 
+#: Words that carry no subject. A quote sharing only these with a question has
+#: not been shown to be about it.
+_EMPTY_WORDS = frozenset(
+    {
+        "the", "and", "for", "you", "your", "are", "have", "has", "had", "with",
+        "this", "that", "there", "any", "all", "our", "their", "his", "her",
+        "will", "would", "can", "could", "should", "may", "might", "must",
+        "was", "were", "been", "being", "does", "did", "doing", "not", "but",
+        "from", "into", "onto", "than", "then", "when", "where", "which",
+        "who", "whom", "whose", "what", "why", "how", "about", "above",
+        "other", "others", "such", "some", "most", "more", "very", "please",
+        "select", "choose", "answer", "question", "yes", "role", "roles",
+        "work", "working", "worked", "job", "jobs", "position", "positions",
+        "experience", "experiences", "years", "year", "level", "using", "use",
+        "used", "able", "willing", "currently", "current", "now", "future",
+        "applicant", "candidate", "company", "team", "office", "based",
+    }
+)
+
+
+def _subjects(text: str) -> set[str]:
+    """The words in *text* that name something in particular.
+
+    Four characters and up. Three lets "per" through, which is a substring of
+    "experience" and matched a question about days per week to a line about
+    years of it.
+    """
+    return {
+        word
+        for word in re.findall(r"[a-z0-9+#.]{4,}", (text or "").lower())
+        if word not in _EMPTY_WORDS
+    }
+
+
+#: Endings that make the same subject a different word. A plain prefix rule is
+#: not enough: it makes "timezone" the same subject as "time", which appears in
+#: half the job descriptions ever written, and a question about a timezone then
+#: has to be answered by a line about something else entirely.
+_ENDINGS = frozenset(
+    {
+        "s", "es", "d", "ed", "ing", "ion", "ions", "ship", "ships", "ment",
+        "ments", "al", "ance", "ence", "ity", "ies", "er", "ers", "or", "ors",
+    }
+)
+
+
+def _same_subject(word: str, others: set[str]) -> bool:
+    """True when *word* names the same thing as one of *others*.
+
+    "sponsor" and "sponsorship" are one subject; so are "require" and
+    "requires". A question that says sponsor against a line that says
+    sponsorship is the commonest shape there is, and refusing it would throw
+    away most of what this check is meant to let through.
+    """
+    for other in others:
+        if word == other:
+            return True
+        longer, shorter = (other, word) if len(other) > len(word) else (word, other)
+        if longer.startswith(shorter) and longer[len(shorter) :] in _ENDINGS:
+            return True
+    return False
+
+
+def _quote_bears_on(question: str, quote: str, evidence: str) -> bool:
+    """False when the quoted line says nothing about what was asked.
+
+    A quote used to be checked for existing and nothing more, which is a weaker
+    rule than it reads as. Asked whether the applicant had built and deployed
+    production applications in React and TypeScript, the model answered yes and
+    quoted a line reading "Role: Software Developer Intern at Josh Innovations
+    (Jun 2021 to Oct 2021)". Real line, real dates, no React in it -- a
+    qualification claimed on a required question with nothing behind it.
+
+    The test is deliberately narrow. The question's own subjects are found, and
+    only those that appear somewhere in the evidence are used: a question about
+    a timezone, whose words appear nowhere in a profile, cannot be settled this
+    way and is left to the rules above. But when the evidence does talk about
+    what the question names, the quoted line has to be one of the places it
+    does.
+    """
+    asked = _subjects(question)
+    if not asked:
+        return True
+    in_evidence = _subjects(evidence)
+    known = {word for word in asked if _same_subject(word, in_evidence)}
+    if not known:
+        # Nothing the question names is written down anywhere. Whatever settled
+        # this, it was not a subject match, and inventing one here would refuse
+        # sound answers about where someone lives.
+        return True
+    quoted = _subjects(quote)
+    return any(_same_subject(word, quoted) for word in known)
+
+
 async def answer_from_evidence(
     model: Model, question: str, options: list[Option], evidence: str
 ) -> tuple[Option | None, str]:
@@ -343,4 +449,8 @@ async def answer_from_evidence(
     quote = str(parsed.get("quote") or "").strip()
     if not quote or normalise(quote)[:60] not in normalise(evidence):
         return None, "the model could not point at anything you wrote that says so"
+    if not _quote_bears_on(question, quote, evidence):
+        return None, (
+            "the line the model quoted does not mention what the question asks about"
+        )
     return chosen, f"from your own history: {quote[:120]}"

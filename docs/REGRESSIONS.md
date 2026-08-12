@@ -1401,3 +1401,30 @@ A question on its second time round says so on screen as well.
 *And it is bounded.* Four hundred entries, oldest dropped, so a form left open
 all afternoon does not grow without end.
 → `test_session_journal.py`
+
+**155. A quote can be real and still say nothing.** The grounding rule was that
+the model must quote the line it read, and the quote is checked against the
+evidence. Asked -- required, on a real application -- whether the applicant had
+built and deployed production-level applications using React and TypeScript,
+the model answered Yes and quoted "Role: Software Developer Intern at Josh
+Innovations (Jun 2021 to Oct 2021)". A real line, real dates, no React in it.
+The check confirmed the quote existed. It never confirmed the quote was about
+the question, so a qualification was claimed with nothing behind it.
+*Mechanism.* The question's own subjects are found, and those that appear
+anywhere in the evidence must appear in the quoted line too. Narrow on purpose:
+a question about a timezone names nothing any profile contains, so it cannot be
+settled this way and is left to the rules above -- which is what keeps "Are you
+based in a US timezone?" answerable from an address.
+*Endings, not prefixes.* "sponsor" and "sponsorship" are one subject; "require"
+and "requires" are one subject; "timezone" and "time" are not, and a plain
+prefix rule made them one -- "time" appears in half of all job descriptions.
+
+**156. The model could not tell what year it was.** Every role on file reads
+"Jun 2025 to now". Asked how many years of relevant experience the applicant
+had, against options 7+ / 5-7 / 2-4 / 0-1, it answered **0-1** for somebody
+with about two years of it. Not a guess it should have made, and not one it
+could have got right: nothing in front of it dated "now".
+*Mechanism.* Today's date leads the evidence. It is a fact about the world, not
+about the applicant, so it appears only where there is a history for it to
+date -- an empty profile still reports nothing recorded.
+→ `test_answer_from_evidence.py::test_a_quote_that_does_not_mention_what_was_asked_is_refused`

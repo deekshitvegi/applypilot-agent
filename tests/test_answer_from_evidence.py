@@ -217,6 +217,96 @@ def test_common_knowledge_may_join_a_line_to_the_question():
     assert "may never supply a fact about them" in model.prompt
 
 
+# ---------------------------------------------------------------------------
+# A quote that is real but says nothing about the question.
+#
+# Checking that a quote exists is a weaker rule than it reads as. Asked whether
+# the applicant had built and deployed production applications in React and
+# TypeScript -- required, on a real job application -- the model answered yes
+# and quoted "Role: Software Developer Intern at Josh Innovations (Jun 2021 to
+# Oct 2021)". A real line, real dates, and no React anywhere in it.
+# ---------------------------------------------------------------------------
+
+
+REACT_QUESTION = (
+    "Have you built and deployed production-level applications using React, "
+    "TypeScript (or JavaScript), and other modern front-end technologies?"
+)
+WITH_REACT = "Skills listed: Python, JavaScript, TypeScript, React, Node.js"
+
+
+def test_a_quote_that_does_not_mention_what_was_asked_is_refused():
+    model = FakeModel(
+        '{"option": "Yes", "quote": "Role: Software Developer Intern at Josh '
+        'Innovations (Jun 2021 to Oct 2021)", "why": "they have engineering work"}'
+    )
+    evidence = WITH_REACT + "\nRole: Software Developer Intern at Josh Innovations (Jun 2021 to Oct 2021)"
+    chosen, why = answer(model, REACT_QUESTION, evidence)
+    assert chosen is None
+    assert "does not mention what the question asks about" in why
+
+
+def test_the_line_that_does_mention_it_is_accepted():
+    model = FakeModel(f'{{"option": "Yes", "quote": "{WITH_REACT}", "why": "listed"}}')
+    chosen, _ = answer(model, REACT_QUESTION, WITH_REACT)
+    assert chosen is not None and chosen.label == "Yes"
+
+
+def test_a_question_about_nothing_written_down_is_left_to_the_other_rules():
+    """A timezone appears in no profile, so subjects cannot settle it.
+
+    Applying the check anyway would refuse "Are you based in a US timezone?"
+    against an address -- which is the answer, and the reason the check only
+    fires when the evidence does talk about what the question names.
+    """
+    lives = "Lives in: Denton, Texas, United States"
+    model = FakeModel(f'{{"option": "Yes", "quote": "{lives}", "why": "Texas is in the US"}}')
+    chosen, _ = answer(model, "Are you based in a US or equivalent timezone?", lives)
+    assert chosen is not None and chosen.label == "Yes"
+
+
+def test_a_word_and_its_ending_are_one_subject():
+    """"sponsor" in the question, "sponsorship" in the profile."""
+    line = "Requires visa sponsorship: No"
+    model = FakeModel(f'{{"option": "No", "quote": "{line}", "why": "no sponsorship"}}')
+    chosen, _ = answer(
+        model, "Will you now or in the future require Notion to sponsor you?", line
+    )
+    assert chosen is not None and chosen.label == "No"
+
+
+def test_a_shared_prefix_that_is_not_an_ending_is_not_one_subject():
+    """"timezone" is not "time", which appears in half of all job descriptions.
+
+    A plain prefix rule made them the same subject, and a question about a
+    timezone then had to be answered by a line about something else.
+    """
+    from applypilot.ai import _same_subject
+
+    assert _same_subject("sponsor", {"sponsorship"})
+    assert _same_subject("require", {"requires"})
+    assert not _same_subject("timezone", {"time"})
+
+
+# ---------------------------------------------------------------------------
+# What "now" means
+# ---------------------------------------------------------------------------
+
+
+def test_the_evidence_says_what_todays_date_is():
+    """Every role reads "to now", and a model cannot date "now".
+
+    Asked how many years of experience someone had, it answered "0-1" for
+    somebody with two years of it -- not a guess it should have made, and not
+    one it could have got right either.
+    """
+    from datetime import date
+
+    lines = ai.evidence_from(PROFILE)
+    assert "Today's date:" in lines
+    assert str(date.today().year) in lines
+
+
 def test_the_prompt_says_enthusiasm_is_not_the_question():
     """"Are you excited to work from our NYC office?" asks whether they can.
 
