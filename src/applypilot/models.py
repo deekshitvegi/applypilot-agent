@@ -293,6 +293,14 @@ class ChecklistItem(BaseModel):
     value: str = ""
     detail: str = ""
     required: bool = False
+    #: An answer this page is holding that nothing here put there, offered back
+    #: to be kept. Set only where the profile has nothing of its own, so a row
+    #: that says this is a row whose answer would otherwise be asked for again
+    #: on the next form.
+    learnable: str = ""
+    #: Where it would be kept, when it is a fact rather than a page-specific
+    #: answer. Empty means it is remembered against the question's own words.
+    learn_key: str = ""
 
 
 class EducationRecord(BaseModel):
@@ -329,6 +337,13 @@ class Profile(BaseModel):
     #: Continue each time. Off by default; pressing final Submit is governed
     #: separately by submission_policy and is never implied by this.
     auto_advance: bool = False
+    #: Keep answers a page was already holding, without offering them first.
+    #:
+    #: Off by default. Every offered answer can be kept one at a time from its
+    #: own row; this is for people who have decided they want all of them, and
+    #: it is a toggle because moving values off a page into a profile is not
+    #: something to start doing quietly.
+    keep_page_answers: bool = False
     #: Tick the agreements an application requires -- terms, arbitration,
     #: privacy consent -- rather than stopping to ask each time.
     #:

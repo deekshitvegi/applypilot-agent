@@ -105,6 +105,9 @@ class Plan:
     skipped: list[tuple[FieldObservation, str]] = field(default_factory=list)
     needs_options: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    #: fingerprint -> (value the page already holds, where it would be kept).
+    #: Answers typed by hand, which used to be respected and then forgotten.
+    learnable: dict[str, tuple[str, str]] = field(default_factory=dict)
 
 
 def _action_for(field_obs: FieldObservation, answer: Answer) -> PlannedAction:
@@ -246,6 +249,11 @@ def plan_page(
             result.questions.append(question)
             continue
         result.skipped.append((observed, resolution.skipped))
+        if resolution.learnable:
+            result.learnable[observed.fingerprint] = (
+                resolution.learnable,
+                resolution.fact_key,
+            )
 
     if observation.captcha == "challenge":
         result.notes.append(
@@ -332,6 +340,7 @@ def build_checklist(
                 )
             )
         elif observed.fingerprint in skipped:
+            learn_value, learn_key = plan.learnable.get(observed.fingerprint, ("", ""))
             items.append(
                 ChecklistItem(
                     fingerprint=observed.fingerprint,
@@ -340,6 +349,8 @@ def build_checklist(
                     state="skipped",
                     detail=skipped[observed.fingerprint],
                     required=observed.required,
+                    learnable=learn_value,
+                    learn_key=learn_key,
                 )
             )
         elif observed.fingerprint in answers:

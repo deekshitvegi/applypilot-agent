@@ -189,6 +189,7 @@ async function refresh() {
   el("demographics").checked = settings.answer_demographics;
   el("accept-agreements").checked = settings.accept_agreements;
   el("auto-attach").checked = settings.auto_attach_resume !== false;
+  el("keep-page-answers").checked = Boolean(settings.keep_page_answers);
 
   profile = await service("/profile");
   renderFacts();
@@ -298,6 +299,7 @@ el("save-behaviour").addEventListener("click", async () => {
     submission_policy: el("submission").value,
     prefer_easy_apply: el("easy-apply").checked,
     auto_attach_resume: el("auto-attach").checked,
+    keep_page_answers: el("keep-page-answers").checked,
     answer_demographics: el("demographics").checked,
     accept_agreements: el("accept-agreements").checked,
   });

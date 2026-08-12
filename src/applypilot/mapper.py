@@ -36,6 +36,7 @@ from .facts import (
     TOPIC_OWNERS,
     FactScope,
     FactSpec,
+    accepts,
     alias_variants,
 )
 from .matching import best_option
@@ -598,6 +599,51 @@ class Resolution:
     question: PendingQuestion | None = None
     skipped: str = ""
     fact_key: str = ""
+    #: An answer the page is already holding that nothing here put there, and
+    #: that the profile has no answer of its own for. Typing a county into a
+    #: form by hand used to be respected and then forgotten, so the next form
+    #: asked again -- and the one after that. The value is offered back rather
+    #: than taken: it is theirs, and a form can hold a value for reasons that
+    #: have nothing to do with them.
+    learnable: str = ""
+
+
+def _worth_learning(
+    field: FieldObservation,
+    spec: FactSpec | None,
+    profile: Profile,
+    page_has_password: bool,
+    learned: dict[str, str],
+) -> str:
+    """The value on the page worth offering to remember, or "".
+
+    Empty unless the page is holding something, the profile has nothing that
+    already covers it, and the field is one whose answer means the same thing
+    on the next form. A password is never learned; nor is anything a page fills
+    in for itself.
+    """
+    if not _already_answered(field):
+        return ""
+    if is_credential(field, page_has_password) or field.control is ControlKind.FILE:
+        return ""
+    value = (field.value or "").strip()
+    if not value or looks_like_placeholder(value):
+        return ""
+    # Read back from a control the page owns and populates itself -- a total, a
+    # generated reference, today's date already written in.
+    if field.readonly or field.disabled:
+        return ""
+    if spec is not None:
+        if not accepts(spec, value):
+            return ""
+        if (profile.fact(spec.key) or "").strip().lower() == value.lower():
+            return ""
+    # Already remembered against this question's own wording. Offering it again
+    # every time the form is opened is how a useful prompt becomes furniture.
+    remembered = learned.get(normalise(field.display_label or field.attr_label), "")
+    if remembered.strip().lower() == value.lower():
+        return ""
+    return value
 
 
 #: A box a form asks you to tick to agree to something. Matched on wording,
@@ -909,13 +955,26 @@ def resolve_field(
         # required and not answered yet" on screen while the login sat in the
         # box, which reads as the tool being unable to see the page at all.
         if _already_answered(field):
-            return Resolution(field=field, skipped="already answered on the page")
+            return Resolution(
+                field=field,
+                skipped="already answered on the page",
+                fact_key=spec.key if spec else "",
+                learnable=_worth_learning(field, spec, profile, page_has_password, learned),
+            )
         return Resolution(
             field=field,
             question=_ask(
                 field, spec.key if spec else "", "required and not answered yet", profile
             ),
             fact_key=spec.key if spec else "",
+        )
+
+    if _already_answered(field):
+        return Resolution(
+            field=field,
+            skipped="already answered on the page",
+            fact_key=spec.key if spec else "",
+            learnable=_worth_learning(field, spec, profile, page_has_password, learned),
         )
 
     if is_supplementary(field, spec):

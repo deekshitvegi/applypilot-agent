@@ -1346,3 +1346,30 @@ remotely answers No to an office question, rather than the prompt reaching for
 the pleasant option.
 → `test_answer_from_evidence.py::test_common_knowledge_may_join_a_line_to_the_question`,
 `test_where_they_live_is_part_of_what_the_model_is_shown`
+
+**151. A yes-or-no answer rotted four facts, permanently.** A profile held
+`referral_source = "Yes"`, `citizenship = "Yes"`, a degree of "Yes" and a
+preferred name of "No". Each got there the same way: a yes-or-no question
+matched a fact that means something open, and the answer was written into it.
+Nothing looked wrong on the page that saved it. Afterwards "How Did You Hear
+About Us?" was answered "Yes" against eleven options -- Colleges & Universities,
+Company Website, Job Board -- on every form, because a saved answer is trusted
+ahead of asking. Found in a report bundle from a real Toyota application.
+*Mechanism.* A bare yes or no may only be saved where a yes or no is what the
+fact means, which its own spec already says: either it lists them as choices,
+or its prompt is phrased as that question. "Are you Hispanic or Latino?" still
+takes "No"; "Citizenship status" does not. Enforced at both write paths, and
+again before a value is offered, so no button appears that would only error.
+
+**152. An answer typed by hand was respected and then forgotten.** A required
+field the page already held a value for was skipped, correctly -- and that was
+all. The county someone typed themselves was thrown away, so the next form
+asked for it, and the one after that. A tool that learns is one that stops
+asking.
+*Mechanism.* A skipped field carries what the page was holding, when the
+profile has nothing of its own for it and nothing was already remembered
+against that question's wording. Its row gets a Keep button. Passwords, account
+names, uploads and anything a page wrote for itself are never offered. Taking
+them all without asking is a Settings toggle, off by default: moving values off
+a page into a profile is not something to start doing quietly.
+→ `test_keeping_page_answers.py`

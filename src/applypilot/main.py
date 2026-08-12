@@ -33,7 +33,7 @@ from . import (
 )
 from .adapters import classify_host
 from .config import load_settings
-from .facts import BY_KEY
+from .facts import BY_KEY, accepts
 from .mapper import describe_match
 from .matching import rank_options, real_options
 from .models import (
@@ -115,6 +115,7 @@ class SettingsPayload(BaseModel):
     accept_agreements: bool | None = None
     auto_advance: bool | None = None
     auto_attach_resume: bool | None = None
+    keep_page_answers: bool | None = None
 
 
 @app.get("/settings")
@@ -130,6 +131,7 @@ def get_settings() -> dict[str, Any]:
         "accept_agreements_scope": "this session only",
         "auto_advance": profile.auto_advance,
         "auto_attach_resume": profile.auto_attach_resume,
+        "keep_page_answers": profile.keep_page_answers,
         "authorised_sign_in_hosts": session_sign_in.authorised_hosts(),
     }
 
@@ -156,6 +158,8 @@ def put_settings(payload: SettingsPayload) -> dict[str, Any]:
         profile.auto_advance = payload.auto_advance
     if payload.auto_attach_resume is not None:
         profile.auto_attach_resume = payload.auto_attach_resume
+    if payload.keep_page_answers is not None:
+        profile.keep_page_answers = payload.keep_page_answers
     store.save_profile(profile)
     return get_settings()
 
@@ -207,6 +211,16 @@ def save_fact(payload: FactAnswer) -> dict[str, Any]:
     spec = BY_KEY.get(payload.fact_key)
     if spec is None:
         raise HTTPException(400, f"no such fact: {payload.fact_key}")
+
+    # A yes-or-no answer landing in a fact that means something open is how a
+    # profile quietly rots: nothing looks wrong on the page that saved it, and
+    # every later form is answered from it without asking.
+    if not accepts(spec, payload.value):
+        raise HTTPException(
+            400,
+            f"{payload.fact_key} does not hold a yes or no -- "
+            f"it holds {spec.prompt.lower() or 'an open value'}",
+        )
 
     if spec.record:
         records = profile.education if spec.record == "education" else profile.experience
@@ -635,10 +649,13 @@ def post_chat(payload: ChatPayload) -> dict[str, Any]:
     )
 
     # An instruction that names a fact is worth keeping, whether or not this
-    # page happened to ask for it.
+    # page happened to ask for it -- unless it is a yes or no going into a fact
+    # that means something open, which is the same rot /profile/fact refuses.
     if outcome.remember and outcome.fact_key and outcome.value:
-        profile.facts[outcome.fact_key] = outcome.value
-        store.save_profile(profile)
+        spec = BY_KEY.get(outcome.fact_key)
+        if spec is not None and accepts(spec, outcome.value):
+            profile.facts[outcome.fact_key] = outcome.value
+            store.save_profile(profile)
 
     return {
         "kind": outcome.kind,

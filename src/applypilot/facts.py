@@ -10,6 +10,7 @@ Nothing here names an employer or an applicant tracking system.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -556,3 +557,35 @@ SUPPLEMENTARY_LABELS: frozenset[str] = frozenset(
 def alias_variants(spec: FactSpec) -> tuple[str, ...]:
     """Every phrasing of *spec*, longest first so specific beats generic."""
     return tuple(sorted(spec.aliases, key=lambda a: (-len(a.split()), -len(a))))
+
+
+#: A prompt that is itself a yes-or-no question. "Are you Hispanic or Latino?"
+#: is answered by "No" and nothing else; "Citizenship status" is not.
+_ASKS_YES_OR_NO = re.compile(
+    r"^\s*(are|do|did|does|have|has|had|will|would|can|could|is|was|may)\b", re.I
+)
+_BARE_YES_NO = frozenset({"yes", "no", "y", "n", "true", "false"})
+
+
+def accepts(spec: FactSpec, value: str) -> bool:
+    """False when *value* cannot be what *spec* means, whatever asked for it.
+
+    One shape of wrong answer poisons a profile quietly and permanently: a
+    yes-or-no question matches a fact that holds an open value, and "Yes" is
+    written into it. Nothing on the page looks wrong at the time. Afterwards
+    "How did you hear about us?" is answered "Yes" against eleven options --
+    on every form, forever, because a saved answer is trusted ahead of asking.
+
+    A real profile carried four of these: referral_source and citizenship both
+    holding "Yes", a degree of "Yes", a preferred name of "No".
+
+    So a bare yes or no may only be saved where a yes or no is what the fact
+    means -- which its own spec already says, either by listing them as choices
+    or by being phrased as that question.
+    """
+    said = (value or "").strip().lower()
+    if said not in _BARE_YES_NO:
+        return True
+    if any(choice.strip().lower() in _BARE_YES_NO for choice in spec.choices):
+        return True
+    return bool(_ASKS_YES_OR_NO.match(spec.prompt or ""))

@@ -1262,6 +1262,13 @@ const MARKS = {
 
 function setChecklist(items) {
   state.checklist = items || [];
+  // Set deliberately in Settings: keep every offered answer without a press.
+  // Done before the rows are drawn, so a kept one never shows a Keep button.
+  if (state.keepPageAnswers && state.checklist.some((i) => i.learnable)) {
+    rememberAll().then((kept) => {
+      if (kept) log(`kept ${kept} answer(s) already on this page`);
+    });
+  }
   const needs = state.checklist.filter((i) => i.state === "needs_you" || i.state === "failed");
   const done = state.checklist.filter((i) => DONE_STATES.has(i.state));
 
@@ -1336,6 +1343,63 @@ function askAbout(item) {
 }
 
 /** One row per field, showing the whole question rather than a truncation. */
+/**
+ * Keep an answer the page was already holding.
+ *
+ * Filling a form is not the only way an answer gets onto a page. People type
+ * one in themselves -- because a dropdown was fiddly, because the question was
+ * about this employer, because it was quicker than explaining. That answer was
+ * respected and then thrown away, so the next form asked for it again, and the
+ * one after that. The point of a tool that learns is that it stops asking.
+ *
+ * A fact goes to the profile under its own key. Anything else is remembered
+ * against the question's own wording, so "How did you hear about us?" answers
+ * itself next time without claiming to be a fact about the person.
+ */
+async function rememberAnswer(item, button) {
+  const value = item.learnable;
+  if (!value) return;
+  const field = fieldFor(item.fingerprint);
+  try {
+    if (item.learn_key) {
+      await post("/profile/fact", {
+        fact_key: item.learn_key,
+        value: value,
+        entry: (field && field.group_index) || 0,
+      });
+    } else {
+      await post("/learn", {
+        field: field || { fingerprint: item.fingerprint, label: item.label },
+        value: value,
+        host: new URL(state.observation.url).host,
+        page_labels: (state.observation.fields || []).map((f) => f.label),
+      });
+    }
+  } catch (err) {
+    // A fact that will not take this value says why, and that is worth seeing:
+    // it is the guard that stops "Yes" becoming a permanent answer to "How did
+    // you hear about us?".
+    showHint(String((err && err.message) || err), false);
+    return;
+  }
+  item.learnable = "";
+  if (button) flashDone(button, "Kept", "Keep");
+  log(`kept "${value}" for ${item.label}`);
+}
+
+/**
+ * Keep every answer on this page that was offered, without asking.
+ *
+ * Off by default, because taking values off a page into a profile is not
+ * something to start doing quietly.
+ */
+async function rememberAll() {
+  const offered = (state.checklist || []).filter((i) => i.learnable);
+  for (const item of offered) await rememberAnswer(item, null);
+  if (offered.length) setChecklist(state.checklist);
+  return offered.length;
+}
+
 function fillReport(list, items) {
   list.innerHTML = "";
   for (const item of items) {
@@ -1361,6 +1425,22 @@ function fillReport(list, items) {
     detail.textContent = [item.section, said].filter(Boolean).join(" · ");
     label.appendChild(detail);
     row.appendChild(label);
+
+    // An answer already sitting on the page that nothing here put there. It
+    // was respected and then forgotten, so the next form asked for it again.
+    // Offered rather than taken: the value is theirs, and a form can hold one
+    // for reasons that have nothing to do with them.
+    if (item.learnable) {
+      const keep = document.createElement("button");
+      keep.className = "keep";
+      keep.textContent = "Keep";
+      keep.title = `Remember "${item.learnable}" for next time`;
+      keep.addEventListener("click", (event) => {
+        event.stopPropagation();
+        rememberAnswer(item, keep);
+      });
+      row.appendChild(keep);
+    }
 
     // A row that is already filled is somewhere to go and look. A row that is
     // not is something to answer, so pressing it asks about it.
@@ -1922,6 +2002,7 @@ toggle("log-toggle", "log");
     const settings = await service("/settings");
     state.autoContinue = Boolean(settings.auto_advance);
     state.autoAttach = settings.auto_attach_resume !== false;
+    state.keepPageAnswers = Boolean(settings.keep_page_answers);
     state.submissionPolicy = settings.submission_policy || "confirm";
     el("auto-continue").checked = state.autoContinue;
     if (state.autoContinue) {
