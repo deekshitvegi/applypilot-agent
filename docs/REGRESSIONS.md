@@ -1256,3 +1256,16 @@ looked for first, because a page offering both says "cover letter" on one and
 applications leave the resume unmarked, and it was skipped in silence.
 Attaching it is the point of the exercise, so it is put forward whether or not
 the form insists.
+
+**144. A nationality question offering 199 countries refused the country the
+answer named.** The saved citizenship is "US Citizen" and the option is "United
+States of America (USA)". Two things stood between them: the status word after
+the place, and the code the form writes after the name.
+*Mechanism.* A citizenship answer is a place and a status together -- "US
+Citizen", "US Permanent Resident" -- and a form asking for nationality offers
+only the places, so the status word comes off. Only for a fact that is about
+somewhere: taking "resident" out of "Resident Engineer" would change what it
+says. Separately, a short bracketed code after a name says the same thing twice
+and is not part of the name, so it is ignored when nothing else matches. Only a
+short one -- "Content (e.g. videos, ads, billboards etc)" is a thing a form is
+offering, not a name with a code after it.

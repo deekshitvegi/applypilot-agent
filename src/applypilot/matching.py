@@ -171,6 +171,37 @@ _SAYS_YES = re.compile(
 )
 
 
+#: What somebody is, rather than where they are from. A citizenship answer is
+#: written as a place and a status together -- "US Citizen", "Indian National",
+#: "Canadian citizenship" -- and a form asking for nationality offers only the
+#: places.
+_STATUS_WORD = re.compile(
+    r"\b(citizen|citizens|citizenship|national|nationality|passport\s*holder|"
+    r"permanent\s+resident|resident)\b",
+    re.IGNORECASE,
+)
+
+#: Facts whose value may carry a status word around the place it names.
+#: A code a form puts after a name -- "United States of America (USA)",
+#: "India (IN)". It says the same thing twice and is not part of the name.
+_TRAILING_CODE = re.compile(r"\s*\([^()]{1,20}\)\s*$")
+
+_PLACE_FACTS = frozenset({"citizenship", "country", "nationality"})
+
+
+def _place_within(desired: str, fact_key: str) -> str:
+    """The place a citizenship answer names, or "".
+
+    Only for a fact that is about somewhere. Stripping "resident" out of an
+    answer to anything else would change what it says.
+    """
+    if fact_key not in _PLACE_FACTS:
+        return ""
+    bare = _STATUS_WORD.sub(" ", desired or "")
+    bare = re.sub(r"\s+", " ", bare).strip(" ,-")
+    return bare if bare and normalise(bare) != normalise(desired) else ""
+
+
 def _polarity(text: str) -> str:
     """Whether a sentence is saying yes, saying no, or declining to say.
 
@@ -353,6 +384,10 @@ def rank_options(
     groups = groups_for(fact_key)
     number = _as_number(desired)
     wanted_polarity = _polarity(desired)
+    # "US Citizen" is a country with a word after it. A form asking for your
+    # nationality offers the countries, so the saved answer named the right one
+    # and was refused for the word it was carrying.
+    bare_place = _place_within(desired, fact_key)
     ranked: list[OptionMatch] = []
     for option in options:
         if option.disabled:
@@ -375,6 +410,24 @@ def rank_options(
         ):
             score = SAME_MEANING
             reason = f'both say "{wanted_polarity}", in different words'
+
+        # The place the answer names, once the status word is off it.
+        if score <= 0 and bare_place:
+            score, reason = _score(bare_place, option.label, groups)
+            if score > 0:
+                reason = f'"{desired}" names {bare_place}'
+
+        # The same name, with the code the form put after it taken off.
+        if score <= 0:
+            plain = _TRAILING_CODE.sub("", option.label).strip()
+            if plain and plain != option.label:
+                for candidate in (desired, bare_place):
+                    if not candidate:
+                        continue
+                    score, reason = _score(candidate, plain, groups)
+                    if score > 0:
+                        reason = f"{reason}, ignoring the code after it"
+                        break
         if score <= 0:
             plain = _opens_with_yes_or_no(desired)
             if plain and normalise(option.label) == plain:
