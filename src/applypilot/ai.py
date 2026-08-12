@@ -189,3 +189,94 @@ async def describe_page(model: Model, observation: PageObservation) -> str:
         fields=listing,
     )
     return await model.ask(prompt, temperature=0.3)
+
+
+#: How much of a history to put in front of the model. Enough to answer "do you
+#: have experience with X", short enough that the question stays the subject.
+_EVIDENCE_JOBS = 6
+_EVIDENCE_BULLETS = 4
+
+
+def evidence_from(profile) -> str:
+    """What the applicant has actually done, in plain lines.
+
+    Only what is written down. Nothing here is generated, summarised into a
+    claim, or rounded up: a model that cannot find something in these lines is
+    required to say so rather than answer anyway.
+    """
+    lines: list[str] = []
+    if profile.skills:
+        lines.append("Skills listed: " + ", ".join(profile.skills[:40]))
+    for record in profile.education[:4]:
+        said = " in ".join(p for p in (record.degree, record.field_of_study) if p)
+        where = f" at {record.school}" if record.school else ""
+        when = f" ({record.start_date}-{record.end_date})" if record.end_date else ""
+        if said or where:
+            lines.append(f"Education: {said}{where}{when}".strip())
+    for record in profile.experience[:_EVIDENCE_JOBS]:
+        when = f"{record.start_date} to {record.end_date or 'now'}"
+        lines.append(f"Role: {record.title or '?'} at {record.company or '?'} ({when})")
+        for bullet in (record.description or "").splitlines()[:_EVIDENCE_BULLETS]:
+            cleaned = bullet.strip().lstrip("-*• \t")
+            if cleaned:
+                lines.append(f"  - {cleaned}")
+    return "\n".join(lines) or "(nothing recorded)"
+
+
+_FROM_EVIDENCE_PROMPT = """\
+A job application asks this question:
+
+  {question}
+
+The employer offers exactly these options, numbered:
+
+{options}
+
+Everything known about the applicant, taken from what they wrote down:
+
+{evidence}
+
+Answer ONLY from those lines. They are the whole of what is known.
+
+If a line supports an answer, reply with a JSON object:
+  {{"option": "<exact text of one option above>", "quote": "<the line that \
+supports it, copied exactly>", "why": "<one short sentence>"}}
+
+If nothing in those lines settles it -- including anything about how many \
+years, which tools, where they live, or what they are willing to do -- reply \
+{{"option": null, "why": "<what is missing>"}}.
+
+Do not infer, do not estimate, do not answer from what is usual for someone \
+with this background, and do not invent an option. A wrong answer here goes on \
+a real job application in the applicant's name.
+"""
+
+
+async def answer_from_evidence(
+    model: Model, question: str, options: list[Option], evidence: str
+) -> tuple[Option | None, str]:
+    """Answer a question about the applicant, from what the applicant wrote.
+
+    This is not the model deciding anything about them. It is the model reading
+    lines they wrote and saying which of the employer's own options those lines
+    support -- and being made to quote the line, so a claim with nothing behind
+    it is visible rather than merely plausible.
+    """
+    if not options:
+        return None, "the control offered no options to choose between"
+    listing = "\n".join(f"  {i + 1}. {o.label}" for i, o in enumerate(options))
+    prompt = _FROM_EVIDENCE_PROMPT.format(
+        question=question, options=listing, evidence=evidence
+    )
+    reply = await model.ask(prompt)
+    parsed = parse_json_object(reply)
+    chosen = validate_option(str(parsed.get("option") or ""), options)
+    if chosen is None:
+        return None, str(parsed.get("why") or "nothing you have written answers this")
+
+    # A quote that is not in the evidence is not a quote. Without this the
+    # grounding is a request rather than a rule.
+    quote = str(parsed.get("quote") or "").strip()
+    if not quote or normalise(quote)[:60] not in normalise(evidence):
+        return None, "the model could not point at anything you wrote that says so"
+    return chosen, f"from your own history: {quote[:120]}"

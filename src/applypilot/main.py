@@ -689,9 +689,25 @@ async def suggest(payload: SuggestPayload) -> dict[str, Any]:
             "kind": "model_unavailable",
         }
     try:
-        chosen, why = await ai.choose_among(
-            model, payload.label, payload.options, payload.saved_value
-        )
+        if payload.saved_value:
+            chosen, why = await ai.choose_among(
+                model, payload.label, payload.options, payload.saved_value
+            )
+        else:
+            # Nothing saved answers this, so ask what the applicant's own
+            # history says. "Do you have hands-on engineering experience with
+            # Python and ML frameworks?" is answered by their skills and their
+            # bullet points; it was going unanswered because the model was only
+            # ever shown a saved answer to compare against, and there was none.
+            #
+            # The model must quote the line it read, and the quote is checked
+            # against the evidence before the answer is offered.
+            chosen, why = await ai.answer_from_evidence(
+                model,
+                payload.label,
+                payload.options,
+                ai.evidence_from(store.get_profile()),
+            )
     except ai.ModelUnavailable as exc:
         # Flagged so the panel keeps it out of the question card: a busy model
         # is not something the applicant needs to read while answering.

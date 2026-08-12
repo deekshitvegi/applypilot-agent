@@ -1284,3 +1284,20 @@ already being matched -- so the cluster was mostly duplicates, and the rule was
 solving a problem that did not exist. The rule is kept because a page with one
 unlabelled upload is a real shape, but it is worth nothing today and the
 numbers say so.
+
+**146. A question the applicant's own CV answers went unanswered.** Across 68
+real applications, 130 required Yes/No questions were left for a person -- "Do
+you have hands-on engineering experience with Python and ML frameworks?", "Are
+you based in a US timezone?". The model was only ever shown a saved answer to
+compare the options against, and for these there is none. Their history answers
+them.
+*Mechanism.* Where nothing saved answers a question, the model is given what
+the applicant wrote down -- skills, degrees, roles, bullet points -- and asked
+which of the employer's own options those lines support. It is not deciding
+anything about them; it is reading their words.
+*What keeps it honest.* It must quote the line it read, and the quote is
+checked against the evidence before the answer is offered. A quote that is not
+there is refused. So is an answer with no quote, and so is an option the page
+never offered. The prompt forbids inferring, estimating, and answering from
+what is usual for someone with that background, and says why: a wrong answer
+here goes on a real application in the applicant's name.
