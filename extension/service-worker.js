@@ -309,6 +309,25 @@ const HANDLERS = {
       message.mime,
     ]);
   },
+  /**
+   * A picture of the page as it looked when something went wrong.
+   *
+   * Only the visible part of the tab that is already on screen, taken when
+   * somebody presses "Report a problem" -- never in the background and never
+   * on a schedule. It goes into a file on their own machine.
+   */
+  async screenshot(message) {
+    try {
+      const tab = await chrome.tabs.get(message.tabId);
+      return await chrome.tabs.captureVisibleTab(tab.windowId, {
+        format: "jpeg",
+        quality: 60,
+      });
+    } catch (err) {
+      // A screenshot is a nicety. A report without one is still a report.
+      return "";
+    }
+  },
   async navigate(message) {
     await chrome.tabs.update(message.tabId, { url: message.url });
     return { ok: true };

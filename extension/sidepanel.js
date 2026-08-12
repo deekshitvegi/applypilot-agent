@@ -1556,6 +1556,94 @@ el("auto-continue").addEventListener("change", async (event) => {
   }
 });
 
+/**
+ * Everything needed to work out why a page went wrong, in one file.
+ *
+ * Reproducing a failure from a description costs a day and usually fails: the
+ * page has moved on, the session is different, and the one detail that mattered
+ * was not the one described. This is the page itself -- every control as it was
+ * read, what was planned for each, what actually happened, and a picture of the
+ * screen.
+ *
+ * What is deliberately not in it: the profile. Not one saved answer, not the
+ * resume, not the API key. The values that were filled do appear, because those
+ * are what went wrong, and the file stays on the applicant's own machine until
+ * they choose to send it.
+ */
+async function saveReport() {
+  const button = el("report");
+  if (state.busy) return;
+  setBusy(button, true);
+  try {
+    if (!state.observation) await scan();
+    let picture = "";
+    try {
+      picture = await browser({ type: "screenshot", tabId: state.tab.id }, 10000);
+    } catch (err) {
+      /* a report without a picture is still a report */
+    }
+
+    const report = {
+      saved_at: new Date().toISOString(),
+      panel_version: EXTENSION_VERSION,
+      page: {
+        url: (state.observation && state.observation.url) || "",
+        title: (state.observation && state.observation.title) || "",
+        kind: (state.observation && state.observation.kind) || "",
+        adapter: (state.plan && state.plan.adapter) || "",
+        captcha: (state.observation && state.observation.captcha) || "",
+      },
+      // Every control, exactly as it was read. This is the part that finds
+      // label and control-kind faults.
+      fields: (state.observation && state.observation.fields) || [],
+      planned: (state.plan && state.plan.actions) || [],
+      asked: (state.plan && state.plan.questions) || [],
+      skipped: (state.plan && state.plan.skipped) || [],
+      results: state.results || [],
+      checklist: state.checklist || [],
+      activity: readActivity(),
+    };
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const host = (report.page.url.split("/")[2] || "page").replace(/[^a-z0-9.-]/gi, "");
+    download(`applypilot-report-${host}-${stamp}.json`, JSON.stringify(report, null, 1));
+    if (picture) download(`applypilot-report-${host}-${stamp}.jpg`, picture, true);
+
+    const unanswered = report.asked.length + report.skipped.length;
+    say(
+      `Saved a report: ${report.fields.length} field(s) seen, ` +
+        `${report.planned.length} planned, ${unanswered} not answered.`,
+      "warn"
+    );
+    activity("Report saved", "Check your downloads and send both files.");
+  } catch (err) {
+    say("Could not save the report: " + err.message, "bad");
+  } finally {
+    setBusy(button, false, "Save a report about this page");
+  }
+}
+
+/** The activity list as plain lines, newest last. */
+function readActivity() {
+  return Array.from(el("log").children)
+    .map((row) => (row.textContent || "").trim())
+    .filter(Boolean)
+    .slice(-80);
+}
+
+/** Hand a file to the browser's own download. Nothing leaves the machine. */
+function download(filename, contents, isDataUrl) {
+  const href = isDataUrl
+    ? contents
+    : URL.createObjectURL(new Blob([contents], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = href;
+  link.download = filename;
+  link.click();
+  if (!isDataUrl) setTimeout(() => URL.revokeObjectURL(href), 10000);
+}
+
+el("report").addEventListener("click", saveReport);
 el("cta").addEventListener("click", runCta);
 el("settings").addEventListener("click", () => chrome.runtime.openOptionsPage());
 el("onboarding-later").addEventListener("click", () => el("onboarding").classList.add("hidden"));

@@ -648,3 +648,7 @@ footer {
   color: var(--text-faint);
   font-size: 11px;
 }
+
+/* A button that owns its row -- "Save a report about this page" is the whole
+   point of the card it sits in, not one option among several. */
+button.wide { width: 100%; }
