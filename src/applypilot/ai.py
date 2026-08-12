@@ -13,6 +13,7 @@ away with a reason, not repaired into something plausible.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 
 import httpx
@@ -83,12 +84,20 @@ class Model:
 # ---------------------------------------------------------------------------
 
 
+#: The number this file puts in front of each option when it lists them. A
+#: model that answers "1. Yes" is naming the first option, not inventing one --
+#: it is reading back the format it was given. Undoing our own numbering is not
+#: loosening the check below; leaving it in place rejected every correct answer
+#: the model gave, and read as a refusal while the reasoning said the opposite.
+_ENUMERATOR = re.compile(r"^\s*\(?\d{1,2}\)?\s*[.):-]\s*")
+
+
 def validate_option(raw: str, options: list[Option]) -> Option | None:
     """Accept a choice only if it is one of the options the page offered.
 
     Not a close spelling, not a repaired version -- one of them.
     """
-    wanted = normalise(raw or "")
+    wanted = normalise(_ENUMERATOR.sub("", raw or ""))
     if not wanted:
         return None
     for option in options:
@@ -270,9 +279,17 @@ async def answer_from_evidence(
     )
     reply = await model.ask(prompt)
     parsed = parse_json_object(reply)
-    chosen = validate_option(str(parsed.get("option") or ""), options)
+    said = str(parsed.get("option") or "").strip()
+    chosen = validate_option(said, options)
     if chosen is None:
-        return None, str(parsed.get("why") or "nothing you have written answers this")
+        why = str(parsed.get("why") or "nothing you have written answers this")
+        # Say what it named, when it named something. A reply the page has no
+        # option for is a different problem from a reply that declined, and
+        # they were indistinguishable -- both came back as the model's own
+        # sentence, which read like a refusal even when it was an answer.
+        if said:
+            return None, f'the model answered "{said[:40]}", which this control does not offer'
+        return None, why
 
     # A quote that is not in the evidence is not a quote. Without this the
     # grounding is a request rather than a rule.

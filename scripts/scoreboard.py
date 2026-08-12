@@ -22,11 +22,13 @@ so a run costs seconds and can be repeated after every change.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import json
 import sys
+import time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,8 +60,9 @@ def _version() -> str:
 
 
 def _profile():
-    from applypilot.models import Profile
     from corpus import TEST_EDUCATION, TEST_EXPERIENCE, TEST_PROFILE
+
+    from applypilot.models import Profile
 
     return Profile(
         facts=dict(TEST_PROFILE),
@@ -96,7 +99,7 @@ def record(note: str) -> int:
 
     profile = _profile()
     run = _next_run()
-    when = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    when = datetime.now(UTC).isoformat(timespec="seconds")
     version = _version()
 
     score_rows: list[dict] = []
@@ -190,6 +193,83 @@ def _append(path: Path, columns: list[str], rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
+def ask_model(limit: int, pause: float) -> int:
+    """How many unanswered questions the model can answer from the profile.
+
+    The rest of this file never calls the model: it replays the matcher, which
+    is deterministic and free. This is the other half -- what the service can
+    answer once matching has already failed -- and it costs a request each, so
+    it is asked for rather than run by default.
+
+    Nothing is filled. It asks the same endpoint the panel asks and writes down
+    what came back.
+    """
+    import urllib.error
+    import urllib.request
+
+    if not QUESTIONS.exists():
+        print("record a run first: python scripts/scoreboard.py")
+        return 1
+
+    with QUESTIONS.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    latest = max(int(r["run"]) for r in rows)
+    # Only ones the model has a chance with: a question offering choices.
+    todo = [
+        r for r in rows
+        if int(r["run"]) == latest and int(r["option_count"] or 0) >= 2 and r["question"]
+    ]
+    if limit:
+        todo = todo[:limit]
+    print(f"asking about {len(todo)} questions from run {latest}\n")
+
+    answered = refused = failed = throttled = 0
+    for index, row in enumerate(todo, 1):
+        payload = json.dumps(
+            {
+                "label": row["question"],
+                "options": [{"label": o, "value": o} for o in row["options"].split(" | ") if o],
+                "saved_value": "",
+                "fact_key": "",
+            }
+        ).encode()
+        request = urllib.request.Request(
+            "http://127.0.0.1:8765/suggest",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            reply = json.load(urllib.request.urlopen(request, timeout=60))
+        except (urllib.error.URLError, TimeoutError, ValueError) as err:
+            failed += 1
+            print(f"  {index:4}  ERROR  {str(err)[:60]}")
+            continue
+        if reply.get("kind") == "model_unavailable":
+            # Not a refusal. Counting a rate limit as "nothing said so" is the
+            # measurement lying about the thing it exists to measure.
+            throttled += 1
+            print(f"  {index:4}  rate limited")
+            time.sleep(pause * 4)
+            continue
+        if reply.get("suggested"):
+            answered += 1
+            print(f"  {index:4}  {reply['suggested'][:26]:28} <- {row['question'][:44]}")
+            print(f"        {reply.get('why', '')[:96]}")
+        else:
+            refused += 1
+
+        time.sleep(pause)
+
+    total = answered + refused
+    print(f"\n  answered from the profile : {answered}")
+    print(f"  refused, nothing said so  : {refused}")
+    print(f"  rate limited, not asked   : {throttled}")
+    print(f"  could not ask             : {failed}")
+    if total:
+        print(f"  -> {answered / total * 100:.0f}% of choice questions the matcher could not do")
+    return 0
+
+
 def compare() -> int:
     """Every run so far, side by side."""
     if not SCOREBOARD.exists():
@@ -223,15 +303,26 @@ def compare() -> int:
 
 
 def main() -> int:
-    try:
+    # Real forms are full of characters this console cannot draw.
+    with contextlib.suppress(AttributeError, ValueError):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    except (AttributeError, ValueError):
-        pass
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--note", default="", help="what changed since the last run")
     parser.add_argument("--compare", action="store_true", help="show every run so far")
+    parser.add_argument(
+        "--ask-model",
+        action="store_true",
+        help="also ask the running service what the model can answer from the profile",
+    )
+    parser.add_argument("--limit", type=int, default=0, help="stop after N questions")
+    parser.add_argument("--pause", type=float, default=4.0,
+                        help="seconds between requests; the free tier is easily annoyed")
     args = parser.parse_args()
-    return compare() if args.compare else record(args.note)
+    if args.compare:
+        return compare()
+    if args.ask_model:
+        return ask_model(args.limit, args.pause)
+    return record(args.note)
 
 
 if __name__ == "__main__":

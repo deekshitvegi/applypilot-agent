@@ -1301,3 +1301,16 @@ there is refused. So is an answer with no quote, and so is an option the page
 never offered. The prompt forbids inferring, estimating, and answering from
 what is usual for someone with that background, and says why: a wrong answer
 here goes on a real application in the applicant's name.
+
+**147. The model's correct answers were thrown away by our own prompt.** The
+options are listed to it numbered -- "1. Yes", "2. No" -- and it answered
+"1. Yes". The check that an answer names one of the page's own options compared
+that against "Yes" and rejected it, so every model answer was refused while its
+own reasoning said the opposite: "The applicant's professional role at HCLTech
+explicitly involves using Python", suggested = none.
+*Mechanism.* The enumerator this file adds is taken off before the check. That
+is not loosening it -- it is undoing our own formatting. "Maybe" and
+"3. Perhaps" are still refused.
+*And it says what it saw.* A reply naming something the control does not offer
+now reports what was named. Before, that was indistinguishable from a refusal,
+which is how this survived: both came back as the model's own sentence.
