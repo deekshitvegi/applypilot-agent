@@ -113,3 +113,18 @@ def test_a_drawn_list_is_still_asked_to_open_before_anyone_is_asked(scan):
     assert needs_its_options_opened(fields["Location"]) is True
     # This one has said its choices are readable, so it is not poked.
     assert needs_its_options_opened(fields["Country"]) is False
+
+
+def test_a_one_pixel_file_input_behind_a_dropzone_is_on_the_page(scan):
+    """How every modern form does uploads, and it was invisible to us.
+
+    The real input is 1x1 with a styled dropzone drawn around it. The old test
+    took the input's label if it had one and gave up when that measured 1x1 --
+    and a screen-reader-only label is 1x1 by design. So the resume upload on
+    one of the largest hiring systems in the world read as not on the page at
+    all, across sixty applications, and nobody was ever asked to attach
+    anything because nothing had been found to attach it to.
+    """
+    found = by_label(scan("control_shapes.html")[1])
+    assert "Attach a resume" in found, f"saw {sorted(found)}"
+    assert found["Attach a resume"]["control"] == "file"

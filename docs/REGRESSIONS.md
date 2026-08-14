@@ -1518,3 +1518,30 @@ on it, after the walk had in fact reached the right page.
 *Mechanism.* A destroyed context after a click is what success looks like from
 outside. It waits for the new page and scans that instead.
 → `test_walls_and_gates.py`
+
+**163. The resume upload was invisible, on every form that matters.** A file
+input is 1x1 pixels with a styled dropzone drawn around it -- that is how
+nearly every modern application does uploads. Visibility already allowed for
+that and measured the drawn thing instead: it took the input's label if it had
+one, and gave up when the label measured 1x1. A screen-reader-only label is 1x1
+by design. So on sixty applications the file control was read as not on the
+page at all, `/plan` had nothing to attach to, and nobody was ever asked to
+attach anything.
+*Mechanism.* Whichever of label or nearest ancestors is actually drawn, rather
+than the first one that exists.
+
+**164. And attaching it reported failure when it had worked.** The upload
+succeeds, the page removes the file input entirely and renders the filename in
+its place -- so the fingerprint resolves to nothing and the check said "the
+control is no longer on the page". True, and exactly backwards: the control is
+gone because it worked.
+*Mechanism.* Two further readings, in order. A file control anywhere holding a
+file of that name -- still the page's own state, only the handle changed. Then,
+only when every file control has gone, the page's own rendered text naming the
+file. The second is narrow on purpose: while an empty upload is still sitting
+there, nothing has been accepted and a filename printed somewhere proves
+nothing.
+*And it waits.* Two hundred milliseconds is enough for a control that keeps its
+own list and nowhere near enough for one that sends the document to a server
+and redraws when it returns.
+→ `test_control_shapes.py::test_a_one_pixel_file_input_behind_a_dropzone_is_on_the_page`

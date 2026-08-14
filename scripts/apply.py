@@ -88,6 +88,27 @@ def targets_from(args) -> list[dict]:
 MAX_HOPS = 4
 
 
+#: The resume on file, fetched once. None when nothing has been uploaded.
+_RESUME: dict | None = None
+_RESUME_LOOKED = False
+
+
+def primary_resume() -> dict | None:
+    """The document the panel would attach, or None."""
+    global _RESUME, _RESUME_LOOKED
+    if _RESUME_LOOKED:
+        return _RESUME
+    _RESUME_LOOKED = True
+    try:
+        documents = service("/documents")
+        document_id = documents.get("primary_resume_id") or ""
+        if document_id:
+            _RESUME = service(f"/documents/{document_id}/content")
+    except (urllib.error.URLError, OSError, ValueError):
+        _RESUME = None
+    return _RESUME
+
+
 def inject(page, scripts: list[str]) -> None:
     for source in scripts:
         page.add_script_tag(content=source)
@@ -175,6 +196,7 @@ def fill_one(page, target: dict, scripts: list[str], timeout: int) -> dict:
         "attempted": 0,
         "failed": 0,
         "needs_you": 0,
+        "attached": 0,
         "captcha": "",
         "submit_left_alone": 0,
         "outcome": "",
@@ -246,6 +268,39 @@ def fill_one(page, target: dict, scripts: list[str], timeout: int) -> dict:
             outcome = (result or {}).get("outcome", "")
             if outcome == "verified":
                 row["verified"] += 1
+            elif outcome == "failed":
+                row["failed"] += 1
+            else:
+                row["attempted"] += 1
+
+    # The document the form is asking for.
+    #
+    # /plan never returns an upload action -- attaching is the panel's job, and
+    # the panel does it from the resume on file. So this measured every form's
+    # file control as "left for a person" and reported 39 of them across the
+    # corpus as unfilled work, when the shipping path attaches them. Measuring
+    # the tool as worse than it is, is the same fault as measuring it as
+    # better: the number stops meaning anything.
+    resume = primary_resume()
+    if resume:
+        for question in [q for q in asked if q.get("control") == "file"]:
+            try:
+                result = page.evaluate(
+                    "([fp, b64, name, mime]) => ApplyPilot.act.attachFile(fp, b64, name, mime)",
+                    [
+                        question.get("fingerprint"),
+                        resume["base64"],
+                        resume["filename"],
+                        resume["mime"],
+                    ],
+                )
+            except Exception:
+                continue
+            row["planned"] += 1
+            outcome = (result or {}).get("outcome", "")
+            if outcome in {"verified", "accepted"}:
+                row["verified"] += 1
+                row["attached"] += 1
             elif outcome == "failed":
                 row["failed"] += 1
             else:
@@ -364,7 +419,7 @@ def main() -> int:
 
     columns = [
         "at", "ats", "company", "title", "url", "kind", "fields", "planned",
-        "verified", "attempted", "failed", "needs_you", "captcha",
+        "verified", "attempted", "failed", "needs_you", "attached", "captcha",
         "submit_left_alone", "outcome", "walked", "landed_on", "note",
     ]
     out = Path(args.out)

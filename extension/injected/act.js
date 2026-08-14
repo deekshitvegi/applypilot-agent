@@ -771,7 +771,82 @@
     fireInput(el);
     await sleep(200);
 
-    return AP.verify.check(fingerprint, filename, already.value);
+    const checked = AP.verify.check(fingerprint, filename, already.value);
+    if (checked && checked.outcome !== "failed") return checked;
+
+    // Uploading is not instant. The two hundred milliseconds above are enough
+    // for a control that keeps its own file list, and nowhere near enough for
+    // one that hands the document to a server and redraws when it comes back.
+    // Checked immediately, that page has not yet said anything, and the answer
+    // was a flat failure on an upload that had in fact worked.
+    const settled = await waitFor(() => attachedSomewhere(filename), SLOW_PAGE_TIMEOUT);
+    if (settled) return settled;
+
+    // The control was replaced by the attachment succeeding.
+    //
+    // Several large systems re-render their upload as soon as a file lands,
+    // which destroys the element the fingerprint pointed at. Verification then
+    // reported "the control is no longer on the page" -- true, and exactly
+    // backwards: the control is gone *because it worked*.
+    //
+    // So look again for a file input holding this file. That is still the
+    // page's own state and still a fresh read; it is only the handle that
+    // changed. Nothing here trusts that the assignment returned, and a page
+    // holding no such file still fails.
+    return checked;
+  }
+
+  /**
+   * A file control anywhere on the page whose own list names *filename*.
+   *
+   * Returns null when none does, so a failure stays a failure.
+   */
+  function attachedSomewhere(filename) {
+    const inputs = AP.dom.deepQuery("input[type='file']", document);
+    for (const el of inputs) {
+      const files = el.files;
+      if (!files || !files.length) continue;
+      for (const candidate of files) {
+        if (AP.verify.same(candidate.name, filename)) {
+          return {
+            fingerprint: "",
+            outcome: "verified",
+            signal: "native_value",
+            observed: candidate.name,
+            requested: filename,
+            evidence: "the page is holding this file, on a control it rebuilt",
+          };
+        }
+      }
+    }
+
+    // The upload was taken away entirely, and the page is showing the name.
+    //
+    // One large system removes its file input the moment a document is
+    // accepted and renders the filename in its place, so there is no input
+    // left to read and nothing anywhere holds a FileList. What there is, is
+    // the page's own words saying it has the file.
+    //
+    // Only when every file control has gone. That is what makes this a reading
+    // of the page's state rather than a search for our own string: we did not
+    // write this text, the page did, and it wrote it because it accepted the
+    // document. While an empty upload is still sitting there, nothing has been
+    // accepted and a filename printed somewhere proves nothing.
+    if (inputs.length === 0 && filename) {
+      const shown = (document.body && document.body.innerText) || "";
+      const stem = filename.replace(/\.[a-z0-9]+$/i, "");
+      if (stem.length >= 6 && shown.indexOf(stem) !== -1) {
+        return {
+          fingerprint: "",
+          outcome: "verified",
+          signal: "rendered_text",
+          observed: filename,
+          requested: filename,
+          evidence: "the upload is gone and the page is showing this filename",
+        };
+      }
+    }
+    return null;
   }
 
   function highlight(fingerprint) {

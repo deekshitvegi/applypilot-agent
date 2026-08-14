@@ -81,5 +81,14 @@
     <input type="hidden" name="csrfToken" value="abc123">
   </div>
 
+  <!-- 12. A one-pixel file input behind a styled dropzone, with a label that
+       is there for screen readers and drawn at 1x1. This is how nearly every
+       modern form does uploads. -->
+  <div style="width:300px;height:50px;border:1px dashed #999">
+    <label for="cv2" style="position:absolute;width:1px;height:1px;overflow:hidden">Attach a resume</label>
+    <input id="cv2" type="file" name="resume" style="width:1px;height:1px">
+    <span>Attach</span>
+  </div>
+
   <button type="submit">Submit application</button>
 </form>

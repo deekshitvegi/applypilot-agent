@@ -192,10 +192,24 @@
       if (Number(style.opacity) === 0) return false;
       if (rect.width <= 1 && rect.height <= 1) return false;
     } else if (rect.width <= 1 && rect.height <= 1) {
-      const drawn = (el.labels && el.labels[0]) || el.parentElement;
+      // Whichever of them is actually drawn -- not the first one that exists.
+      //
+      // This used to take the label if there was a label, and give up when it
+      // measured 1x1. Plenty of forms give a file input a screen-reader-only
+      // label and draw the dropzone as its parent: the label is 1x1 by design
+      // and the parent is 300x50. So the resume upload on one of the largest
+      // hiring systems in the world was read as not on the page at all, on
+      // sixty of the applications here, and nobody was ever asked to attach
+      // anything because nothing had been found to attach it to.
+      const candidates = [];
+      if (el.labels && el.labels[0]) candidates.push(el.labels[0]);
+      candidates.push(...ancestors(el).slice(0, 3));
+      const drawn = candidates.some((node) => {
+        if (!node || !node.getBoundingClientRect) return false;
+        const box = node.getBoundingClientRect();
+        return box.width > 1 && box.height > 1;
+      });
       if (!drawn) return false;
-      const box = drawn.getBoundingClientRect();
-      if (box.width <= 1 && box.height <= 1) return false;
     }
     // Either way the ancestor checks below still apply, which is the point.
     for (const node of ancestors(el)) {
