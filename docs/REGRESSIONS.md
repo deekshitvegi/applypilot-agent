@@ -1593,3 +1593,16 @@ what separates this from searching a document for a string we supplied
 ourselves; a form redisplaying a document attached last week does not count.
 *Measured.* 30 Greenhouse applications: 6 resumes attached with 14 failures,
 against 20 attached with none.
+
+**169. A company careers page hid the form behind its own scenery.** 29 URLs
+read as a page with no controls: databricks.com/company/careers/...?gh_jid=,
+careers.airbnb.com/positions/...?gh_jid=, coinbase.com/careers/positions/...
+Each is the employer's own page around a form served by somebody else, and the
+Apply button is script this cannot press. Six of them burned every hop in the
+walk pressing it: "Apply now > Apply now > Apply now > Apply now".
+*Mechanism.* The job id is in the company's own address. Following it reaches
+the form directly and skips the scenery -- one Airbnb posting went from nothing
+at all to eighteen fields, seven filled and the resume attached.
+*And the walk stops.* Its guard asked for the URL to be unchanged and no fields
+at all; these pages carry one, so it never fired. Unchanged now means the same
+address, the same kind and the same number of fields.

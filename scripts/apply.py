@@ -27,6 +27,7 @@ import csv
 import json
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
@@ -114,6 +115,36 @@ def inject(page, scripts: list[str]) -> None:
         page.add_script_tag(content=source)
 
 
+#: A hiring system's own job id, carried in the query string of the company's
+#: own careers page. The page is the employer's design -- a description with an
+#: Apply button that opens a widget, or nothing at all to a reader -- while the
+#: form itself is served by the system named here, at an address this id
+#: completes. 29 URLs in the corpus were unreadable for exactly this reason.
+EMBEDDED_JOB_ID = (
+    ("gh_jid", "https://boards.greenhouse.io/embed/job_app?token={id}"),
+    ("gh_src", ""),  # present alongside gh_jid; carries no id of its own
+    ("lever-jobid", ""),
+    ("ashby_jid", ""),
+)
+
+
+def embedded_form(url: str) -> str:
+    """The system's own application URL behind a company careers page, or "".
+
+    A company that embeds someone else's hiring system keeps the job id in its
+    own address. Following it reaches the form directly, rather than a page
+    whose Apply button is a script this cannot press.
+    """
+    query = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+    for name, template in EMBEDDED_JOB_ID:
+        if not template:
+            continue
+        values = query.get(name) or []
+        if values and values[0].strip():
+            return template.format(id=values[0].strip())
+    return ""
+
+
 def walk_to_application(page, scripts: list[str], timeout: int) -> tuple[dict, list[str]]:
     """Follow Apply until a form is reached, and say what was walked.
 
@@ -129,6 +160,23 @@ def walk_to_application(page, scripts: list[str], timeout: int) -> tuple[dict, l
     """
     trail: list[str] = []
     observation = page.evaluate("() => ApplyPilot.scan.run()")
+
+    # A company careers page that embeds someone else's form, with the job id
+    # in its own URL. Reading the id is more reliable than pressing a button
+    # the page draws with script.
+    if observation.get("kind") != "application":
+        direct = embedded_form(page.url)
+        if direct:
+            try:
+                page.goto(direct, timeout=timeout, wait_until="domcontentloaded")
+                page.wait_for_timeout(3000)
+                inject(page, scripts)
+                landed = page.evaluate("() => ApplyPilot.scan.run()")
+                if (landed.get("fields") or []):
+                    trail.append("followed the job id in the URL")
+                    observation = landed
+            except Exception:
+                pass
 
     for _ in range(MAX_HOPS):
         if observation.get("kind") == "application":
@@ -172,10 +220,20 @@ def walk_to_application(page, scripts: list[str], timeout: int) -> tuple[dict, l
         page.wait_for_timeout(3500)
 
         inject(page, scripts)
-        observation = page.evaluate("() => ApplyPilot.scan.run()")
-        if page.url == before and not (observation.get("fields") or []):
-            # Pressing it changed nothing. Pressing it again will change
-            # nothing twice.
+        after = page.evaluate("() => ApplyPilot.scan.run()")
+
+        # Pressing it changed nothing. Pressing it again will change nothing
+        # twice -- and it did: six URLs burned all four hops on "Apply now >
+        # Apply now > Apply now > Apply now". The old guard asked for the URL
+        # to be unchanged *and* no fields at all, and these pages carry one
+        # field, so it never fired.
+        same_page = (
+            page.url == before
+            and after.get("kind") == observation.get("kind")
+            and len(after.get("fields") or []) == len(observation.get("fields") or [])
+        )
+        observation = after
+        if same_page:
             return observation, trail
 
     return observation, trail
