@@ -12,11 +12,13 @@ an afternoon.
 
 from __future__ import annotations
 
+import time
+from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from . import (
@@ -27,7 +29,9 @@ from . import (
     documents,
     learning,
     linkedin,
+    notify,
     onboarding,
+    phone_app,
     resume,
     runloop,
 )
@@ -66,6 +70,17 @@ session_sign_in = SessionSignIn()
 #: rather than sit switched on for months because of one afternoon's clicking.
 #: Nothing about it reaches the disk.
 session_accept_agreements = False
+
+#: The bot token, held in memory for as long as the service runs.
+#:
+#: Not in the profile and not on disk. A token is a credential -- anyone with
+#: it can send messages as that bot -- and this repository is public. Setting
+#: it again after a restart is a small price for never having written it down.
+session_phone = notify.Phone()
+
+#: Questions sent to the phone and not yet answered, newest last. Only ever
+#: the wording and the options; nothing here holds a profile.
+session_asked: list[notify.Question] = []
 
 app = FastAPI(title="ApplyPilot", version=__version__)
 app.add_middleware(
@@ -943,3 +958,174 @@ def reset(confirm: str = Body("", embed=True)) -> dict[str, Any]:
     for document in store.list_documents():
         store.delete_document(document["id"])
     return {"ok": True, "forgotten_answers": forgotten}
+
+
+# ---------------------------------------------------------------------------
+# Asking a question when nobody is at the machine
+# ---------------------------------------------------------------------------
+
+
+class PhoneSetup(BaseModel):
+    token: str = ""
+
+
+class PhoneQuestion(BaseModel):
+    label: str
+    options: list[str] = Field(default_factory=list)
+    host: str = ""
+    fact_key: str = ""
+    wait: int = notify.DEFAULT_WAIT
+
+
+@app.get("/phone")
+def phone_state() -> dict[str, Any]:
+    return {
+        "configured": bool(session_phone.token),
+        "connected": session_phone.available,
+        "scope": "this session only",
+        "sends": "the question, its options, and the site asking -- never your profile",
+    }
+
+
+@app.put("/phone")
+def phone_setup(payload: PhoneSetup) -> dict[str, Any]:
+    """Point at a bot and find who is on the other end of it.
+
+    A bot cannot start a conversation, so the applicant messages it once and
+    the chat is read back from that. It means a chat id cannot be guessed at,
+    and nothing here can send a message to a stranger.
+    """
+    global session_phone
+    session_phone = notify.Phone(token=payload.token)
+    if not payload.token.strip():
+        return phone_state()
+    try:
+        chat = session_phone.find_chat()
+    except notify.NotifyUnavailable as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not chat:
+        raise HTTPException(
+            400,
+            "the bot has no messages yet -- open it in Telegram and send it "
+            "anything, then try again",
+        )
+    session_phone.send("ApplyPilot is connected. I will send questions here.")
+    return phone_state()
+
+
+@app.post("/phone/ask")
+def phone_ask(payload: PhoneQuestion) -> dict[str, Any]:
+    """Put one question to the phone and wait for what it means.
+
+    An unanswered question comes back unanswered. Nothing is guessed at because
+    a phone was face-down, and an answer the control does not offer is refused
+    the same way it would be on screen.
+    """
+    if not session_phone.available:
+        raise HTTPException(400, "no phone is connected")
+
+    question = notify.Question(
+        label=payload.label,
+        options=tuple(payload.options),
+        host=payload.host,
+    )
+    try:
+        answer = session_phone.ask(question, wait=payload.wait)
+    except notify.NotifyUnavailable as exc:
+        raise HTTPException(502, str(exc)) from exc
+
+    saved = False
+    if answer and payload.fact_key:
+        spec = BY_KEY.get(payload.fact_key)
+        if spec is not None and accepts(spec, answer):
+            profile = store.get_profile()
+            profile.facts[payload.fact_key] = answer
+            store.save_profile(profile)
+            saved = True
+
+    return {
+        "answer": answer,
+        "saved": saved,
+        "waited": int(time.time() - question.asked_at),
+    }
+
+
+# ---------------------------------------------------------------------------
+# The phone app, served from this machine
+# ---------------------------------------------------------------------------
+
+_STATIC = Path(__file__).parent / "static"
+
+
+def _static(name: str, media_type: str) -> Response:
+    return Response(
+        (_STATIC / name).read_bytes(),
+        media_type=media_type,
+        # The app is one page from a machine on the same network. A cached copy
+        # of a question is a stale question.
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/phone/", include_in_schema=False)
+@app.get("/phone/index.html", include_in_schema=False)
+def phone_page() -> Response:
+    return _static("phone.html", "text/html; charset=utf-8")
+
+
+@app.get("/phone/manifest.json", include_in_schema=False)
+def phone_manifest() -> Response:
+    return _static("manifest.json", "application/manifest+json")
+
+
+@app.get("/phone/sw.js", include_in_schema=False)
+def phone_worker() -> Response:
+    return _static("sw.js", "text/javascript; charset=utf-8")
+
+
+@app.get("/phone/icon.png", include_in_schema=False)
+def phone_icon() -> Response:
+    return _static("icon.png", "image/png")
+
+
+@app.get("/phone/next")
+def phone_next(since: str = "") -> dict[str, Any]:
+    """The question on offer, held open until it is not the one already shown.
+
+    A phone asking every second is a phone with a flat battery by lunchtime.
+    This returns the moment there is something to say, and otherwise after
+    about half a minute so the connection does not go stale.
+    """
+    question = phone_app.QUEUE.wait_for_change(since)
+    return question.as_json() if question else {}
+
+
+class PhoneAnswer(BaseModel):
+    id: str
+    reply: str = ""
+
+
+@app.post("/phone/answer")
+def phone_answer(payload: PhoneAnswer) -> dict[str, Any]:
+    """Take an answer from the phone and keep it here.
+
+    A reply the control does not offer is refused, exactly as it would be on
+    screen: putting a value into a control that has never heard of it fails,
+    and calling that answered is the thing this project exists to stop.
+    """
+    question = phone_app.QUEUE.answer(payload.id, payload.reply)
+    if question is None:
+        raise HTTPException(404, "no such question")
+    if not question.answered:
+        return {"accepted": False, "why": "not one of the options this control offers"}
+
+    saved = False
+    if question.answer and question.fact_key:
+        spec = BY_KEY.get(question.fact_key)
+        if spec is not None and accepts(spec, question.answer):
+            profile = store.get_profile()
+            profile.facts[question.fact_key] = question.answer
+            store.save_profile(profile)
+            saved = True
+    phone_app.QUEUE.forget_answered()
+    return {"accepted": True, "answer": question.answer, "saved_to_profile": saved}

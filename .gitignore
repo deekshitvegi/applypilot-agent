@@ -43,3 +43,14 @@ corpus/scoreboard.csv
 corpus/questions.csv
 corpus/linkedin_sample.csv
 corpus/tracker.csv
+
+# Measurement output. Every one of these is a record of a run against live
+# employer sites -- useful the day it is made and stale a week later, and none
+# of it is the source of anything.
+corpus/applications.csv
+corpus/applications_questions.csv
+corpus/linkedin_applications.csv
+corpus/linkedin_targets.json
+corpus/linkedin_bulk.json
+corpus/linkedin_companies.json
+corpus/bespoke_targets.json

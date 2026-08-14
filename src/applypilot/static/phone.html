@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101418">
+<title>ApplyPilot</title>
+<link rel="manifest" href="/phone/manifest.json">
+<link rel="apple-touch-icon" href="/phone/icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --ink: #14181d; --soft: #5b6570;
+    --line: #dde2e8; --accent: #2f6df6; --good: #1a7f45; --warn: #8a5a08;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101418; --card: #181d23; --ink: #e8ecf1; --soft: #98a2ad;
+      --line: #262c34; --accent: #6d9bff; --good: #4fbf7e; --warn: #e0ad55;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    min-height: 100dvh;
+  }
+  header {
+    padding: 18px 20px 12px; display: flex; align-items: baseline; gap: 10px;
+  }
+  h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: -.01em; }
+  #state { font-size: 13px; color: var(--soft); margin-left: auto; }
+  main { padding: 0 16px 28px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 20px; margin-bottom: 14px;
+  }
+  .from { font-size: 13px; color: var(--soft); margin: 0 0 8px; }
+  .ask { font-size: 19px; line-height: 1.35; margin: 0 0 18px; font-weight: 550; }
+  button {
+    font: inherit; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); padding: 14px 16px;
+    width: 100%; text-align: left; margin-bottom: 8px; cursor: pointer;
+  }
+  button:active { transform: scale(.995); }
+  button.primary {
+    background: var(--accent); color: #fff; border-color: transparent;
+    text-align: center; font-weight: 600;
+  }
+  button.quiet { color: var(--soft); text-align: center; }
+  input {
+    font: inherit; width: 100%; padding: 14px 16px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    margin-bottom: 10px;
+  }
+  .idle { text-align: center; color: var(--soft); padding: 48px 20px; }
+  .idle .dot {
+    width: 9px; height: 9px; border-radius: 50%; background: var(--good);
+    display: inline-block; margin-right: 7px;
+  }
+  .note { font-size: 12.5px; color: var(--soft); margin: 14px 2px 0; }
+  .flash { color: var(--good); font-size: 14px; text-align: center; padding: 6px; }
+  .bad { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>ApplyPilot</h1>
+  <span id="state">connecting…</span>
+</header>
+
+<main id="main">
+  <div class="idle"><span class="dot"></span>Waiting for a question…</div>
+</main>
+
+<script>
+/*
+ * The whole app. It talks only to the machine that served it.
+ *
+ * A long poll rather than a timer: the request is held open until there is
+ * something to say, so a phone on a bedside table is not waking its radio
+ * every second to be told nothing has happened.
+ */
+const main = document.getElementById("main");
+const state = document.getElementById("state");
+let showing = "";
+let notifyOk = false;
+
+async function askToNotify() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") { notifyOk = true; return; }
+  if (Notification.permission === "denied") return;
+  try { notifyOk = (await Notification.requestPermission()) === "granted"; }
+  catch (err) { notifyOk = false; }
+}
+
+function announce(question) {
+  if (!notifyOk) return;
+  try {
+    new Notification("A question about your application", {
+      body: question.label.slice(0, 140),
+      tag: question.id,
+      renotify: false,
+    });
+  } catch (err) { /* a notification is a nicety */ }
+  if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+}
+
+function draw(question) {
+  main.innerHTML = "";
+  if (!question) {
+    showing = "";
+    main.innerHTML =
+      '<div class="idle"><span class="dot"></span>Nothing to answer. ' +
+      'I will buzz when there is.</div>';
+    return;
+  }
+  if (question.id !== showing) announce(question);
+  showing = question.id;
+
+  const card = document.createElement("div");
+  card.className = "card";
+
+  if (question.host) {
+    const from = document.createElement("p");
+    from.className = "from";
+    from.textContent = question.host;
+    card.appendChild(from);
+  }
+
+  const ask = document.createElement("p");
+  ask.className = "ask";
+  ask.textContent = question.label;
+  card.appendChild(ask);
+
+  if (question.options && question.options.length) {
+    for (const option of question.options) {
+      const button = document.createElement("button");
+      button.textContent = option;
+      button.addEventListener("click", () => answer(question.id, option));
+      card.appendChild(button);
+    }
+  } else {
+    const box = document.createElement("input");
+    box.placeholder = "Your answer";
+    box.autocapitalize = "sentences";
+    const send = document.createElement("button");
+    send.className = "primary";
+    send.textContent = "Send";
+    send.addEventListener("click", () => answer(question.id, box.value));
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") answer(question.id, box.value);
+    });
+    card.appendChild(box);
+    card.appendChild(send);
+  }
+
+  const skip = document.createElement("button");
+  skip.className = "quiet";
+  skip.textContent = "Leave this one blank";
+  skip.addEventListener("click", () => answer(question.id, "skip"));
+  card.appendChild(skip);
+
+  main.appendChild(card);
+
+  const note = document.createElement("p");
+  note.className = "note";
+  note.textContent =
+    "Answered here, saved on your computer. Nothing about you leaves your network.";
+  main.appendChild(note);
+}
+
+async function answer(id, value) {
+  const flash = document.createElement("div");
+  flash.className = "flash";
+  flash.textContent = "Saving…";
+  main.appendChild(flash);
+  try {
+    const response = await fetch("/phone/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: id, reply: value }),
+    });
+    const result = await response.json();
+    if (result.accepted === false) {
+      flash.className = "flash bad";
+      flash.textContent = "That is not one of the choices this form offers.";
+      return;
+    }
+    showing = "";
+    poll();
+  } catch (err) {
+    flash.className = "flash bad";
+    flash.textContent = "Could not reach your computer. Is it still awake?";
+  }
+}
+
+async function poll() {
+  try {
+    const response = await fetch("/phone/next?since=" + encodeURIComponent(showing));
+    const question = await response.json();
+    state.textContent = "connected";
+    state.classList.remove("bad");
+    draw(question && question.id ? question : null);
+  } catch (err) {
+    state.textContent = "offline";
+    state.classList.add("bad");
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  poll();
+}
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/phone/sw.js").catch(() => {});
+}
+document.body.addEventListener("click", askToNotify, { once: true });
+askToNotify();
+poll();
+</script>
+</body>
+</html>

@@ -146,6 +146,36 @@ SYSTEMS: list[tuple[str, str, object, str]] = [
      _json_has("jobs"), "api"),
 ]
 
+#: Systems whose job list is a page rather than a feed, checked by finding
+#: real postings on it rather than by the page merely loading.
+#:
+#: Avature is here because a real company on a real LinkedIn search turned out
+#: to use it -- ManTech, whose form has repeating employment, education and
+#: certification blocks and fifty-three controls. Nothing in the corpus looked
+#: like it, which is exactly the argument for going and looking.
+PAGE_SYSTEMS: list[tuple[str, str, str]] = [
+    ("avature", "https://{slug}.avature.net/en_US/careers/SearchJobs", "JobDetail"),
+    ("avature", "https://careers.{slug}.com/en_US/careers/SearchJobs", "JobDetail"),
+    ("icims", "https://careers-{slug}.icims.com/jobs/search", "icims.com/jobs/"),
+    ("icims", "https://{slug}.icims.com/jobs/search", "icims.com/jobs/"),
+]
+
+
+def try_page_system(name: str, template: str, marker: str, slug: str) -> tuple[str, str] | None:
+    """A job board that is a page. Real postings on it, or it does not count.
+
+    The marker is a link shape only a real listing has -- not the vendor's own
+    name, which is printed on their 404 as readily as on a board.
+    """
+    url = template.format(slug=slug)
+    body = fetch(url)
+    if body is None:
+        return None
+    text = body[:400_000].decode("utf-8", "replace")
+    if text.count(marker) >= 2:
+        return (name, url)
+    return None
+
 #: Workday is not one host. A tenant lives on a numbered pod and names its own
 #: site, and neither is derivable -- so the shapes that actually occur get
 #: tried. This is the system behind more large employers than any other, and
@@ -208,6 +238,30 @@ def try_system(name: str, template: str, check, slug: str) -> tuple[str, str] | 
     return None
 
 
+def _workday_probe(args) -> tuple[str, str] | None:
+    slug, pod, site = args
+    host = f"https://{slug}.{pod}.myworkdayjobs.com"
+    url = f"{host}/wday/cxs/{slug}/{site}/jobs"
+    body = json.dumps({"limit": 5, "offset": 0, "searchText": ""}).encode()
+    headers = {
+        "User-Agent": HEADERS["User-Agent"],
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    try:
+        request = urllib.request.Request(url, data=body, headers=headers)
+        with urllib.request.urlopen(request, timeout=6) as response:
+            if response.status != 200:
+                return None
+            data = json.loads(response.read(200_000))
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError,
+            ValueError, TimeoutError):
+        return None
+    if data.get("jobPostings"):
+        return ("workday", f"{host}/en-US/{site}")
+    return None
+
+
 def try_workday(slug: str) -> tuple[str, str] | None:
     """Workday's own job feed: a POST, and it wants to be asked as an API.
 
@@ -215,28 +269,21 @@ def try_workday(slug: str) -> tuple[str, str] | None:
     the edge in front of it rejects anything that does not look like a browser.
     The API underneath answers perfectly well, so the site name is tried rather
     than read.
+
+    Six pods against fourteen site names is eighty-four requests, and asked one
+    after another that is minutes per company: a sweep of two hundred and sixty
+    companies would have taken most of a day. They do not depend on each other,
+    so they are asked at once.
     """
-    body = json.dumps({"limit": 5, "offset": 0, "searchText": ""}).encode()
-    headers = {
-        "User-Agent": HEADERS["User-Agent"],
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-    for pod in WORKDAY_PODS:
-        host = f"https://{slug}.{pod}.myworkdayjobs.com"
-        for site in workday_sites_for(slug):
-            url = f"{host}/wday/cxs/{slug}/{site}/jobs"
-            try:
-                request = urllib.request.Request(url, data=body, headers=headers)
-                with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-                    if response.status != 200:
-                        continue
-                    data = json.loads(response.read(200_000))
-            except (urllib.error.URLError, urllib.error.HTTPError, OSError,
-                    ValueError, TimeoutError):
-                continue
-            if data.get("jobPostings"):
-                return ("workday", f"{host}/en-US/{site}")
+    combinations = [
+        (slug, pod, site)
+        for pod in WORKDAY_PODS
+        for site in workday_sites_for(slug)
+    ]
+    with ThreadPoolExecutor(max_workers=24) as pool:
+        for found in pool.map(_workday_probe, combinations):
+            if found:
+                return found
     return None
 
 
@@ -250,6 +297,16 @@ def find(company: str) -> dict:
 
     with ThreadPoolExecutor(max_workers=12) as pool:
         for found in pool.map(lambda a: try_system(*a), jobs):
+            if found:
+                return {"company": company, "system": found[0], "url": found[1]}
+
+    pages = [
+        (name, template, marker, slug)
+        for slug in shapes
+        for name, template, marker in PAGE_SYSTEMS
+    ]
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        for found in pool.map(lambda a: try_page_system(*a), pages):
             if found:
                 return {"company": company, "system": found[0], "url": found[1]}
 
