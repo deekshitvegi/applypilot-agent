@@ -1574,3 +1574,22 @@ SuccessFactors and BambooHR serve an empty page shell that says 200 for a
 company they have never heard of -- jobs.jobvite.com/nvidia answers as readily
 as the real one, and NVIDIA is on Workday. Believing those reported the wrong
 system with total confidence, which is worse than reporting nothing.
+
+**167. The resume went into the cover letter box.** Every file control on the
+form was treated as wanting the resume, so on the 27 applications that offer
+both, it was attached twice -- once correctly, once into a box for a document
+it is not. The mapper already says which control is which; "takes a file" is
+not the same as "wants this file".
+
+**168. And the check for it was written for a form with one upload.** A page
+that accepts a document removes the control it arrived on and writes the name
+in its place, so the first fix asked whether every file input had gone. On a
+form that also offers a cover letter, one is still sitting there and always
+will be, so a working attach reported failure on 27 forms.
+*Mechanism.* The page's own words, and the change in them. It was not showing
+this name a moment ago and it is showing it now -- nobody wrote that text but
+the page, and it wrote it because it took the file. Requiring the change is
+what separates this from searching a document for a string we supplied
+ourselves; a form redisplaying a document attached last week does not count.
+*Measured.* 30 Greenhouse applications: 6 resumes attached with 14 failures,
+against 20 attached with none.

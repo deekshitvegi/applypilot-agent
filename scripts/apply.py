@@ -283,7 +283,14 @@ def fill_one(page, target: dict, scripts: list[str], timeout: int) -> dict:
     # better: the number stops meaning anything.
     resume = primary_resume()
     if resume:
-        for question in [q for q in asked if q.get("control") == "file"]:
+        # The resume goes in the resume box, and nowhere else.
+        #
+        # Attaching it to every file control on the form put it in the cover
+        # letter box too -- on 27 applications, which is every Greenhouse form
+        # that offers both. The mapper already says which control is which, so
+        # use that rather than treating "takes a file" as "wants this file".
+        for question in [q for q in asked if q.get("control") == "file"
+                         and q.get("fact_key") in ("", "resume")]:
             try:
                 result = page.evaluate(
                     "([fp, b64, name, mime]) => ApplyPilot.act.attachFile(fp, b64, name, mime)",

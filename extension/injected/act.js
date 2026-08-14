@@ -765,6 +765,11 @@
     for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
     const file = new File([bytes], filename, { type: mime || "application/octet-stream" });
 
+    // Whether the page was already showing this name before anything was
+    // done. Without that reading, a form redisplaying a document somebody
+    // attached earlier would count as this attach having worked.
+    const namedBefore = pageShowsFilename(filename);
+
     const transfer = new DataTransfer();
     transfer.items.add(file);
     el.files = transfer.files;
@@ -781,6 +786,29 @@
     // was a flat failure on an upload that had in fact worked.
     const settled = await waitFor(() => attachedSomewhere(filename), SLOW_PAGE_TIMEOUT);
     if (settled) return settled;
+
+    // The page took the document, removed the control it came in on, and wrote
+    // the name where the control used to be. Nothing holds a FileList any more
+    // -- on a form with a second upload still sitting there, not even the count
+    // of file inputs changes.
+    //
+    // What did change is the page's own words. It did not say this name a
+    // moment ago and it says it now, and nobody wrote that text but the page,
+    // which wrote it because it accepted the file. Requiring the change is what
+    // separates this from searching the document for a string we supplied.
+    if (!namedBefore) {
+      const named = await waitFor(() => pageShowsFilename(filename), SLOW_PAGE_TIMEOUT);
+      if (named) {
+        return {
+          fingerprint: fingerprint,
+          outcome: "verified",
+          signal: "rendered_text",
+          observed: filename,
+          requested: filename,
+          evidence: "the page took the file and is now showing its name",
+        };
+      }
+    }
 
     // The control was replaced by the attachment succeeding.
     //
@@ -820,33 +848,15 @@
       }
     }
 
-    // The upload was taken away entirely, and the page is showing the name.
-    //
-    // One large system removes its file input the moment a document is
-    // accepted and renders the filename in its place, so there is no input
-    // left to read and nothing anywhere holds a FileList. What there is, is
-    // the page's own words saying it has the file.
-    //
-    // Only when every file control has gone. That is what makes this a reading
-    // of the page's state rather than a search for our own string: we did not
-    // write this text, the page did, and it wrote it because it accepted the
-    // document. While an empty upload is still sitting there, nothing has been
-    // accepted and a filename printed somewhere proves nothing.
-    if (inputs.length === 0 && filename) {
-      const shown = (document.body && document.body.innerText) || "";
-      const stem = filename.replace(/\.[a-z0-9]+$/i, "");
-      if (stem.length >= 6 && shown.indexOf(stem) !== -1) {
-        return {
-          fingerprint: "",
-          outcome: "verified",
-          signal: "rendered_text",
-          observed: filename,
-          requested: filename,
-          evidence: "the upload is gone and the page is showing this filename",
-        };
-      }
-    }
     return null;
+  }
+
+  /** Whether the page's own rendered text names this file. */
+  function pageShowsFilename(filename) {
+    const stem = String(filename || "").replace(/\.[a-z0-9]+$/i, "");
+    if (stem.length < 6) return false;
+    const shown = (document.body && document.body.innerText) || "";
+    return shown.indexOf(stem) !== -1;
   }
 
   function highlight(fingerprint) {
