@@ -1612,6 +1612,19 @@ async function runCta() {
       state.busy = false;
       if (state.autoContinue) await runToCompletion();
       else await fillPage();
+    } else if (action === "apply") {
+      // Opening a form sends nothing. It is the one press on a job page that
+      // commits to nothing at all, and not offering it left half of all real
+      // job URLs as a dead end reading "Scan this page".
+      const control = state.observation.apply_controls[0];
+      note("apply", control.text || "Apply", { from: state.observation.url });
+      const moved = await browser({ type: "click", tabId: state.tab.id, text: control.text });
+      if (!moved || moved.outcome === "failed") {
+        say(`"${control.text}" did not open anything.`, "bad");
+      }
+      state.busy = false;
+      await scan();
+      await planPage();
     } else if (action === "next" || action === "submit") {
       const control =
         action === "next"

@@ -70,13 +70,81 @@ def load_scripts() -> list[str]:
 def targets_from(args) -> list[dict]:
     if args.url:
         return [{"ats": "given", "company": "given", "title": "", "url": args.url}]
-    if not TARGETS.exists():
-        print(f"no targets at {TARGETS}; run corpus.py harvest first", file=sys.stderr)
+    source = Path(args.targets) if args.targets else TARGETS
+    if not source.exists():
+        print(f"no targets at {source}; run corpus.py harvest first", file=sys.stderr)
         return []
-    everything = json.loads(TARGETS.read_text(encoding="utf-8"))
+    everything = json.loads(source.read_text(encoding="utf-8"))
     if args.ats:
         everything = [t for t in everything if t.get("ats") in set(args.ats.split(","))]
     return everything[: args.limit]
+
+
+#: How many times to follow an "Apply" before giving up. Four covers the
+#: longest real path seen -- listing, then a choice of how to apply, then a
+#: sign-in wall, then the form -- and stops a page that links to itself from
+#: being followed forever.
+MAX_HOPS = 4
+
+
+def inject(page, scripts: list[str]) -> None:
+    for source in scripts:
+        page.add_script_tag(content=source)
+
+
+def walk_to_application(page, scripts: list[str], timeout: int) -> tuple[dict, list[str]]:
+    """Follow Apply until a form is reached, and say what was walked.
+
+    Half of these URLs land on a job description with an Apply button that
+    nobody had ever pressed: 58 of 125, including every single one served by
+    one large ATS, which reported six fields across eighteen applications. The
+    form was always one or more clicks away.
+
+    It is a walk rather than a click because the path is not one hop. A listing
+    leads to a choice of how to apply, which leads to a sign-in wall, which
+    leads to the form. Each hop is only taken when the page still is not an
+    application, so a page that is already one is never navigated away from.
+    """
+    trail: list[str] = []
+    observation = page.evaluate("() => ApplyPilot.scan.run()")
+
+    for _ in range(MAX_HOPS):
+        if observation.get("kind") == "application":
+            return observation, trail
+        controls = observation.get("apply_controls") or []
+        if not controls:
+            return observation, trail
+
+        # Prefer the plainest way in. "Autofill with Resume" and "Use My Last
+        # Application" both want an account this has no business creating;
+        # applying manually is the path that leads to a form to fill.
+        controls = sorted(
+            controls,
+            key=lambda c: 0 if "manual" in str(c.get("text", "")).lower() else 1,
+        )
+        control = controls[0]
+        label = str(control.get("text") or "Apply")
+        trail.append(label)
+
+        before = page.url
+        href = control.get("href")
+        try:
+            if href:
+                page.goto(href, timeout=timeout, wait_until="domcontentloaded")
+            else:
+                page.evaluate("(text) => ApplyPilot.act.clickByText(text)", label)
+            page.wait_for_timeout(3500)
+        except Exception:
+            return observation, trail
+
+        inject(page, scripts)
+        observation = page.evaluate("() => ApplyPilot.scan.run()")
+        if page.url == before and not (observation.get("fields") or []):
+            # Pressing it changed nothing. Pressing it again will change
+            # nothing twice.
+            return observation, trail
+
+    return observation, trail
 
 
 def fill_one(page, target: dict, scripts: list[str], timeout: int) -> dict:
@@ -97,16 +165,20 @@ def fill_one(page, target: dict, scripts: list[str], timeout: int) -> dict:
         "captcha": "",
         "submit_left_alone": 0,
         "outcome": "",
+        "walked": "",
+        "landed_on": "",
         "note": "",
     }
     questions: list[dict] = []
 
     page.goto(target["url"], timeout=timeout, wait_until="domcontentloaded")
     page.wait_for_timeout(2500)
-    for source in scripts:
-        page.add_script_tag(content=source)
+    inject(page, scripts)
 
-    observation = page.evaluate("() => ApplyPilot.scan.run()")
+    observation, trail = walk_to_application(page, scripts, timeout)
+    if trail:
+        row["walked"] = " > ".join(trail)
+        row["landed_on"] = page.url
     row["kind"] = observation.get("kind", "")
     row["fields"] = len(observation.get("fields") or [])
     row["captcha"] = observation.get("captcha", "")
@@ -217,6 +289,9 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument("--url", default="", help="one application, instead of the corpus")
     parser.add_argument("--ats", default="", help="only these, comma separated")
+    parser.add_argument(
+        "--targets", default="", help="a targets file other than the corpus one"
+    )
     parser.add_argument("--timeout", type=int, default=45000)
     parser.add_argument("--out", default=str(OUT))
     parser.add_argument(
@@ -273,7 +348,7 @@ def main() -> int:
     columns = [
         "at", "ats", "company", "title", "url", "kind", "fields", "planned",
         "verified", "attempted", "failed", "needs_you", "captcha",
-        "submit_left_alone", "outcome", "note",
+        "submit_left_alone", "outcome", "walked", "landed_on", "note",
     ]
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

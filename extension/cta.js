@@ -25,7 +25,37 @@
     const next = ((observation || {}).next_controls || [])[0];
     const submit = ((observation || {}).submit_controls || [])[0];
 
-    if (!observation || ((observation.fields || []).length === 0)) {
+    if (!observation) {
+      return { label: "Scan this page", note: "", action: "scan", disabled: false };
+    }
+
+    const apply = (observation.apply_controls || [])[0];
+
+    // A job description with an Apply button on it.
+    //
+    // Nothing here ever pressed one, and the button said "Scan this page" --
+    // which scanned, found the same nothing, and said it again. A dead end on
+    // 58 of 125 real job URLs, including every one served by one large ATS.
+    // The form was always a click away and nobody was ever offered the click.
+    //
+    // Below filling, so a page with fields to fill is never navigated away
+    // from, and only when this is not already an application: plenty of forms
+    // carry an "Apply" control that is their own submit.
+    if (
+      apply &&
+      observation.kind !== "application" &&
+      actions.length === 0 &&
+      outstanding === 0
+    ) {
+      return {
+        label: "Open the application ▸",
+        note: `Presses "${apply.text}". Nothing is sent by opening a form.`,
+        action: "apply",
+        disabled: false,
+      };
+    }
+
+    if ((observation.fields || []).length === 0) {
       return { label: "Scan this page", note: "", action: "scan", disabled: false };
     }
 

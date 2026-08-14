@@ -102,6 +102,99 @@ def test_a_scanned_page_with_no_fields_offers_a_scan(decide):
 
 
 # ---------------------------------------------------------------------------
+# A job description with an Apply button on it.
+#
+# 58 of 125 real job URLs landed on one of these, including every one served
+# by one large ATS. The button read "Scan this page", which scanned, found the
+# same nothing, and said it again. The form was a click away every time and
+# the click was never offered.
+# ---------------------------------------------------------------------------
+
+
+def test_a_listing_offers_to_open_the_application(decide):
+    choice = decide(
+        {
+            "observation": {
+                "fields": [],
+                "kind": "listing",
+                "apply_controls": [{"text": "Apply", "fingerprint": "b1"}],
+            },
+            "plan": plan_with(0),
+            "outstanding": 0,
+        }
+    )
+    assert choice["action"] == "apply"
+    assert 'Presses "Apply"' in choice["note"]
+
+
+def test_opening_a_form_is_described_as_committing_to_nothing(decide):
+    """Because it does not, and the tool refuses plenty that does."""
+    choice = decide(
+        {
+            "observation": {
+                "fields": [],
+                "kind": "board",
+                "apply_controls": [{"text": "Apply Manually"}],
+            },
+            "plan": plan_with(0),
+            "outstanding": 0,
+        }
+    )
+    assert "Nothing is sent" in choice["note"]
+
+
+def test_a_form_with_fields_is_never_navigated_away_from(decide):
+    """Plenty of applications carry an Apply control that is their own submit.
+
+    Filling outranks opening, so a page with work to do keeps it.
+    """
+    choice = decide(
+        {
+            "observation": {
+                "fields": [{"fingerprint": "f1"}],
+                "kind": "application",
+                "apply_controls": [{"text": "Apply"}],
+            },
+            "plan": plan_with(4),
+            "outstanding": 0,
+        }
+    )
+    assert choice["action"] == "fill"
+
+
+def test_an_application_is_not_re_opened_even_with_nothing_to_fill(decide):
+    choice = decide(
+        {
+            "observation": {
+                "fields": [{"fingerprint": "f1"}],
+                "kind": "application",
+                "apply_controls": [{"text": "Apply"}],
+                "submit_controls": [{"text": "Submit application"}],
+            },
+            "plan": plan_with(0),
+            "outstanding": 0,
+        }
+    )
+    assert choice["action"] != "apply"
+
+
+def test_a_question_outranks_opening_a_new_form(decide):
+    """Walking off a page with an unanswered question loses the answer."""
+    choice = decide(
+        {
+            "observation": {
+                "fields": [{"fingerprint": "f1"}],
+                "kind": "listing",
+                "apply_controls": [{"text": "Apply"}],
+            },
+            "plan": plan_with(0),
+            "outstanding": 2,
+        }
+    )
+    assert choice["action"] == "focus"
+
+
+# ---------------------------------------------------------------------------
 # Filling still does not run past the end of the page on its own.
 # ---------------------------------------------------------------------------
 

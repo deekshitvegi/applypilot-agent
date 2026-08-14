@@ -1452,3 +1452,35 @@ page's shape, scoreboard.py replays those shapes -- and a replay cannot fail to
 write to a page, because it never writes to one. The 62% those runs reported
 was a claim about a replay. apply.py fills, and found this on its first pass.
 → `test_control_shapes.py::test_a_text_box_backed_by_a_hidden_input_is_a_search`
+
+**158. A job description was a dead end.** 58 of 125 real job URLs landed on a
+posting with an Apply button rather than on a form -- including all 18 served
+by one large ATS, which reported six fields across eighteen applications. The
+panel's button read "Scan this page", which scanned, found the same nothing,
+and offered to scan again. The form was one click away every time, and the
+click was never offered to anybody.
+*Mechanism.* A page that is not an application and carries an apply control
+offers to open it. Ranked below filling, so a form with work on it is never
+navigated away from, and below outstanding questions, so an answer in progress
+is not walked away from either. An application carrying its own "Apply" submit
+is not re-opened.
+*More than one hop.* The path is a listing, then a choice of how to apply, then
+often a sign-in wall, then the form. The harness walks up to four, preferring
+the plainest way in: "Apply Manually" over "Autofill with Resume", which wants
+an account this will not create.
+*Where it stops.* That ATS puts account creation in front of every form. The
+walk reaches the registration page and fills everything on it except the
+credentials, which is exactly as far as anybody should go uninvited.
+
+**159. LinkedIn will not say where its Apply button goes.** 27 of 40 postings
+were recorded as "external (behind a login or bespoke)" with no destination at
+all. Opening them in a browser settled it: every one resolves to
+linkedin.com/signup/cold-join. The destination is genuinely unavailable to a
+guest, and reading it out of a signed-in session at volume is scraping an
+account into a suspension.
+*Mechanism.* The company name is public on the guest page, and the hiring
+systems publish their own openings at a slug derived from it. So the name is
+the key: the employer's own board hands over the apply URL directly, with no
+login and no redirect to follow. 5 of 40 companies answered, giving 15 real
+forms, 12 of which filled.
+→ `test_cta_decision.py::test_a_listing_offers_to_open_the_application`
