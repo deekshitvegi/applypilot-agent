@@ -65,8 +65,17 @@ BOARDS = {
     "smartrecruiters": {
         "jobs": "https://api.smartrecruiters.com/v1/companies/{slug}/postings",
         "pick": lambda data: data.get("content") or [],
+        # Two things were wrong with the obvious URL. These paths are
+        # case-sensitive and the company's real name is capitalised -- the API
+        # answers to a lowercase slug but the site does not, so the lowercase
+        # one 404s. And the posting is a description, not a form: the form is
+        # the one-click publication, keyed by the posting's uuid rather than
+        # its id. The identifier comes back in the posting itself, so neither
+        # has to be guessed at.
         "url": lambda job, slug: (
-            f"https://jobs.smartrecruiters.com/{slug}/{job.get('id')}"
+            "https://jobs.smartrecruiters.com/oneclick-ui/company/"
+            f"{(job.get('company') or {}).get('identifier') or slug}"
+            f"/publication/{job.get('uuid')}"
         ),
         "title": lambda job: job.get("name", ""),
     },

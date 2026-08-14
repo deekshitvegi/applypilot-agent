@@ -22,6 +22,7 @@ reviewed. What it produces is a filled form and an honest account of it.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import json
 import sys
@@ -133,9 +134,21 @@ def walk_to_application(page, scripts: list[str], timeout: int) -> tuple[dict, l
                 page.goto(href, timeout=timeout, wait_until="domcontentloaded")
             else:
                 page.evaluate("(text) => ApplyPilot.act.clickByText(text)", label)
-            page.wait_for_timeout(3500)
-        except Exception:
-            return observation, trail
+        except Exception as err:
+            # "Execution context was destroyed, most likely because of a
+            # navigation" is what success looks like from out here: the click
+            # worked and the page went somewhere. Treating it as a failure
+            # returned the *old* observation, so an ATS that navigates on click
+            # reported the listing it had already left -- every one of its
+            # eighteen applications, as a page with nothing on it.
+            if "context was destroyed" not in str(err) and "navigating" not in str(err):
+                return observation, trail
+
+        # A page that never reaches this state is still worth scanning: the
+        # fixed wait below is what most of these need anyway.
+        with contextlib.suppress(Exception):
+            page.wait_for_load_state("domcontentloaded", timeout=timeout)
+        page.wait_for_timeout(3500)
 
         inject(page, scripts)
         observation = page.evaluate("() => ApplyPilot.scan.run()")
@@ -192,7 +205,11 @@ def fill_one(page, target: dict, scripts: list[str], timeout: int) -> dict:
     )
 
     if observation.get("captcha") == "challenge":
-        row["outcome"] = "left alone: CAPTCHA is waiting for a person"
+        row["outcome"] = "left alone: a bot check is waiting for a person"
+        return {"row": row, "questions": questions}
+    if observation.get("kind") == "sign_in":
+        # Not a failure to read the page. The page is a wall.
+        row["outcome"] = "blocked: an account is wanted before the form"
         return {"row": row, "questions": questions}
     if row["fields"] == 0:
         row["outcome"] = "nothing to fill: no controls found"

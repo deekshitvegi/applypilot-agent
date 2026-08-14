@@ -54,7 +54,17 @@
   const CUSTOM_CONTROLS =
     "[role='combobox'],[role='checkbox'],[role='switch'],[contenteditable='true']";
 
-  const APPLY_TEXT = /^(apply|apply now|apply here|apply for this job|apply to this job|easy apply|quick apply|start application|apply with)/i;
+  //: What a button that opens an application is called.
+  //:
+  //: Not always "Apply". One large system labels it "I'm interested", which
+  //: matched nothing here, so its postings scanned as a page with no way into
+  //: them -- reported as a form with no controls, which reads as a fault in
+  //: the reading rather than a button nobody had thought of.
+  //:
+  //: Anchored at the start so "Not interested" and "Share this job" cannot
+  //: match, and kept to phrasings that begin an application rather than finish
+  //: one: "submit" belongs to SUBMIT_TEXT and must never appear here.
+  const APPLY_TEXT = /^(apply|apply now|apply here|apply for this job|apply to this job|easy apply|quick apply|start application|apply with|i'?m interested|start your application|begin( your)? application|start applying)/i;
   const SUBMIT_TEXT = /^(submit|submit application|send application|submit my application|finish|complete application)/i;
   const NEXT_TEXT = /(save and continue|save & continue|next|continue|proceed|save and next)/i;
   const ADD_TEXT = /(add another|add more|add an(other)? entry|add education|add experience|add employment|add school|add work|add position|add degree|\+\s*add)/i;
@@ -281,6 +291,20 @@
    * waiting to be ticked or a puzzle panel on screen -- and neither of those is
    * something this agent will ever solve.
    */
+  /**
+   * Bot checks that are the whole page rather than a widget on it.
+   *
+   * These are not the tick box beside a form -- they are served *instead* of
+   * the page, before any of it exists. An application form behind one reads as
+   * a page with nothing on it, which is indistinguishable from a page this
+   * tool failed to read, and was reported as "no controls found": our fault by
+   * implication, on a form that was never sent.
+   *
+   * Naming them is not working around them. It is the difference between
+   * stopping with a reason and stopping with a shrug.
+   */
+  const CHALLENGE_HOSTS = /(captcha-delivery|datadome|perimeterx|px-cloud|cloudflare[^/]*\/cdn-cgi\/challenge|challenges\.cloudflare|imperva|incapsula|kasada|arkoselabs|funcaptcha)/i;
+
   function captchaState() {
     const frames = D.deepQuery("iframe", document);
     let sawBadge = false;
@@ -289,6 +313,11 @@
 
     for (const frame of frames) {
       const src = frame.getAttribute("src") || "";
+
+      // A whole-page check. There is no size test worth doing: if one of these
+      // is on the page at all, it is the page.
+      if (CHALLENGE_HOSTS.test(src)) return "challenge";
+
       const isRecaptcha = /recaptcha/i.test(src);
       const isHcaptcha = /hcaptcha/i.test(src);
       if (!isRecaptcha && !isHcaptcha) continue;
@@ -458,8 +487,55 @@
       return { kind: "listing", notes: notes };
     }
 
+    // A wall where an application should be.
+    //
+    // One large ATS puts "Create Account/Sign In, step 1 of 6" in front of
+    // every form, and offers nothing but "Sign in with Google" and "Sign in
+    // with email" -- no fields at all, so nothing above matches and it came
+    // back "unknown". That reads as a page this tool could not understand,
+    // when in fact it understood it perfectly: there is nothing here for
+    // anybody who will not make an account, and this will not make one.
+    //
+    // Last, so a real form carrying a "Sign in" link in its header is never
+    // mistaken for one of these.
+    if (signInOnly(labelled, controls)) {
+      notes.push("an account is wanted before the form; nothing here to fill");
+      return { kind: "sign_in", notes: notes };
+    }
+
     notes.push(`${controls.length} controls, ${postings} posting links`);
     return { kind: "unknown", notes: notes };
+  }
+
+  //: A control that starts somebody signing in rather than applying.
+  //:
+  //: Distinct from SIGN_IN_TEXT above, which names the button that submits a
+  //: sign-in form and so includes Next, Continue and Submit. Those words
+  //: belong to any form at all and would call every one of them a wall.
+  const ACCOUNT_GATE_TEXT = /^(sign in|log ?in|continue with|sign in with|create account|register|sign up)\b/i;
+
+  /**
+   * True when a page offers a way in and nothing to fill.
+   *
+   * Deliberately strict on both halves. There must be a sign-in control, and
+   * there must be no question to answer -- a form with a "Sign in" link above
+   * it is a form, and filling it is the whole job.
+   */
+  function signInOnly(labelled, controls) {
+    if (labelled.length) return false;
+    if (!matchingControls(ACCOUNT_GATE_TEXT).length) return false;
+    // A control that takes a value means there is something here after all,
+    // even if nothing could be labelled -- better to call that unknown and
+    // look again than to write the page off.
+    for (const control of controls) {
+      const tag = (control.tagName || "").toLowerCase();
+      if (tag === "select" || tag === "textarea") return false;
+      if (tag === "input") {
+        const type = (control.getAttribute("type") || "text").toLowerCase();
+        if (type !== "hidden" && type !== "radio" && type !== "checkbox") return false;
+      }
+    }
+    return true;
   }
 
   /**

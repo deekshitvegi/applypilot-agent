@@ -1484,3 +1484,37 @@ the key: the employer's own board hands over the apply URL directly, with no
 login and no redirect to follow. 5 of 40 companies answered, giving 15 real
 forms, 12 of which filled.
 → `test_cta_decision.py::test_a_listing_offers_to_open_the_application`
+
+**160. A wall was reported as a page nobody could read.** Two different pages
+came back "no controls found", which reads as a fault in the reading. Neither
+was. One ATS puts "Create Account/Sign In, step 1 of 6" in front of every
+application and offers two sign-in buttons and no fields at all. Another serves
+a whole-page bot check instead of the form. Both were understood perfectly:
+there is nothing there for anybody who will not make an account or answer a
+challenge, and this does neither.
+*Mechanism.* A page offering a way in and nothing to fill is `sign_in` -- a
+kind that already existed and that nothing had ever returned. Strict on both
+halves: there must be a sign-in control and no question to answer, so a form
+with a "Sign in" link in its header stays a form. Whole-page bot checks are
+named by their host (DataDome, PerimeterX, Cloudflare, Kasada, Arkose) and need
+no size test: if one is on the page, it is the page.
+*Naming a challenge is not working around one.* It is the difference between
+stopping with a reason and stopping with a shrug.
+
+**161. An Apply button that was not called Apply.** One large ATS labels it
+"I'm interested". The pattern matched only "apply", so those postings scanned
+as a page with no way into them and were reported as a form with no controls.
+*Mechanism.* The pattern covers the phrasings that begin an application, still
+anchored at the start so "Not interested" cannot match, and still with no
+overlap on SUBMIT_TEXT -- a word that finishes an application must never appear
+on the list that opens one.
+
+**162. A click that worked was read as a click that failed.** Driving a real
+browser, pressing a control that navigates destroys the execution context, and
+the harness caught that as an error and returned the observation from *before*
+the click. So an ATS that navigates on Apply reported the listing it had
+already left -- every one of its eighteen applications, as a page with nothing
+on it, after the walk had in fact reached the right page.
+*Mechanism.* A destroyed context after a click is what success looks like from
+outside. It waits for the new page and scans that instead.
+→ `test_walls_and_gates.py`
