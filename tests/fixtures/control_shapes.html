@@ -59,5 +59,27 @@
   <label for="cv">Resume</label>
   <input id="cv" type="file">
 
+  <!-- 10. A plain text box whose real answer lives in the hidden input beside
+       it. Nothing on the visible box says so: no role, no aria-autocomplete,
+       no placeholder. Typing into it and stopping leaves the hidden one empty,
+       and the hidden one is what the form submits. Copied from a required
+       field that failed on every application one large ATS serves. -->
+  <label><div>Current location</div>
+    <div class="application-field">
+      <input id="current-location" type="text" name="location" required>
+      <input id="selected-location" type="hidden" name="selectedLocation">
+      <div class="dropdown-container"></div>
+    </div>
+  </label>
+
+  <!-- 11. The same shape, but the hidden input is somebody else's business.
+       A form id or a token sitting beside a text box does not make that box
+       a search. -->
+  <label for="middle">Middle Name</label>
+  <div class="application-field">
+    <input id="middle" type="text" name="middleName">
+    <input type="hidden" name="csrfToken" value="abc123">
+  </div>
+
   <button type="submit">Submit application</button>
 </form>

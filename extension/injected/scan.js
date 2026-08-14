@@ -143,9 +143,56 @@
 
     if (["text", "email", "tel", "number", "url"].indexOf(kind) !== -1) {
       if (DATE_HINT.test(hint)) return "date_picker";
+      if (backedByHiddenValue(el)) return "type_to_search";
       return "free_text";
     }
     return "unknown";
+  }
+
+  /**
+   * A text box whose real answer is kept in a hidden input beside it.
+   *
+   * This shape is everywhere and it does not announce itself. There is no
+   * role, no aria-autocomplete, nothing a scan can read off the box itself:
+   *
+   *   <div class="application-field">
+   *     <input type="text" name="location" required>
+   *     <input type="hidden" name="selectedLocation">
+   *     <div class="...dropdown-container">
+   *
+   * Typing into the visible box and stopping leaves the hidden one empty, and
+   * the hidden one is what the form submits. The page then holds nothing --
+   * which is exactly what a verified read reported, on a required field, on
+   * every application one large ATS serves. Eleven failures across four
+   * different employers were this one control.
+   *
+   * The visible box has to be worked as what it is: type, wait for the
+   * suggestions the hidden field is waiting on, and pick one.
+   */
+  function backedByHiddenValue(el) {
+    const field = el.parentElement;
+    if (!field) return false;
+    for (const sibling of field.children) {
+      if (sibling === el) continue;
+      if ((sibling.tagName || "").toLowerCase() !== "input") continue;
+      const type = (sibling.getAttribute("type") || "").toLowerCase();
+      if (type !== "hidden") continue;
+      // A hidden input holding something unrelated -- a CSRF token, a form id
+      // -- is not this control's answer. The pair is named for the same thing:
+      // location / selectedLocation, city / cityId, school / schoolValue.
+      const mine = fieldWord(el);
+      const theirs = fieldWord(sibling);
+      if (mine && theirs && (theirs.indexOf(mine) !== -1 || mine.indexOf(theirs) !== -1)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** The letters of a control's name or id, for comparing a pair. */
+  function fieldWord(el) {
+    const said = (el.getAttribute("name") || el.getAttribute("id") || "").toLowerCase();
+    return said.replace(/[^a-z]/g, "");
   }
 
   /**

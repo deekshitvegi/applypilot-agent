@@ -1428,3 +1428,27 @@ could have got right: nothing in front of it dated "now".
 about the applicant, so it appears only where there is a history for it to
 date -- an empty profile still reports nothing recorded.
 → `test_answer_from_evidence.py::test_a_quote_that_does_not_mention_what_was_asked_is_refused`
+
+**157. A required field failed on every application one ATS serves, and no
+replay could have found it.** Filling 125 real applications produced eleven
+failures spread across four unrelated employers -- one each, always the same
+control: a required "Current location" box that reported, correctly, that the
+page held nothing after it was written to.
+
+    <div class="application-field">
+      <input type="text" name="location" required>
+      <input type="hidden" name="selectedLocation">
+      <div class="...dropdown-container">
+
+The visible box announces nothing -- no role, no aria-autocomplete, no
+placeholder to read -- so it scanned as ordinary text. The hidden input beside
+it is what the form submits, and it stays empty until a suggestion is picked.
+*Mechanism.* A text box paired with a hidden input named for the same thing is
+worked as a search: type, wait, pick. The pair has to share a name, or a CSRF
+token sitting beside a text box would turn it into a search that offers
+nothing.
+*How it was found.* Every other script in scripts/ reads. corpus.py saves a
+page's shape, scoreboard.py replays those shapes -- and a replay cannot fail to
+write to a page, because it never writes to one. The 62% those runs reported
+was a claim about a replay. apply.py fills, and found this on its first pass.
+→ `test_control_shapes.py::test_a_text_box_backed_by_a_hidden_input_is_a_search`

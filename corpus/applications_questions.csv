@@ -1,0 +1,155 @@
+company,url,question,control,how_it_works,required,options,why
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,"As part of our interview process, we may use AI notetakers to transcribe conversations for accuracy and efficiency. Please see our candidate privacy policy for more information on how we process your data. Your decision to opt in or out of this tooling will not impact your candidacy. ✱",radio,choice_group,yes,"Yes, I consent | No, I do not consent",required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Resume/CV ✱ ATTACH RESUME/CV,file,file,no,,a document this form will take
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Current location ✱,text,type_to_search,yes,,the label is exactly this field
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,English (ENG),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Spanish (SPA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,French (FRA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,German (DEU),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Japanese (JPN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Cantonese (CANT),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Mandarin (MAN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Dutch (NLD),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Hindi (HIN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Arabic (ARA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Danish (DAN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Turkish (TUR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Portuguese (POR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Hebrew (HEB),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Swedish (SWE),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Norwegian (NOR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Italian (ITA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Vietnamese (VIE),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Tagalog (TGL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Khmer (KHM),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Hmong (HMN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Telugu (TEL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Bengali (BNE),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Marathi (MAR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Urdu (URD),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Gujarati (GUJ),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Lithuanian (LIT),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Korean (KOR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,American Sign Language (ASL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,British Sign Language (BSL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,field0,checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Polish,checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Other,checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/ac978161-6f46-4f6b-ad9e-a258e642751c/apply,Please tell us how you heard about this opportunity. ✱,select,list_present,yes,"Agency or Non-Palantir Recruiter | America's Job Exchange | BuiltIn | Campus Ambassador | Friend or Family | Glassdoor | Hackajob | Hallo | Handshake | Job Board (Indeed, Monster, etc.) | LinkedIn | Palantir Event",required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,"As part of our interview process, we may use AI notetakers to transcribe conversations for accuracy and efficiency. Please see our candidate privacy policy for more information on how we process your data. Your decision to opt in or out of this tooling will not impact your candidacy. ✱",radio,choice_group,yes,"Yes, I consent | No, I do not consent",required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Resume/CV ✱ ATTACH RESUME/CV,file,file,no,,a document this form will take
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Current location ✱,text,type_to_search,yes,,the label is exactly this field
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,English (ENG),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Spanish (SPA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,French (FRA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,German (DEU),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Japanese (JPN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Cantonese (CANT),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Mandarin (MAN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Dutch (NLD),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Hindi (HIN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Arabic (ARA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Danish (DAN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Turkish (TUR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Portuguese (POR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Hebrew (HEB),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Swedish (SWE),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Norwegian (NOR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Italian (ITA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Vietnamese (VIE),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Tagalog (TGL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Khmer (KHM),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Hmong (HMN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Telugu (TEL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Bengali (BNE),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Marathi (MAR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Urdu (URD),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Gujarati (GUJ),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Lithuanian (LIT),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Korean (KOR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,American Sign Language (ASL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,British Sign Language (BSL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,field0,checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Polish,checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Other,checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/0bbfd4f4-41ff-4ec6-b73f-5200efd5d4d3/apply,Please tell us how you heard about this opportunity. ✱,select,list_present,yes,"Agency or Non-Palantir Recruiter | America's Job Exchange | BuiltIn | Campus Ambassador | Friend or Family | Glassdoor | Hackajob | Hallo | Handshake | Job Board (Indeed, Monster, etc.) | LinkedIn | Palantir Event",required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,"As part of our interview process, we may use AI notetakers to transcribe conversations for accuracy and efficiency. Please see our candidate privacy policy for more information on how we process your data. Your decision to opt in or out of this tooling will not impact your candidacy. ✱",radio,choice_group,yes,"Yes, I consent | No, I do not consent",required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Resume/CV ✱ ATTACH RESUME/CV,file,file,no,,a document this form will take
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Current location ✱,text,type_to_search,yes,,the label is exactly this field
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,English (ENG),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Spanish (SPA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,French (FRA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,German (DEU),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Japanese (JPN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Cantonese (CANT),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Mandarin (MAN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Dutch (NLD),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Hindi (HIN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Arabic (ARA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Danish (DAN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Turkish (TUR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Portuguese (POR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Hebrew (HEB),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Swedish (SWE),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Norwegian (NOR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Italian (ITA),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Vietnamese (VIE),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Tagalog (TGL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Khmer (KHM),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Hmong (HMN),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Telugu (TEL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Bengali (BNE),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Marathi (MAR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Urdu (URD),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Gujarati (GUJ),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Lithuanian (LIT),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Korean (KOR),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,American Sign Language (ASL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,British Sign Language (BSL),checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,field0,checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Polish,checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Other,checkbox,choice_group,yes,,required and not answered yet
+palantir,https://jobs.lever.co/palantir/fe2a8c69-49b7-405f-816c-a6c6f894399a/apply,Please tell us how you heard about this opportunity. ✱,select,list_present,yes,"Agency or Non-Palantir Recruiter | America's Job Exchange | BuiltIn | Campus Ambassador | Friend or Family | Glassdoor | Hackajob | Hallo | Handshake | Job Board (Indeed, Monster, etc.) | LinkedIn | Palantir Event",required and not answered yet
+spotify,https://jobs.lever.co/spotify/890b2c0f-f46f-4a4b-bb73-3a6af6e0edd5/apply,Resume/CV ✱ ATTACH RESUME/CV,file,file,no,,a document this form will take
+spotify,https://jobs.lever.co/spotify/890b2c0f-f46f-4a4b-bb73-3a6af6e0edd5/apply,Current location ✱,text,type_to_search,yes,,the label is exactly this field
+spotify,https://jobs.lever.co/spotify/890b2c0f-f46f-4a4b-bb73-3a6af6e0edd5/apply,Have you ever been previously employed by Spotify? ✱,multiselect,list_on_open,yes,No | Yes - Intern | Yes - Full Time Employment,none of the options offered here match your saved answer 'None'
+spotify,https://jobs.lever.co/spotify/08d82da1-0c72-44d1-91eb-7fa22dee3d39/apply,Resume/CV ✱ ATTACH RESUME/CV,file,file,no,,a document this form will take
+spotify,https://jobs.lever.co/spotify/08d82da1-0c72-44d1-91eb-7fa22dee3d39/apply,Current location ✱,text,type_to_search,yes,,the label is exactly this field
+spotify,https://jobs.lever.co/spotify/08d82da1-0c72-44d1-91eb-7fa22dee3d39/apply,Have you ever been previously employed by Spotify? ✱,multiselect,list_on_open,yes,No | Yes - Intern | Yes - Full Time Employment,none of the options offered here match your saved answer 'None'
+spotify,https://jobs.lever.co/spotify/a0fa7da3-4c3c-4fa2-97bd-7d6eb01eb9e5/apply,Resume/CV ✱ ATTACH RESUME/CV,file,file,no,,a document this form will take
+spotify,https://jobs.lever.co/spotify/a0fa7da3-4c3c-4fa2-97bd-7d6eb01eb9e5/apply,Current location ✱,text,type_to_search,yes,,the label is exactly this field
+spotify,https://jobs.lever.co/spotify/a0fa7da3-4c3c-4fa2-97bd-7d6eb01eb9e5/apply,Have you ever been previously employed by Spotify? ✱,multiselect,list_on_open,yes,No | Yes - Intern | Yes - Full Time Employment,none of the options offered here match your saved answer 'None'
+binance,https://jobs.lever.co/binance/ed0cabf1-90a5-4127-bcbd-54f2207a9a95/apply,"Do you have any experience with cryptocurrency or blockchain, either professionally or personally? ✱",radio,choice_group,yes,Yes | No,required and not answered yet
+binance,https://jobs.lever.co/binance/ed0cabf1-90a5-4127-bcbd-54f2207a9a95/apply,Resume/CV ATTACH RESUME/CV,file,file,no,,a document this form will take
+binance,https://jobs.lever.co/binance/ed0cabf1-90a5-4127-bcbd-54f2207a9a95/apply,Current location,text,type_to_search,no,,the label is exactly this field
+binance,https://jobs.lever.co/binance/ed0cabf1-90a5-4127-bcbd-54f2207a9a95/apply,Where do you currently live? ✱,select,list_present,yes,Afghanistan | Albania | Algeria | Andorra | Angola | Antigua and Barbuda | Argentina | Armenia | Australia | Austria | Azerbaijan | Bahamas,required and not answered yet
+binance,https://jobs.lever.co/binance/ed0cabf1-90a5-4127-bcbd-54f2207a9a95/apply,What is your nationality? ✱,select,list_present,yes,Afghanistan | Albania | Algeria | Andorra | Angola | Antigua and Barbuda | Argentina | Armenia | Australia | Austria | Azerbaijan | Bahamas,required and not answered yet
+binance,https://jobs.lever.co/binance/ed0cabf1-90a5-4127-bcbd-54f2207a9a95/apply,Language 1 ✱,select,list_present,yes,Albanian | Arabic | Armenian | Azerbaijani | Belarusian | Bulgarian | Cantonese | Chinese | Croatian | Czech | Danish | Dutch,required and not answered yet
+binance,https://jobs.lever.co/binance/ed0cabf1-90a5-4127-bcbd-54f2207a9a95/apply,Language 2 ✱,select,list_present,yes,Albanian | Arabic | Armenian | Azerbaijani | Belarusian | Bulgarian | Cantonese | Chinese | Croatian | Czech | Danish | Dutch,required and not answered yet
+binance,https://jobs.lever.co/binance/0cb402ad-7715-4127-ad25-14ab4b142983/apply,Resume/CV ATTACH RESUME/CV,file,file,no,,a document this form will take
+binance,https://jobs.lever.co/binance/0cb402ad-7715-4127-ad25-14ab4b142983/apply,Current location,text,type_to_search,no,,the label is exactly this field
+binance,https://jobs.lever.co/binance/0cb402ad-7715-4127-ad25-14ab4b142983/apply,Where do you currently live? ✱,select,list_present,yes,Afghanistan | Albania | Algeria | Andorra | Angola | Antigua and Barbuda | Argentina | Armenia | Australia | Austria | Azerbaijan | Bahamas,required and not answered yet
+binance,https://jobs.lever.co/binance/0cb402ad-7715-4127-ad25-14ab4b142983/apply,What is your nationality? ✱,select,list_present,yes,Afghanistan | Albania | Algeria | Andorra | Angola | Antigua and Barbuda | Argentina | Armenia | Australia | Austria | Azerbaijan | Bahamas,required and not answered yet
+binance,https://jobs.lever.co/binance/0cb402ad-7715-4127-ad25-14ab4b142983/apply,Language 1 ✱,select,list_present,yes,Albanian | Arabic | Armenian | Azerbaijani | Belarusian | Bulgarian | Cantonese | Chinese | Croatian | Czech | Danish | Dutch,required and not answered yet
+binance,https://jobs.lever.co/binance/0cb402ad-7715-4127-ad25-14ab4b142983/apply,Language 2 ✱,select,list_present,yes,Albanian | Arabic | Armenian | Azerbaijani | Belarusian | Bulgarian | Cantonese | Chinese | Croatian | Czech | Danish | Dutch,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/3414ba28-35f7-45d3-8e13-35c883959635/apply,Are you located in the NYC area? ✱,radio,choice_group,yes,Yes | No,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/3414ba28-35f7-45d3-8e13-35c883959635/apply,"If you answered no to the above question, are you open to relocating? ✱",radio,choice_group,yes,Yes | No | I'm already in NYC,this is a follow-up to the question above it
+matchgroup,https://jobs.lever.co/matchgroup/3414ba28-35f7-45d3-8e13-35c883959635/apply,Are you willing to come into the NYC office during the week (3 days) according to our hybrid policy? ✱,radio,choice_group,yes,"Yes | No, I need to work remotely.",required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/3414ba28-35f7-45d3-8e13-35c883959635/apply,Resume/CV ✱ ATTACH RESUME/CV,file,file,no,,a document this form will take
+matchgroup,https://jobs.lever.co/matchgroup/3414ba28-35f7-45d3-8e13-35c883959635/apply,Current location ✱,text,type_to_search,yes,,the label is exactly this field
+matchgroup,https://jobs.lever.co/matchgroup/3414ba28-35f7-45d3-8e13-35c883959635/apply,field1,select,list_present,yes,Yes | No,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/0152fd07-2715-4fe1-a208-af9d03c0b358/apply,Resume/CV ✱ ATTACH RESUME/CV,file,file,no,,a document this form will take
+matchgroup,https://jobs.lever.co/matchgroup/0152fd07-2715-4fe1-a208-af9d03c0b358/apply,Current location ✱,text,type_to_search,yes,,the label is exactly this field
+matchgroup,https://jobs.lever.co/matchgroup/0152fd07-2715-4fe1-a208-af9d03c0b358/apply,What is your current salary compensation (please explain your salary breakdown)? ✱,textarea,long_text,yes,,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/0152fd07-2715-4fe1-a208-af9d03c0b358/apply,본인의 영어 커뮤니케이션 수준(서면/회화)에 대하여 각각 말씀 부탁드립니다. (업무에 영어를 이용한 경험이 있다면 함께 기재해주세요.) ✱,textarea,long_text,yes,,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/0152fd07-2715-4fe1-a208-af9d03c0b358/apply,"I consent to retain the materials for future hiring purposes (i.e., inclusion in a talent pool) for 2 years. I understand I may withdraw my consent at any time and there will be no disadvantage if I refuse to provide such consent.",checkbox,choice_group,no,,an agreement -- yours to read and accept
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,Work From Home: Would you be able to work at least 3 days from the office? ✱,radio,choice_group,yes,Yes | No,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,"Will you, now, or in the future, require the support of Match Group to maintain that authorization? ✱",radio,choice_group,yes,Yes | No,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,Please confirm the type of contrat you are seeking : ✱,radio,choice_group,yes,Apprenticeship | Professionalization,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,Resume/CV ✱ ATTACH RESUME/CV,file,file,no,,a document this form will take
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,Current location ✱,text,type_to_search,yes,,the label is exactly this field
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,"Have you been employed by Match Group, in any of its brands, previously? ✱",select,list_present,yes,Yes | No,none of the options offered here match your saved answer 'None'
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,Please indicate the salary range you would expect for this position? (Fixed salary + Bonus) ✱,text,free_text,yes,,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,"Please confirm your degree (Master 1, Licence 3, DUT 2...) for this contract : ✱",textarea,long_text,yes,,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,"What is your alternating schedule ? (1day/4days, 1week/3weeks..) ✱",textarea,long_text,yes,,required and not answered yet
+matchgroup,https://jobs.lever.co/matchgroup/4f8b6ca1-70f4-4629-8cca-435397226e29/apply,What is your start date ? ✱,textarea,long_text,yes,,required and not answered yet

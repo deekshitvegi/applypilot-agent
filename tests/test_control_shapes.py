@@ -62,6 +62,33 @@ def test_the_two_comboboxes_are_told_apart(scan):
     assert types["operation"] == "type_to_search"
 
 
+def test_a_text_box_backed_by_a_hidden_input_is_a_search(scan):
+    """The shape that failed eleven times across four employers.
+
+        <input type="text" name="location" required>
+        <input type="hidden" name="selectedLocation">
+
+    Nothing on the visible box announces it: no role, no aria-autocomplete, no
+    placeholder to read. Typing into it and stopping leaves the hidden one
+    empty, and the hidden one is what the form submits -- so a verified read
+    correctly reported that the page held nothing, on a required field, on
+    every application that ATS serves.
+    """
+    found = by_label(scan("control_shapes.html")[1])
+    assert found["Current location"]["operation"] == "type_to_search"
+
+
+def test_an_unrelated_hidden_input_does_not_make_a_search(scan):
+    """A CSRF token beside a text box is not that box's answer.
+
+    The pair has to be named for the same thing -- location and
+    selectedLocation -- or every form with a hidden token in it would have its
+    text boxes worked as searches that offer nothing.
+    """
+    found = by_label(scan("control_shapes.html")[1])
+    assert found["Middle Name"]["operation"] == "free_text"
+
+
 def test_nothing_on_a_real_form_shape_comes_back_unrecognised(scan):
     _, observation = scan("control_shapes.html")
     unknown = [
