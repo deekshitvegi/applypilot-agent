@@ -324,6 +324,56 @@ FACTS: tuple[FactSpec, ...] = (
         topics=("hear", "referral", "source"), supplementary=True,
         prompt="How you usually hear about roles", onboarding_group="preferences",
     ),
+    # Questions real applications ask that nothing here could answer.
+    #
+    # Taken from what the corpus actually asked rather than from imagination:
+    # each of these turned up on real forms, was matched to no fact at all, and
+    # so was handed back to the applicant every single time. Answering one of
+    # them once is the whole point of keeping a profile.
+    _f(
+        "previously_interviewed", "have you ever interviewed",
+        "have you interviewed with us before", "have you previously interviewed",
+        "have you ever interviewed here before", "previously interviewed",
+        kind="choice", choices=YES_NO,
+        topics=("interviewed", "interview"),
+        prompt="Have you interviewed at the companies you apply to before?",
+        onboarding_group="preferences", supplementary=True,
+    ),
+    _f(
+        "earliest_start_date", "earliest start date",
+        "when is the earliest you would want to start",
+        "when could you start", "earliest available start date",
+        "when are you available to start", "earliest possible start date",
+        topics=("earliest",),
+        prompt="Earliest date you could start",
+        onboarding_group="preferences", supplementary=True,
+    ),
+    _f(
+        "onsite_days", "how many days per week in office",
+        "days per week in the office", "days in office",
+        "how many days a week are you willing to be in the office",
+        topics=("days",),
+        prompt="Days a week you would come into an office",
+        help_text="A number, or 'none' if you will only work remotely.",
+        onboarding_group="preferences", supplementary=True,
+    ),
+    _f(
+        "years_experience", "years of experience",
+        "how many years of experience", "total years of experience",
+        "years of relevant experience", "years of professional experience",
+        topics=("years",),
+        prompt="Years of professional experience",
+        onboarding_group="preferences", supplementary=True,
+    ),
+    _f(
+        "additional_information", "additional information",
+        "anything else you would like us to know",
+        "is there anything else", "other information",
+        "additional comments", "anything else we should know",
+        prompt="Anything else you always want employers to know",
+        help_text="Left blank is fine. A short paragraph reused across forms.",
+        onboarding_group="preferences", supplementary=True,
+    ),
     _f(
         "previously_employed", "have you ever been employed by",
         "previously employed by", "former employee",

@@ -1545,3 +1545,32 @@ nothing.
 own list and nowhere near enough for one that sends the document to a server
 and redraws when it returns.
 → `test_control_shapes.py::test_a_one_pixel_file_input_behind_a_dropzone_is_on_the_page`
+
+**165. Seven questions real forms ask that nothing here could answer.** Taken
+from what the corpus asked and the matcher matched to nothing: whether you have
+interviewed there before, the earliest date you could start, how many days a
+week you would come into an office, years of professional experience, and a
+paragraph of anything else worth saying. Each was handed back to the applicant
+on every form that asked it.
+*Not guessed at.* Two more were written and removed the same afternoon --
+current employer and current job title -- because the employment record already
+answers those, and a flat fact took the question away from the record that had
+the better answer. Nine tests said so.
+
+**166. "Cannot be told apart from outside a login" was true of the five that
+were asked.** LinkedIn resolves every posting to a sign-up wall, so a company
+name is all there is to work from, and probing five systems answered for 5
+companies out of 40. The other 35 were written off as Workday, iCIMS, Oracle or
+bespoke.
+*Mechanism.* Ask more systems, under more spellings. A company's board is filed
+under a name nobody can reason out -- Match Group is matchgroup on one system
+and match on another -- so the shapes get tried rather than deduced. Workday is
+asked properly: its front page answers 406 to anything that does not look like
+a browser, while the feed underneath is a plain POST that answers to anyone,
+and the site name that could not be guessed is tried from the shapes real
+tenants use. 13 of 36 companies, no login anywhere.
+*And five systems were left out on purpose.* Jobvite, iCIMS, Taleo,
+SuccessFactors and BambooHR serve an empty page shell that says 200 for a
+company they have never heard of -- jobs.jobvite.com/nvidia answers as readily
+as the real one, and NVIDIA is on Workday. Believing those reported the wrong
+system with total confidence, which is worse than reporting nothing.

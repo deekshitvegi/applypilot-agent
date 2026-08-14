@@ -27,8 +27,12 @@ import json
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import find_board  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = ROOT / "corpus" / "linkedin_sample.csv"
@@ -84,6 +88,52 @@ BOARDS = {
 
 def slugify(company: str) -> str:
     return re.sub(r"[^a-z0-9]", "", (company or "").lower())
+
+
+def workday_openings(board_url: str, company: str, per_company: int) -> list[dict]:
+    """Jobs from a Workday tenant, given the site find_board resolved.
+
+    Workday is the system behind more large employers than any other and it was
+    the whole of the "cannot be told apart from outside a login" bucket. It can:
+    the feed is a POST and it answers without an account. What could not be
+    guessed was the site name, and that is what find_board resolves.
+    """
+    # https://tenant.wd5.myworkdayjobs.com/en-US/SiteName
+    parts = urllib.parse.urlsplit(board_url)
+    host = f"{parts.scheme}://{parts.netloc}"
+    tenant = parts.netloc.split(".")[0]
+    site = parts.path.rstrip("/").split("/")[-1]
+    body = json.dumps({"limit": per_company, "offset": 0, "searchText": ""}).encode()
+    try:
+        request = urllib.request.Request(
+            f"{host}/wday/cxs/{tenant}/{site}/jobs",
+            data=body,
+            headers={
+                "User-Agent": HEADERS["User-Agent"],
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            data = json.load(response)
+    except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+        return []
+
+    out = []
+    for job in (data.get("jobPostings") or [])[:per_company]:
+        path = job.get("externalPath") or ""
+        if not path:
+            continue
+        out.append(
+            {
+                "ats": "workday",
+                "company": company,
+                "title": str(job.get("title", ""))[:90],
+                "url": f"{host}/en-US/{site}{path}",
+                "from": "linkedin",
+            }
+        )
+    return out
 
 
 def fetch(url: str, timeout: int = 12):
@@ -147,15 +197,26 @@ def main() -> int:
     seen_company: set[str] = set()
 
     for row in rows:
-        system = (row.get("system") or "").strip()
         company = (row.get("company") or "").strip()
-        if system not in BOARDS:
-            unreachable += 1
-            continue
-        if slugify(company) in seen_company:
+        if not company or slugify(company) in seen_company:
             continue
         seen_company.add(slugify(company))
-        found = openings(system, company, args.per_company)
+
+        # Ask every system that publishes a board, under every name shape the
+        # company might be filed under. The survey's own guess covered five
+        # systems and one spelling; this covers Workday too, which is most of
+        # what "cannot be told apart from outside a login" actually was.
+        resolved = find_board.find(company)
+        system = resolved["system"]
+        if not system:
+            unreachable += 1
+            print(f"  {'-':16} {company[:26]:28} no board answered")
+            continue
+
+        if system == "workday":
+            found = workday_openings(resolved["url"], company, args.per_company)
+        else:
+            found = openings(system, company, args.per_company)
         if found:
             targets.extend(found)
             reachable += 1
