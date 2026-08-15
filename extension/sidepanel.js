@@ -1861,13 +1861,47 @@ function readActivity() {
 }
 
 /** Hand a file to the browser's own download. Nothing leaves the machine. */
-function download(filename, blob) {
+/**
+ * Save a file, into a folder of its own.
+ *
+ * A run that hits trouble on six pages produces six of these, and loose in
+ * Downloads among everything else they are a nuisance to gather up and send.
+ * They go in one folder now.
+ *
+ * The folder is inside Downloads because that is the only place an extension
+ * may write to. Chrome will not accept an absolute path here and refuses the
+ * download outright if given one -- so this is a subfolder, not a chosen
+ * directory, and choosing a real directory is a job for the Save dialog.
+ */
+const REPORT_FOLDER = "ApplyPilot";
+
+function download(filename, blob, options) {
   const href = URL.createObjectURL(blob);
+  const done = () => setTimeout(() => URL.revokeObjectURL(href), 10000);
+  const where = `${REPORT_FOLDER}/${filename}`;
+
+  if (chrome.downloads && chrome.downloads.download) {
+    chrome.downloads.download(
+      { url: href, filename: where, saveAs: Boolean(options && options.ask) },
+      () => {
+        // A folder Chrome will not write to is not worth losing the file over.
+        if (chrome.runtime.lastError) {
+          const link = document.createElement("a");
+          link.href = href;
+          link.download = filename;
+          link.click();
+        }
+        done();
+      }
+    );
+    return;
+  }
+
   const link = document.createElement("a");
   link.href = href;
   link.download = filename;
   link.click();
-  setTimeout(() => URL.revokeObjectURL(href), 10000);
+  done();
 }
 
 /*

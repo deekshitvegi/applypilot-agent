@@ -1606,3 +1606,52 @@ at all to eighteen fields, seven filled and the resume attached.
 *And the walk stops.* Its guard asked for the URL to be unchanged and no fields
 at all; these pages carry one, so it never fired. Unchanged now means the same
 address, the same kind and the same number of fields.
+
+**170. The forms worth testing against were the ones nobody was looking at.**
+Every corpus so far came from the boards that publish an API, which is why it
+was 60 Greenhouse applications and 27 Ashby. Most employers do not use those.
+They send applicants to their own careers page, and behind it sits a system
+nothing here had ever met -- one real LinkedIn search turned up Avature, whose
+form has fifty-three controls and repeating employment, education and
+certification blocks, and which the corpus had no example of at all.
+*Why they were invisible.* A careers page today is an empty shell that draws
+its own job list once a browser runs its script, so reading the HTML finds no
+jobs on it. `bespoke.py` renders the page instead.
+*Measured on the first ones found.* Avature: 26 of ~38 controls seen, 14 of 14
+verified, none failed. Twelve more across three employers: 11 of 11 verified,
+none failed. The pattern holds everywhere -- what it attempts, it lands; what
+it misses, it misses in silence.
+
+**171. Two systems answer 200 for a company they have never heard of.** Added
+to the earlier list: a probe that reads a page and finds the vendor's name on
+it will name the wrong employer, because that name is on their 404 as well.
+Avature and iCIMS are checked by counting real posting links instead -- two or
+more, or it does not count as a board.
+
+**172. A picker showed seven cities and we said it offered nothing.** On the
+first real application run after a release, a required City field was asked
+about four times over -- "this control opened no list of its own, so I cannot
+tell you what it offers" -- while Denton, TX, US and six more sat on screen
+underneath it. Everything else on that form filled: 7 of 7 verified.
+*Why.* A dropdown's options are read from the list that dropdown points at,
+and that rule is what stops a document-wide scrape offering a salary chip and
+an EEO race list as one question. This picker points at nothing: no
+aria-controls, no aria-owns, no aria-haspopup. Its suggestions are rendered
+into a container at the end of the body, which is how a great many
+autocompletes are built.
+*Mechanism.* Ownership by behaviour, and only once markup has failed. The list
+must have appeared *after* this control was typed into, must sit directly
+below it, and must line up with it. Nothing already on the page can qualify and
+nothing anywhere else on it can, so this is not the scrape the original rule
+was written against.
+*And the loop was visible.* The panel said "asked 4 times now -- answering it
+is not sticking", and the report named the field and the reason. That is what
+the journal was for.
+→ `test_detached_suggestions.py`
+
+**173. Reports piled up loose in Downloads.** Six troubled pages make six zips,
+and gathering them out of everything else downloaded that day is a chore.
+*Mechanism.* They go in a folder of their own. Inside Downloads, because that
+is the only place an extension may write; Chrome refuses an absolute path
+outright, and a file lost to a rejected download is worse than a file in the
+wrong folder, so a failure falls back to the plain save.

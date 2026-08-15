@@ -503,8 +503,76 @@
       // to wait for. Waiting anyway cost six seconds per control, several
       // times over, and turned one page into ten minutes.
     }
+    if (!popup) popup = await appearedFor(el, filterText);
     return popup;
   }
+
+  /**
+   * A list that was not there a moment ago, sitting under this control.
+   *
+   * The rule everywhere else is that a dropdown's options are read from the
+   * list that dropdown points at, and that rule is what stops a document-wide
+   * scrape offering a salary chip and an EEO race list as one question. But
+   * plenty of pickers point at nothing at all: they render their suggestions
+   * into a container at the end of the body with no aria-controls, no
+   * aria-owns, and no relationship a reader can follow.
+   *
+   * On one of those, typing "Denton" put seven real cities on screen and this
+   * reported "no list of its own, so I cannot tell you what it offers" -- four
+   * times, on a required field, while the answer sat visible on the page.
+   *
+   * So ownership is established by behaviour instead of by markup, and only
+   * when markup has already failed. The list has to have appeared *after* this
+   * control was typed into, and it has to be directly below it and roughly its
+   * width. That is not a scrape: nothing that was on the page beforehand can
+   * qualify, and nothing anywhere else on the page can either.
+   */
+  async function appearedFor(el, filterText) {
+    const before = new Set(D.deepQuery(POPUP_SHAPES, document));
+    const box = filterBox(el) || el;
+    if (filterText) {
+      typeFilter(box, filterText);
+    } else {
+      realClick(comboTrigger(el));
+    }
+
+    const anchor = el.getBoundingClientRect();
+    const near = (node) => {
+      const box = node.getBoundingClientRect();
+      if (box.width < 60 || box.height < 20) return false;
+      // Below the control, within a couple of rows of it, and lined up with
+      // it. A list somewhere else on the page belongs to something else.
+      const under = box.top >= anchor.top - 8 && box.top <= anchor.bottom + 80;
+      const lined = Math.abs(box.left - anchor.left) <= Math.max(80, anchor.width * 0.5);
+      return under && lined;
+    };
+
+    return await waitFor(() => {
+      for (const node of D.deepQuery(POPUP_SHAPES, document)) {
+        if (before.has(node)) continue;
+        if (!D.isVisible(node)) continue;
+        if (node.contains(el)) continue;
+        if (!near(node)) continue;
+        if (D.optionRows(node).length < 1) continue;
+        return node;
+      }
+      return null;
+    }, SEARCH_TIMEOUT);
+  }
+
+  //: Where a picker puts its suggestions when it will not say where they are.
+  //: Shapes only -- a listbox, a menu, or a container calling itself one of the
+  //: half-dozen names every autocomplete library uses.
+  const POPUP_SHAPES = [
+    "[role='listbox']",
+    "[role='menu']",
+    "ul",
+    "[class*='dropdown' i]",
+    "[class*='autocomplete' i]",
+    "[class*='suggestion' i]",
+    "[class*='typeahead' i]",
+    "[class*='menu' i]",
+  ].join(",");
 
   /**
    * Open a dropdown and read the options it owns.

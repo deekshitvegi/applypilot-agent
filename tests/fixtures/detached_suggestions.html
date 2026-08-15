@@ -1,0 +1,37 @@
+<!doctype html><meta charset=utf-8><title>Apply</title>
+<!-- A city picker that points at nothing.
+     No aria-controls, no aria-owns, no aria-haspopup. The suggestions are
+     rendered into a container at the end of the body when you type, which is
+     how a great many autocompletes are built. Copied from a real application
+     where typing "Denton" put seven cities on screen and the panel reported
+     that the control offered nothing. -->
+<form>
+  <label for="first">First name</label><input id="first" required>
+  <label for="city">City</label>
+  <div class="field"><input id="city" role="combobox" required></div>
+  <label for="email">Email</label><input id="email" type="email" required>
+</form>
+<div id="away"></div>
+<script>
+  const city = document.getElementById("city");
+  const away = document.getElementById("away");
+  city.addEventListener("input", () => {
+    away.innerHTML = "";
+    if (!city.value) return;
+    const box = city.getBoundingClientRect();
+    const list = document.createElement("ul");
+    list.className = "suggestion-list";
+    list.style.cssText =
+      "position:absolute;width:" + box.width + "px;left:" + box.left +
+      "px;top:" + (box.bottom + 2) + "px;list-style:none;margin:0;padding:0;background:#fff";
+    for (const place of ["Denton, TX, US", "Denton, MD, US", "Denton, NC, US"]) {
+      const row = document.createElement("li");
+      row.setAttribute("role", "option");
+      row.style.cssText = "height:24px;padding:2px";
+      row.textContent = place;
+      row.addEventListener("mousedown", () => { city.value = place; away.innerHTML = ""; });
+      list.appendChild(row);
+    }
+    away.appendChild(list);
+  });
+</script>
