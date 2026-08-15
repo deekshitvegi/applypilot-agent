@@ -240,6 +240,21 @@
     // answered at all, and the widget writes the canonical wording back: that
     // reading is the page's, not ours. Every such fill was being reported
     // unverified while sitting correctly filled on screen.
+    // A box that is only a filter is not evidence -- and the only thing that
+    // makes it one is our own typing still sitting in it.
+    //
+    // This used to refuse the value of any combobox input nobody had typed
+    // into, on the grounds that such text might be a leftover filter. It is
+    // very rarely a filter and almost always the answer: a picker writes its
+    // canonical wording back once something is chosen, and a page reloaded
+    // mid-application shows what was chosen before. On a required City field
+    // that read "Denton, TX, US" -- put there by the page, after the pick --
+    // this returned nothing at all, so a filled control was reported unverified
+    // and asked about again, four times over, with the answer on screen.
+    //
+    // Our own echo is still refused, which is the case the rule was written
+    // for: typing "Denton" and reading "Denton" back proves only that we can
+    // type.
     const stillOurs = echoOfOurOwnTyping(el);
     const filtering = stillOurs || (!typedAsFilter.has(el) && D.isComboboxInput(el));
 
@@ -294,9 +309,30 @@
       return { value: rendered, signal: "rendered_value" };
     }
 
-    if (filtering) {
-      // There is a text box here, but what is in it came from this agent.
+    if (stillOurs) {
+      // What is in this box came from this agent, and reading our own typing
+      // back proves only that we can type.
       return { value: "", signal: "none" };
+    }
+
+    // Last of all: what is actually in the box.
+    //
+    // Every reading above is better than this one, and each gets its turn
+    // first. But a control whose text nobody here typed, holding something
+    // that is not its own placeholder, is holding an answer -- and refusing to
+    // say so because the widget kept no state a reader recognises is how a
+    // required City field reading "Denton, TX, US" came back empty, was
+    // reported unverified, and was asked about four times with the answer on
+    // screen the whole time.
+    //
+    // This tool reads the page rather than the picture of it, which is why the
+    // value being plainly visible was not enough on its own. Reading the box
+    // is the nearest thing to looking.
+    if (tag === "input" || tag === "textarea") {
+      const held = (el.value || "").trim();
+      if (held && !isPlaceholder(held) && !same(held, D.visibleLabel(el))) {
+        return { value: held, signal: "native_value" };
+      }
     }
 
     return { value: "", signal: "none" };

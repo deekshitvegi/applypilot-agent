@@ -55,3 +55,66 @@ def test_nothing_is_offered_when_nothing_appeared(scan):
         [field["fingerprint"], ""],
     )
     assert not opened["options"]
+
+
+def test_a_value_the_page_wrote_into_the_box_is_read(scan):
+    """The bug this fixture was made for, from the other end.
+
+    Picking a suggestion makes the widget write its own canonical wording into
+    the box -- "Denton, TX, US" where "Denton" was typed. Nothing here wrote
+    that, and the widget keeps no other state a reader recognises, so refusing
+    to read the box left a filled required field reported as unverified and
+    asked about four times with the answer on screen.
+    """
+    page, observation = scan("detached_suggestions.html")
+    field = city_field(observation)
+    page.evaluate(
+        """(fp) => {
+          const el = ApplyPilot.scan.findByFingerprint(fp).element;
+          el.value = "Denton, TX, US";
+        }""",
+        field["fingerprint"],
+    )
+    reading = page.evaluate(
+        """(fp) => {
+          const found = ApplyPilot.scan.findByFingerprint(fp);
+          return ApplyPilot.verify.observe(found.element, found.kind, found.group);
+        }""",
+        field["fingerprint"],
+    )
+    assert reading["value"] == "Denton, TX, US", reading
+    assert reading["signal"] != "none"
+
+
+def test_our_own_typing_read_back_is_still_not_evidence(scan):
+    """The rule the refusal was written for, which has to survive the fix.
+
+    Typing "Denton" and reading "Denton" back says nothing about whether the
+    page accepted it as a choice.
+    """
+    page, observation = scan("detached_suggestions.html")
+    field = city_field(observation)
+    reading = page.evaluate(
+        """(fp) => {
+          const found = ApplyPilot.scan.findByFingerprint(fp);
+          ApplyPilot.verify.markTypedAsFilter(found.element, "Denton");
+          found.element.value = "Denton";
+          return ApplyPilot.verify.observe(found.element, found.kind, found.group);
+        }""",
+        field["fingerprint"],
+    )
+    assert reading["value"] == ""
+    assert reading["signal"] == "none"
+
+
+def test_one_control_is_listed_once(scan):
+    """An upload reachable two ways came back twice, and broke the resume rule.
+
+    Same fingerprint, same frame, listed twice. Nothing downstream minds -- both
+    resolve to the same element -- except the rule that a form offering exactly
+    one unlabelled upload must be asking for a resume. It saw two, gave up, and
+    left the resume unattached.
+    """
+    _, observation = scan("control_shapes.html")
+    seen = [f["fingerprint"] for f in observation["fields"]]
+    assert len(seen) == len(set(seen)), "a control is listed more than once"

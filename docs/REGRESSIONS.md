@@ -1655,3 +1655,30 @@ and gathering them out of everything else downloaded that day is a chore.
 is the only place an extension may write; Chrome refuses an absolute path
 outright, and a file lost to a rejected download is worse than a file in the
 wrong folder, so a failure falls back to the plain save.
+
+**174. The answer was in the box and we would not look at it.** A City field
+read "Denton, TX, US" -- written there by the picker after a suggestion was
+chosen -- and the reading came back empty, so a filled required field was
+reported unverified and asked about four times with the answer visible on
+screen the whole time.
+*Why.* A combobox's text box was treated as a filter whenever nothing here had
+typed into it, on the grounds that leftover filter text is not an answer. It
+almost never is leftover filter text. A picker writes its own canonical wording
+into that box once something is chosen, and that wording is the page's, not
+ours.
+*Mechanism.* A last reading, after every better one has had its turn: what is
+actually in the box, when nobody here typed it, it is not the control's own
+placeholder, and it is not the field's own name. Our own typing read back is
+still refused -- that rule was right and is what this whole module is for.
+*And the wider point.* This tool reads the page rather than a picture of it,
+which is why a value being plainly visible was not enough on its own. Reading
+the box is the nearest thing to looking at it.
+
+**175. One control, listed twice, cost every resume on that form.** An upload
+reachable both as an input and through the dropzone drawn around it came back
+twice -- same fingerprint, same frame. Nothing downstream minded: both resolve
+to the same element and it would have been filled once. The rule that a form
+offering exactly one unlabelled upload must be asking for a resume did mind. It
+saw two, declined to guess between them, and left the resume unattached.
+*Mechanism.* Fields are deduplicated by fingerprint before anything counts them.
+→ `test_detached_suggestions.py`

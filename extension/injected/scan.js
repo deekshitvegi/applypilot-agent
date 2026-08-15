@@ -602,6 +602,22 @@
     // inputs, so nothing above finds them, and on one applicant tracking system
     // that is every Yes/No question on the form.
     if (root) fields.push(...buttonChoiceFields(root));
+
+    // One control, listed once.
+    //
+    // A control can be reached down more than one path -- an upload found both
+    // as an input and through the dropzone drawn around it -- and it came back
+    // twice, with the same fingerprint, from the same frame. Nothing downstream
+    // is wrong about that; the fingerprints resolve to the same element and it
+    // gets filled once. But counting is not: the rule that a form offering
+    // exactly one unlabelled upload must be asking for a resume saw two, gave
+    // up, and left the resume unattached on every form built that way.
+    const byFingerprint = new Map();
+    for (const field of fields) {
+      if (!byFingerprint.has(field.fingerprint)) byFingerprint.set(field.fingerprint, field);
+    }
+    const distinct = Array.from(byFingerprint.values());
+
     const notes = classification.notes.slice();
 
     const onAPosting = kind === "listing" || kind === "application";
@@ -615,7 +631,7 @@
       url: location.href,
       title: document.title || "",
       kind: kind,
-      fields: fields,
+      fields: distinct,
       apply_controls: applyControls,
       submit_controls: kind === "application" ? S.matchingControls(S.SUBMIT_TEXT) : [],
       next_controls: kind === "application" ? S.matchingControls(S.NEXT_TEXT) : [],
